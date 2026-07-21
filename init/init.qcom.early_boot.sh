@@ -554,3 +554,19 @@ if [ -f /sys/class/kgsl/kgsl-3d0/gpu_available_frequencies ]; then
     gpu_freq=`cat /sys/class/kgsl/kgsl-3d0/gpu_available_frequencies` 2> /dev/null
     setprop vendor.gpu.available_frequencies "$gpu_freq"
 fi
+
+# IchthysOS/AOSP-17 a52sxq bringup: this kernel has no CONFIG_DEVTMPFS (enabling it
+# bootloops early init), and AOSP-17 ueventd does not create the legacy ION misc node,
+# so /dev/ion is missing -> Adreno GPU + gralloc fail ("open(/dev/ion) errno 2") ->
+# SurfaceFlinger EGL_BAD_ALLOC. Create /dev/ion from the kernel misc device here (runs
+# at early-boot, before the graphics HALs). See LineageOS builds where ueventd did make it.
+if [ ! -e /dev/ion ] && [ -f /sys/class/misc/ion/dev ]; then
+    ion_dev=`cat /sys/class/misc/ion/dev` 2> /dev/null
+    ion_major=${ion_dev%%:*}
+    ion_minor=${ion_dev##*:}
+    if [ -n "$ion_major" ] && [ -n "$ion_minor" ]; then
+        mknod /dev/ion c "$ion_major" "$ion_minor"
+        chmod 0664 /dev/ion
+        chown system system /dev/ion
+    fi
+fi

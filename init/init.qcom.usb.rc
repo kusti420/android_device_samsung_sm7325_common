@@ -1,0 +1,67 @@
+# IchthysOS/AOSP-17 a52sxq bringup: configfs USB gadget bring-up.
+#
+# init.qcom.rc does `import /vendor/etc/init/hw/init.qcom.usb.rc`, but that file was never
+# provided -- it normally comes from the QTI usb repo (vendor/qcom/opensource/usb), which
+# was never synced. As a result the ENTIRE configfs USB gadget setup was missing:
+#   * no gadget skeleton  (/config/usb_gadget/g1, functions/ffs.adb, configs/b.1, os_desc)
+#   * no functionfs mount (/dev/usb-ffs/adb)
+# The Samsung AIDL gadget HAL (android.hardware.usb.gadget-service.samsung) then abort()s
+# in its constructor because /config/usb_gadget/g1/os_desc/b.1 is absent, crash-loops every
+# ~5s, and that instability takes down SystemUI; adb never enumerates in the OS. (Recovery
+# has its own gadget skeleton in its ramdisk init.rc, which is why adb works only there.)
+#
+# This file provides the missing bring-up. The skeleton + functionfs mount are modeled on
+# the recovery ramdisk (proven on a52sxq hardware); the os_desc/b.1 symlink is ADDED here
+# because the Samsung/pixel gadget HAL requires it (recovery does not create it since it
+# uses static functions, not the HAL). The HAL itself owns function-linking and the UDC
+# pullup (UsbGadget::setupFunctions -> linkFunction + write UDC), so this file only builds
+# the skeleton and mounts functionfs -- it does not compose or enable the gadget.
+
+# The device only sets these in `on charger` (init.target.rc) and in recovery -- NEVER in
+# normal boot (the missing QTI init.qcom.usb.rc set them). Without sys.usb.configfs=1 the
+# `on fs` skeleton block below never runs and the generic init.usb.configfs.rc is inert, so
+# the gadget is never built and the HAL aborts. Set them at `on init` (before `on fs`).
+on init
+    setprop sys.usb.configfs 1
+    setprop sys.usb.controller a600000.dwc3
+
+on fs && property:sys.usb.configfs=1
+    mkdir /config/usb_gadget/g1 0770 shell shell
+    write /config/usb_gadget/g1/idVendor 0x04e8
+    write /config/usb_gadget/g1/idProduct 0x6860
+    write /config/usb_gadget/g1/bcdDevice 0x0400
+    write /config/usb_gadget/g1/bcdUSB 0x0200
+    # Microsoft OS descriptors + the os_desc/b.1 -> configs/b.1 link the Samsung HAL checks.
+    write /config/usb_gadget/g1/os_desc/use 1
+    write /config/usb_gadget/g1/os_desc/b_vendor_code 0x1
+    write /config/usb_gadget/g1/os_desc/qw_sign "MSFT100"
+    mkdir /config/usb_gadget/g1/strings/0x409 0770
+    write /config/usb_gadget/g1/strings/0x409/serialnumber ${ro.serialno}
+    write /config/usb_gadget/g1/strings/0x409/manufacturer ${ro.product.manufacturer}
+    write /config/usb_gadget/g1/strings/0x409/product ${ro.product.model}
+    # Allocate the adb FunctionFS instance (the HAL only symlinks it, never creates it).
+    mkdir /config/usb_gadget/g1/functions/ffs.adb
+    mkdir /config/usb_gadget/g1/configs/b.1 0770 shell shell
+    mkdir /config/usb_gadget/g1/configs/b.1/strings/0x409 0770 shell shell
+    write /config/usb_gadget/g1/configs/b.1/MaxPower 500
+    symlink /config/usb_gadget/g1/configs/b.1 /config/usb_gadget/g1/os_desc/b.1
+
+on fs
+    # Mount the adb FunctionFS instance created above; adbd opens ep0 and writes descriptors,
+    # then sets sys.usb.ffs.ready=1 so the gadget can be composed.
+    mkdir /dev/usb-ffs 0775 shell shell
+    mkdir /dev/usb-ffs/adb 0770 shell shell
+    mount functionfs adb /dev/usb-ffs/adb uid=2000,gid=2000,rmode=0770,fmode=0660
+
+# adbd start/stop. The generic system init.usb.rc leaves this to "init.<platform>.usb.rc"
+# (this file). Start adbd whenever the requested USB config includes adb so it can feed the
+# ffs.adb endpoints; the composition (symlink + UDC pullup) is done by the Samsung gadget
+# HAL and/or the generic init.usb.configfs.rc once sys.usb.ffs.ready=1.
+on property:sys.usb.config=adb && property:sys.usb.configfs=1
+    start adbd
+
+on property:sys.usb.config=mtp,adb && property:sys.usb.configfs=1
+    start adbd
+
+on property:sys.usb.config=none && property:sys.usb.configfs=1
+    stop adbd

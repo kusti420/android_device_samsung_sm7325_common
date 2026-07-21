@@ -72,6 +72,8 @@ PRODUCT_PACKAGES += \
     init.kernel.post_boot-yupik.sh \
     init.qcom.class_core.sh \
     init.qcom.early_boot.sh \
+    init.ichthys.crashlog.rc \
+    init.ichthys.crashlog.sh \
     init.qcom.post_boot.sh \
     init.qcom.sh \
     init.qti.kernel.sh \
@@ -83,6 +85,12 @@ PRODUCT_PACKAGES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/init/fstab.qcom:$(TARGET_COPY_OUT_VENDOR_RAMDISK)/first_stage_ramdisk/fstab.qcom \
     $(LOCAL_PATH)/init/fstab.qcom:$(TARGET_COPY_OUT_VENDOR)/etc/fstab.qcom
+
+# IchthysOS custom (fish) boot animation. Copied directly to product/media so it does
+# not depend on vendor/lineage/bootanimation (which we neutralized -- it needs
+# ImageMagick mogrify). BootAnimation searches /product/media first.
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/bootanimation.zip:$(TARGET_COPY_OUT_PRODUCT)/media/bootanimation.zip
 
 # Audio
 PRODUCT_PACKAGES += \
@@ -97,6 +105,14 @@ PRODUCT_PACKAGES += \
     libqcompostprocbundle \
     libvolumelistener \
     libqti_vndfwk_detect.vendor:32
+
+# QCOM audio source modules (effects bundle, visualizer, voiceproc) read these
+# from the qtiaudio soong namespace. The board sets the make-vars
+# AUDIO_FEATURE_ENABLED_GKI/INSTANCE_ID (BoardConfigCommon), but the audio tree
+# has no make->soong translation, so set them here to match the vendor blob HAL.
+# GKI: our kernel's techpack audio_effects.h uses AUDIO_EFFECTS_CONFIG_SET (GKI naming).
+$(call soong_config_set,qtiaudio,feature_gki,true)
+$(call soong_config_set,qtiaudio,feature_instance_id,true)
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/configs/audio_effects.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_effects.xml \
@@ -144,6 +160,12 @@ PRODUCT_PACKAGES += \
     vendor.qti.hardware.display.allocator-service \
     android.hardware.graphics.mapper@3.0-impl-qti-display \
     android.hardware.graphics.mapper@4.0-impl-qti-display \
+    libsdmcore \
+    libsdmutils \
+    libdrmutils \
+    libsdedrm \
+    libgpu_tonemapper \
+    libmemutils \
     init.qti.display_boot.rc \
     init.qti.display_boot.sh \
     gralloc.default \
@@ -207,10 +229,25 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/keylayout/sec_touchscreen.kl:$(TARGET_COPY_OUT_VENDOR)/usr/keylayout/sec_touchscreen.kl
 
 # Keymaster
-PRODUCT_PACKAGES += \
-    android.hardware.keymaster@4.0-service.samsung
+# IchthysOS/AOSP-17 a52sxq bringup: the Samsung keymaster@4.0 HIDL HAL fails
+# `QSEECom_start_app` (its TrustZone keymaster TA won't load) and never registers,
+# spamming the log 100s of times/sec (skeymaster/QSEECOMAPI/keymaster_tee errors)
+# which drowns the pstore so the real KeyMint startup is invisible. keystore2 uses the
+# AIDL software KeyMint below, so this HIDL HAL is dead weight. Remove it (unfloods logs,
+# drops a broken HAL). Revisit if/when the Samsung TZ keymaster is made to load.
+# PRODUCT_PACKAGES += \
+#     android.hardware.keymaster@4.0-service.samsung
+#
+# $(call soong_config_set,samsungVars,target_keymaster4_library,//vendor/samsung/sm7325-common:libskeymaster4device)
 
-$(call soong_config_set,samsungVars,target_keymaster4_library,//vendor/samsung/sm7325-common:libskeymaster4device)
+# IchthysOS/AOSP-17 bringup: the Samsung TrustZone keymaster@4.0 HIDL HAL never
+# registers on the A17 tree, so keystore2 blocks and vold hangs the boot in
+# post-fs-data. Add AOSP's software KeyMint (nonsecure, in-process TA) so keystore2
+# gets a working KeyMint-V5 AIDL backend directly and boot proceeds. NOTE: software
+# crypto, NOT hardware-backed (no StrongBox/attestation) — a bring-up stopgap until
+# the TZ keymaster is fixed. keystore2 prefers the AIDL KeyMint over the HIDL one.
+PRODUCT_PACKAGES += \
+    android.hardware.security.keymint-service.nonsecure
 
 # LiveDisplay
 PRODUCT_PACKAGES += \
@@ -316,8 +353,21 @@ PRODUCT_PACKAGES += \
     sehradiomanager
 
 # Sensors
-PRODUCT_PACKAGES += \
-    android.hardware.sensors-service.samsung-multihal
+# IchthysOS/AOSP-17 a52sxq bringup: DISABLED. The multihal is installed and declares
+# android.hardware.sensors.ISensors/default via its own vintf_fragment, but it never
+# registers (its SSC sub-HALs need the ADSP sensor PD, which fails on this bringup —
+# same reason vendor.sensors/sscrpcd is disabled in init.target.rc).
+#
+# A HAL DECLARED in VINTF but never registered makes its client block FOREVER:
+# system_server retried ISensors as a lazy AIDL service once a second for ~95s, never
+# finished booting, and was killed -> zygote died 4x -> UPDATABLE_CRASHING -> no boot.
+# Undeclared is the fast-fail path (see ILights/IPowerStats/IVibratorManager, which
+# system_server skips cleanly), so dropping the package drops the declaration too and
+# SensorService comes up with zero sensors. Same lesson as the keymaster@4.0 VINTF decl.
+#
+# TODO(bringup): restore once the ADSP sensor PD / sscrpcd is working.
+# PRODUCT_PACKAGES += \
+#     android.hardware.sensors-service.samsung-multihal
 
 # Touch features
 PRODUCT_PACKAGES += \
@@ -331,12 +381,28 @@ PRODUCT_PACKAGES += \
 PRODUCT_SOONG_NAMESPACES += bootable/deprecated-ota
 
 # USB
+# IchthysOS/AOSP-17 a52sxq bringup: android.hardware.usb-service.qti was never synced
+# (missing from the tree -> silently dropped by ALLOW_MISSING_DEPENDENCIES -> NO USB HAL
+# in the image -> UsbDeviceManager in the booted ROM could not configure the configfs
+# gadget -> USB/adb never enumerated (recovery's static gadget still worked, which is why
+# adb worked there but not in the OS). Use the Samsung AIDL USB HALs from hardware/samsung
+# instead: IUsb (port/role) + IUsbGadget (function switching, incl. adb). Both build and
+# ship their own VINTF fragments + init.rc; labeled via device file_contexts below.
 PRODUCT_PACKAGES += \
-    android.hardware.usb-service.qti \
-    init.qcom.usb.rc \
-    init.qcom.usb.sh
+    android.hardware.usb-service.samsung \
+    android.hardware.usb.gadget-service.samsung \
+    init.qcom.usb.rc
 
-PRODUCT_SOONG_NAMESPACES += vendor/qcom/opensource/usb/etc
+# The Samsung gadget HAL bakes in the UDC (USB Device Controller) name at compile time
+# via -DGADGET_NAME. On a52sxq (SM7325/lahaina) the DWC3 controller is a600000.dwc3
+# (confirmed from /sys/class/udc on device). Without this the HAL fails to compile
+# (UsbGadget.h: "use of undeclared identifier 'GADGET_NAME'").
+$(call soong_config_set,samsungUsbGadgetVars,gadget_name,a600000.dwc3)
+# NOTE: init.qcom.usb.rc / init.qcom.usb.sh and the vendor/qcom/opensource/usb/etc
+# soong namespace all came from the never-synced QTI usb repo (silently dropped). The
+# Samsung USB HALs ship their own init.rc, and generic Android configfs init (driven by
+# sys.usb.configfs=1, already set in init.target.rc) composes the adb/mtp gadget, so the
+# QTI-specific bits are not needed for bringup.
 
 # Samsung Ext Flash
 PRODUCT_PACKAGES += \
@@ -384,7 +450,10 @@ PRODUCT_SOONG_NAMESPACES += \
     hardware/google/pixel \
     hardware/google/pixel/power-libperfmgr \
     hardware/samsung-ext/interfaces \
-    hardware/samsung
+    hardware/samsung \
+    vendor/qcom/opensource/commonsys-intf/display \
+    vendor/qcom/opensource/display \
+    hardware/qcom-caf/sm8350
 
 # Inherit proprietary blobs
 $(call inherit-product, vendor/samsung/sm7325-common/sm7325-common-vendor.mk)
@@ -392,3 +461,30 @@ $(call inherit-product, vendor/samsung/sm7325-common/sm7325-common-vendor.mk)
 # Set system_server compiler filter to speed-profile
 PRODUCT_SYSTEM_SERVER_COMPILER_FILTER := speed-profile
 
+# IchthysOS/AOSP-17: the QCOM display source header_libs are gated on the qtidisplay soong
+# config (qtidisplay_cc_defaults). The device already has the display props/packages, so we
+# set ONLY the soong config here (inheriting the full display-product.mk duplicated vendor
+# props). Values from hardware/qcom-caf/sm8350/display/config/display-product.mk.
+SOONG_CONFIG_NAMESPACES += qtidisplay
+SOONG_CONFIG_qtidisplay := drmpp headless llvmsa gralloc4 udfps default
+SOONG_CONFIG_qtidisplay_drmpp := true
+SOONG_CONFIG_qtidisplay_headless := false
+SOONG_CONFIG_qtidisplay_llvmsa := false
+SOONG_CONFIG_qtidisplay_gralloc4 := true
+SOONG_CONFIG_qtidisplay_udfps := false
+SOONG_CONFIG_qtidisplay_default := true
+
+# IchthysOS/AOSP-17: the A17 framework compatibility matrices have no kernel entry for 5.4
+# (the a52sxq's stock kernel), failing check_vintf. Don't enforce the VINTF kernel-version
+# requirement for this bringup (the device kernel is 5.4).
+PRODUCT_OTA_ENFORCE_VINTF_KERNEL_REQUIREMENTS := false
+
+# IchthysOS/AOSP-17: the device vendor manifest targets FCM version 5 (Android-12 era), whose
+# framework compatibility matrix Android 17 no longer ships, so check_vintf can't run. Disable
+# strict VINTF manifest enforcement for this bringup (revisit by bumping the vendor target-level).
+PRODUCT_ENFORCE_VINTF_MANIFEST := false
+
+# IchthysOS/AOSP-17 a52sxq bringup: bake host adb key so adbd auto-authorizes during
+# the (currently headless/GPU-broken) boot — enables live logcat/dmesg without on-screen
+# "Allow USB debugging". Remove once GPU/display bring-up is done.
+PRODUCT_ADB_KEYS := device/samsung/sm7325-common/adbkey.pub

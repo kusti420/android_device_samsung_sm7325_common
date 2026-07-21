@@ -1,0 +1,8 @@
+service ichthys-crashlog /vendor/bin/init.ichthys.crashlog.sh
+    class core
+    user root
+    group root system log readproc
+    seclabel u:r:vendor_init:s0
+
+on post-fs-data
+    start ichthys-crashlog

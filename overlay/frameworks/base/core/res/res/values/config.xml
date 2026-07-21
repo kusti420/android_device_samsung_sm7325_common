@@ -1359,4 +1359,9 @@
 
     <!-- Whether the new Auto Selection Network UI should be shown -->
     <bool name="config_enableNewAutoSelectNetworkUI">true</bool>
+
+    <!-- IchthysOS: long-press power shows the power menu (global actions), not the
+         Assistant. AOSP defaults this to 5 (LONG_PRESS_POWER_ASSISTANT); LineageOS sets
+         it to 1 in its common overlay, which we don't inherit, so set it here. -->
+    <integer name="config_longPressOnPowerBehavior">1</integer>
 </resources>

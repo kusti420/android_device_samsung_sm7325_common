@@ -65,3 +65,17 @@
 /(vendor|system/vendor)/bin/hw/android\.hardware\.vibrator\-service\.samsung                                u:object_r:hal_vibrator_default_exec:s0
 /(vendor|system/vendor)/bin/hw/android\.hardware\.health-service\.samsung                                   u:object_r:hal_health_default_exec:s0
 /(vendor|system/vendor)/bin/hw/sehradiomanager                                                              u:object_r:sehradiomanager_exec:s0
+# IchthysOS/AOSP-17 a52sxq bringup: we install AOSP's software KeyMint
+# (android.hardware.security.keymint-service.nonsecure) directly to /vendor/bin/hw
+# (not via its apex), so the stock keymint fc regex (which lacks the .nonsecure suffix)
+# doesn't match it -> the binary is unlabeled -> wrong domain -> addService DENIED ->
+# keystore2 gets NAME_NOT_FOUND and panics -> boot hangs. Label it hal_keymint_default_exec.
+/(vendor|system/vendor)/bin/hw/android\.hardware\.security\.keymint-service\.nonsecure       u:object_r:hal_keymint_default_exec:s0
+
+# IchthysOS/AOSP-17 a52sxq bringup: Samsung AIDL USB HALs (replacing the never-synced
+# android.hardware.usb-service.qti). Without these labels the binaries run unlabeled ->
+# wrong domain -> addService denied under enforcing -> UsbDeviceManager can't bring up the
+# gadget -> no USB/adb in the booted OS. Port HAL -> hal_usb_default, gadget HAL (function
+# switching incl. adb) -> hal_usb_gadget_default (matching AOSP's usb*-service.example).
+/(vendor|system/vendor)/bin/hw/android\.hardware\.usb-service\.samsung                       u:object_r:hal_usb_default_exec:s0
+/(vendor|system/vendor)/bin/hw/android\.hardware\.usb\.gadget-service\.samsung              u:object_r:hal_usb_gadget_default_exec:s0

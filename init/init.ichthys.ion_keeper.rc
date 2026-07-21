@@ -1,0 +1,12 @@
+service ichthys-ion-keeper /vendor/bin/init.ichthys.ion_keeper.sh
+    class core
+    user root
+    group system root
+    seclabel u:r:vendor_init:s0
+
+# Start in the DEFAULT mount namespace (post-fs-data, after the bootstrap/default split)
+# so the /dev/ion node this keeper creates is visible to SurfaceFlinger and the vendor
+# graphics HALs. Starting at early-init put it in the bootstrap namespace, where the node
+# it maintained never reached the default-namespace graphics processes.
+on post-fs-data
+    start ichthys-ion-keeper

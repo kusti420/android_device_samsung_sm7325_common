@@ -62,7 +62,14 @@ TARGET_LINUX_KERNEL_VERSION := 5.4
 
 # Kernel flags
 BOARD_KERNEL_CMDLINE += console=null androidboot.hardware=qcom androidboot.memcg=1 lpm_levels.sleep_disabled=1 video=vfb:640x400,bpp=32,memsize=3072000 msm_rtb.filter=0x237 service_locator.enable=1 androidboot.usbcontroller=a600000.dwc3 swiotlb=0 loop.max_part=7 cgroup.memory=nokmem,nosocket firmware_class.path=/vendor/firmware_mnt/image pcie_ports=compat loop.max_part=7 iptable_raw.raw_before_defrag=1 ip6table_raw.raw_before_defrag=1 printk.devkmsg=on
-#BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive
+# IchthysOS/AOSP-17 bringup: boot SELinux permissive so incomplete bring-up policy
+# doesn't block HALs (keymint/keystore2/qseecom/sscrpcd) from registering.
+# NOTE: this Samsung sm7325 kernel IGNORES the userspace androidboot.selinux knob
+# (security/selinux/selinuxfs.c forces enforce on user builds via setenforce), so the
+# reliable lever is the KERNEL param `enforcing=0` (hooks.c __setup("enforcing="));
+# CONFIG_ALWAYS_ENFORCE is unset so selinux_enforcing_boot defaults 0 and enforcing=0
+# (appended last) overrides the stock enforcing=1. Tighten (write policy) once booting.
+BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive enforcing=0
 BOARD_BOOT_HEADER_VERSION := 3
 
 BOARD_KERNEL_BASE            := 0x00000000
@@ -117,14 +124,25 @@ BOARD_SUPER_PARTITION_SIZE                      := 10643046400
 BOARD_SUPER_PARTITION_GROUPS                    := samsung_dynamic_partitions
 BOARD_SAMSUNG_DYNAMIC_PARTITIONS_PARTITION_LIST := system vendor product odm
 BOARD_SAMSUNG_DYNAMIC_PARTITIONS_SIZE           := 10643046400
-BOARD_SYSTEMIMAGE_PARTITION_RESERVED_SIZE       := 3000000000
-BOARD_VENDORIMAGE_PARTITION_RESERVED_SIZE       := 400000000
-BOARD_PRODUCTIMAGE_PARTITION_RESERVED_SIZE      := 1500000000
-BOARD_ODMIMAGE_PARTITION_RESERVED_SIZE     	:= 50000000
-BOARD_SYSTEMIMAGE_EXTFS_INODE_COUNT             := -1
-BOARD_VENDORIMAGE_EXTFS_INODE_COUNT             := -1
-BOARD_PRODUCTIMAGE_EXTFS_INODE_COUNT            := -1
-BOARD_ODMIMAGE_EXTFS_INODE_COUNT           	:= -1
+# IchthysOS: dropped for dynamic/super build (content+reserved+ext4 overhead overflowed)
+# BOARD_SYSTEMIMAGE_PARTITION_RESERVED_SIZE       := 3000000000
+# IchthysOS: dropped for dynamic/super build (content+reserved+ext4 overhead overflowed)
+# BOARD_VENDORIMAGE_PARTITION_RESERVED_SIZE       := 400000000
+# IchthysOS: dropped for dynamic/super build (content+reserved+ext4 overhead overflowed)
+# BOARD_PRODUCTIMAGE_PARTITION_RESERVED_SIZE      := 1500000000
+# IchthysOS/AOSP-17: with use_dynamic_partition_size, the odm partition is sized to exactly
+# content+reserved, so ext4 metadata overhead always overflowed our minimal (~2MB) odm no
+# matter the reserve. Dropped the per-partition reserve (not needed for a super/dynamic build;
+# spare lives in super), so odm is sized to fit content + fs overhead.
+# BOARD_ODMIMAGE_PARTITION_RESERVED_SIZE     	:= 50000000
+# IchthysOS: removed EXTFS_INODE_COUNT=-1 (newer mke2fs 1.47.2 rejects "-N -1"; auto-computes)
+# BOARD_SYSTEMIMAGE_EXTFS_INODE_COUNT             := -1
+# IchthysOS: removed EXTFS_INODE_COUNT=-1 (newer mke2fs 1.47.2 rejects "-N -1"; auto-computes)
+# BOARD_VENDORIMAGE_EXTFS_INODE_COUNT             := -1
+# IchthysOS: removed EXTFS_INODE_COUNT=-1 (newer mke2fs 1.47.2 rejects "-N -1"; auto-computes)
+# BOARD_PRODUCTIMAGE_EXTFS_INODE_COUNT            := -1
+# IchthysOS: removed EXTFS_INODE_COUNT=-1 (newer mke2fs 1.47.2 rejects "-N -1"; auto-computes)
+# BOARD_ODMIMAGE_EXTFS_INODE_COUNT           	:= -1
 
 BOARD_FLASH_BLOCK_SIZE := 262144 # (BOARD_KERNEL_PAGESIZE * 64)
 
@@ -161,6 +179,7 @@ TARGET_PROVIDES_AUDIO_EXTNS := true
 DEVICE_MANIFEST_FILE += $(COMMON_PATH)/configs/manifest_lahaina.xml
 DEVICE_MATRIX_FILE := hardware/qcom-caf/common/compatibility_matrix.xml
 DEVICE_FRAMEWORK_COMPATIBILITY_MATRIX_FILE += \
+    hardware/lineage/interfaces/compatibility_matrices/compatibility_matrix.lineage.xml \
     $(COMMON_PATH)/configs/framework_compatibility_matrix.xml \
     hardware/samsung/vintf/samsung_framework_compatibility_matrix.xml \
     hardware/qcom-caf/common/vendor_framework_compatibility_matrix.xml
@@ -201,6 +220,12 @@ TARGET_RECOVERY_UPDATER_LIBS := librecovery_updater_samsung_sm7325
 TARGET_RELEASETOOLS_EXTENSIONS := $(COMMON_PATH)/releasetools
 
 # SePolicy
+# IchthysOS/AOSP-17: this device doesn't inherit the Lineage config, so the common lineage
+# sepolicy dir (device/lineage/sepolicy/common/public — where the rw_dir_file macro lives)
+# was never added. Include the common one here. NOTE: the qcom one is NOT included here — it
+# is -included by device/qcom/sepolicy_vndr/SEPolicy.mk (the os_pickup dispatcher below), so
+# adding it here too would double the qcom sepolicy dirs + M4DEFS.
+include device/lineage/sepolicy/common/sepolicy.mk
 include device/lineage/sepolicy/libion/sepolicy.mk
 include device/lineage/sepolicy/libperfmgr/sepolicy.mk
 include device/qcom/sepolicy_vndr/SEPolicy.mk
@@ -212,10 +237,14 @@ PRODUCT_PUBLIC_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/public
 # WiFi
 BOARD_WLAN_DEVICE := qcwcn
 BOARD_HOSTAPD_DRIVER := NL80211
-BOARD_HOSTAPD_PRIVATE_LIB := lib_driver_cmd_$(BOARD_WLAN_DEVICE)
 BOARD_WPA_SUPPLICANT_DRIVER := NL80211
-BOARD_WPA_SUPPLICANT_PRIVATE_LIB := lib_driver_cmd_$(BOARD_WLAN_DEVICE)
-BOARD_WPA_SUPPLICANT_PRIVATE_LIB_EVENT := "ON"
+# IchthysOS/AOSP-17: lib_driver_cmd_qcwcn lives in the hardware/qcom-caf/wlan soong
+# namespace, which the default-namespace wpa_supplicant/hostapd can't resolve on this
+# AOSP tree. Deferred (WLAN driver plugin) to get a bootable image first; revisit to
+# re-enable WLAN (needs the wlan namespace made visible to wpa_supplicant).
+# BOARD_HOSTAPD_PRIVATE_LIB := lib_driver_cmd_$(BOARD_WLAN_DEVICE)
+# BOARD_WPA_SUPPLICANT_PRIVATE_LIB := lib_driver_cmd_$(BOARD_WLAN_DEVICE)
+# BOARD_WPA_SUPPLICANT_PRIVATE_LIB_EVENT := "ON"
 CONFIG_IEEE80211AX := true
 WIFI_DRIVER_DEFAULT := qca_cld3
 WIFI_DRIVER_STATE_CTRL_PARAM := "/dev/wlan"
