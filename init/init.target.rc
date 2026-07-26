@@ -112,7 +112,8 @@ on early-boot
     # (sns_registry_sensor.c:154) → SSR storm that floods pstore/logcat and hammers
     # init's control queue, starving later boot stages (no USB/adbd). Disabled until
     # ADSP sensor registry/persist bring-up is done. Sensors are non-critical to boot.
-    # start vendor.sensors
+    # IchthysOS 2026-07-26: RE-ENABLED — ADSP sensor PD verified healthy at runtime.
+    start vendor.sensors
 
 on boot
     setprop vendor.powerhal.init 1

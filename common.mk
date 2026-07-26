@@ -371,9 +371,11 @@ PRODUCT_PACKAGES += \
 # system_server skips cleanly), so dropping the package drops the declaration too and
 # SensorService comes up with zero sensors. Same lesson as the keymaster@4.0 VINTF decl.
 #
-# TODO(bringup): restore once the ADSP sensor PD / sscrpcd is working.
-# PRODUCT_PACKAGES += \
-#     android.hardware.sensors-service.samsung-multihal
+# IchthysOS 2026-07-26: RE-ENABLED. The ADSP sensor PD (sscrpcd sensorspd) was verified
+# healthy at runtime (sscrpcd stable, all sensor configs load, no SSR/crash) — the original
+# bringup crash was transient (empty persist registry on first boot, since populated).
+PRODUCT_PACKAGES += \
+    android.hardware.sensors-service.samsung-multihal
 
 # Touch features
 PRODUCT_PACKAGES += \
