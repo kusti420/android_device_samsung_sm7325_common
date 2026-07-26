@@ -1364,4 +1364,11 @@
          Assistant. AOSP defaults this to 5 (LONG_PRESS_POWER_ASSISTANT); LineageOS sets
          it to 1 in its common overlay, which we don't inherit, so set it here. -->
     <integer name="config_longPressOnPowerBehavior">1</integer>
+
+    <!-- IchthysOS: make the FRAMEWORK send STK "SEND SHORT MESSAGE" proactive commands
+         (via CatService.sendStkSms) instead of delegating to the modem. AOSP defaults this
+         false → the Samsung modem never transmits the SIM applet's outgoing SMS, which
+         breaks SIM-toolkit auth like Mobile-ID (EE) at the final response step. Samsung's
+         stock firmware sets this true; so do we. -->
+    <bool name="config_stk_sms_send_support">true</bool>
 </resources>

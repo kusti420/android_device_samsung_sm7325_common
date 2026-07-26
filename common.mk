@@ -352,6 +352,12 @@ PRODUCT_PACKAGES += \
     secril_config_svc \
     sehradiomanager
 
+# SIM Toolkit (STK) — handles SIM proactive commands (DISPLAY TEXT / GET INPUT).
+# Required for SIM-applet auth like Mobile-ID (EE). AOSP ships it via generic_system.mk
+# but this product config doesn't inherit that, so add it explicitly.
+PRODUCT_PACKAGES += \
+    Stk
+
 # Sensors
 # IchthysOS/AOSP-17 a52sxq bringup: DISABLED. The multihal is installed and declares
 # android.hardware.sensors.ISensors/default via its own vintf_fragment, but it never
