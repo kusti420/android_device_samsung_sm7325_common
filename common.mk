@@ -420,6 +420,30 @@ PRODUCT_PACKAGES += \
     ipacm \
     IPACM_cfg.xml
 
+# IchthysOS/AOSP-17: WLAN driver plugin. wpa_supplicant/hostapd need the Qualcomm qcwcn
+# nl80211 driver-command lib (lib_driver_cmd_qcwcn) to actually drive the WCN6750 chip;
+# without it the daemons build but WiFi never associates (this was stubbed out during
+# bringup to get a bootable image). The lib lives in the hardware/qcom-caf/wlan/qcwcn
+# soong namespace, so it is referenced by fully-qualified //path:module — the
+# default-namespace wpa_supplicant/hostapd cannot resolve a bare cross-namespace name
+# (same mechanism as libinit/udfps soong_config_set elsewhere in this tree). The old
+# BOARD_WPA_SUPPLICANT_PRIVATE_LIB / BOARD_HOSTAPD_PRIVATE_LIB make-vars are dead in the
+# AOSP-17 soong build; these soong configs are what actually wire the lib in.
+$(call soong_config_set,wpa_supplicant_8,board_wlan_device,qcwcn)
+$(call soong_config_set,wpa_supplicant_8,board_wpa_supplicant_private_lib,//hardware/qcom-caf/wlan/qcwcn:lib_driver_cmd_qcwcn)
+$(call soong_config_set_bool,wpa_supplicant_8,board_wpa_supplicant_private_lib_event,true)
+# NOTE: AOSP-17 builds wpa_supplicant/hostapd with -DANDROID_LIB_STUB unconditionally, so
+# driver_nl80211_android.c provides the P2P helper stubs. The qcwcn private lib is patched
+# (driver_cmd_nl80211.c, ICHTHYS_BASE_PROVIDES_P2P_STUBS) to NOT redefine them, so the two
+# no longer collide. Do not try to force use_stub_lib off — the lib now depends on the
+# base stubs being present.
+# NOTE: hostapd deliberately does NOT get lib_driver_cmd_qcwcn. AOSP-17's
+# driver_nl80211_android.c compiles stub p2p helpers (wpa_driver_set_p2p_noa etc.) for
+# hostapd, which collide at link with the same real symbols in the qcwcn lib. hostapd
+# drives SoftAP fine over plain nl80211 without the QCOM driver-command plugin, so it
+# stays on the stubs (its known-good pre-WLAN-fix state). Only wpa_supplicant (station
+# mode) needs the private lib.
+
 # WiFi
 PRODUCT_PACKAGES += \
     android.hardware.wifi-service \

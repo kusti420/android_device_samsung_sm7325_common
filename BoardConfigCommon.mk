@@ -238,10 +238,11 @@ PRODUCT_PUBLIC_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/public
 BOARD_WLAN_DEVICE := qcwcn
 BOARD_HOSTAPD_DRIVER := NL80211
 BOARD_WPA_SUPPLICANT_DRIVER := NL80211
-# IchthysOS/AOSP-17: lib_driver_cmd_qcwcn lives in the hardware/qcom-caf/wlan soong
-# namespace, which the default-namespace wpa_supplicant/hostapd can't resolve on this
-# AOSP tree. Deferred (WLAN driver plugin) to get a bootable image first; revisit to
-# re-enable WLAN (needs the wlan namespace made visible to wpa_supplicant).
+# IchthysOS/AOSP-17: the WLAN driver plugin (lib_driver_cmd_qcwcn) is wired in via
+# soong_config_set in sm7325-common/common.mk (board_wpa_supplicant_private_lib /
+# board_hostapd_private_lib = //hardware/qcom-caf/wlan/qcwcn:lib_driver_cmd_qcwcn).
+# These BOARD_*_PRIVATE_LIB make-vars are dead in the AOSP-17 soong-based
+# wpa_supplicant_8 build and are kept commented for reference only.
 # BOARD_HOSTAPD_PRIVATE_LIB := lib_driver_cmd_$(BOARD_WLAN_DEVICE)
 # BOARD_WPA_SUPPLICANT_PRIVATE_LIB := lib_driver_cmd_$(BOARD_WLAN_DEVICE)
 # BOARD_WPA_SUPPLICANT_PRIVATE_LIB_EVENT := "ON"
