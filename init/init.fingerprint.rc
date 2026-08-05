@@ -36,6 +36,21 @@ on boot
     mkdir /data/vendor/misc/qti_fp/template 0770 system system
 
     mkdir /data/vendor/biometrics 0770 system system
+    mkdir /data/vendor/biometrics/meta 0770 system system
+    mkdir /data/vendor/biometrics/meta/bk 0770 system system
+    mkdir /data/vendor/biometrics/fp 0770 system system
+    mkdir /data/vendor/biometrics/log 0770 system system
+    mkdir /data/vendor/biometrics/type 0770 system system
+    mkdir /data/vendor/biometrics/info 0770 system system
+    mkdir /data/vendor/biometrics/bk 0770 system system
+    mkdir /data/vendor/biometrics/ta 0770 system system
+    mkdir /data/vendor/biometrics/ta/bta 0770 system system
+    mkdir /data/vendor/biometrics/ta/dta 0770 system system
+    mkdir /data/vendor/biometrics/switch 0770 system system
     mkdir /data/vendor/fpSnrTest 0770 system system
     mkdir /efs/biometrics 0770 system system
     mkdir /efs/biometrics/meta 0770 system system
+
+    # type_check sysfs is capped to 1 in kernel (fingerprint_common.c)
+    # so BAuth no longer triggers persbds. No chattr +i needed — BDS
+    # file must be writable for calibration updates during enrollment.
