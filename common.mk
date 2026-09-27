@@ -72,8 +72,6 @@ PRODUCT_PACKAGES += \
     init.kernel.post_boot-yupik.sh \
     init.qcom.class_core.sh \
     init.qcom.early_boot.sh \
-    init.ichthys.crashlog.rc \
-    init.ichthys.crashlog.sh \
     init.qcom.post_boot.sh \
     init.qcom.sh \
     init.qti.kernel.sh \
@@ -528,7 +526,5 @@ PRODUCT_OTA_ENFORCE_VINTF_KERNEL_REQUIREMENTS := false
 # strict VINTF manifest enforcement for this bringup (revisit by bumping the vendor target-level).
 PRODUCT_ENFORCE_VINTF_MANIFEST := false
 
-# IchthysOS/AOSP-17 a52sxq bringup: bake host adb key so adbd auto-authorizes during
-# the (currently headless/GPU-broken) boot — enables live logcat/dmesg without on-screen
-# "Allow USB debugging". Remove once GPU/display bring-up is done.
-PRODUCT_ADB_KEYS := device/samsung/sm7325-common/adbkey.pub
+# IchthysOS: the bring-up host adb key is no longer baked in; display bring-up is done, so
+# "Allow USB debugging?" can be approved on screen. (kusti420/ichthysos-tracker#14)

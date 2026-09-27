@@ -233,8 +233,9 @@ service fan_control_turn_off /vendor/bin/fan_control 0
     disabled
     oneshot
 
-on property:persist.vendor.radio.port_index=""
-    setprop sys.usb.config adb
+# IchthysOS: removed the Qualcomm rule that switched USB to adb whenever
+# persist.vendor.radio.port_index was empty, i.e. adb without Developer options
+# (kusti420/ichthysos-tracker#14).
 
 # light sensor
 on property:vendor.post_boot.parsed=1 && property:ro.product.device=m52xq
