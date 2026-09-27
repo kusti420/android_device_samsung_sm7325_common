@@ -248,7 +248,7 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/keylayout/sec_touchscreen.kl:$(TARGET_COPY_OUT_VENDOR)/usr/keylayout/sec_touchscreen.kl
 
 # Keymaster — Samsung TEE keymaster@4.0 loads skeymast TA for fingerprint HMAC.
-# Software KeyMint handles boot; Samsung keymaster provides TEE HMAC for fingerprint.
+# It is the device keystore (keystore2 reaches it through km_compat); see the KeyMint note below.
 PRODUCT_PACKAGES += \
     android.hardware.keymaster@4.0-service.samsung
 # IchthysOS: removed android.hardware.security.sharedsecret-service.samsung
@@ -256,8 +256,13 @@ PRODUCT_PACKAGES += \
 # without a binary makes keystore2 retry the binder connection every 6 seconds.
 $(call soong_config_set,samsungVars,target_keymaster4_library,//vendor/samsung/sm7325-common:libskeymaster4device)
 
-PRODUCT_PACKAGES += \
-    android.hardware.security.keymint-service.nonsecure
+# IchthysOS: no software KeyMint. android.hardware.security.keymint-service.nonsecure is AOSP's
+# test implementation with an all-zero root key that nevertheless reports TrustedEnvironment, so
+# every keystore key (incl. the lockscreen synthetic-password protector and FBE key wrapping) was
+# decryptable offline. It was a July bring-up stopgap for when the TZ keymaster didn't load; it
+# loads now (fingerprint uses it), so keystore2 uses the Samsung TEE keymaster@4.0 via km_compat.
+# Changing keystores invalidates existing keys: this ships only in a clean-flash build.
+# (kusti420/ichthysos-tracker#34)
 
 # LiveDisplay
 PRODUCT_PACKAGES += \
