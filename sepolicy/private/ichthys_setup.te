@@ -33,12 +33,8 @@ allow ichthys_setup system_file:dir { search read open getattr };
 allow ichthys_setup app_data_file:dir { create write add_name remove_name search read open getattr setattr };
 allow ichthys_setup app_data_file:file { create write read open getattr setattr };
 
-# Create /data/misc/ichthys/ for marker files (legacy, now uses Settings.Global).
-allow ichthys_setup system_data_file:dir { create write add_name search read open getattr setattr };
-allow ichthys_setup system_data_file:file { create write read open getattr setattr };
-
 # chown/chmod on copied files.
-allow ichthys_setup self:capability { chown fowner fsetid dac_override dac_read_search };
+allow ichthys_setup self:capability { chown fowner fsetid dac_override };
 
 # restorecon on copied files. restorecon -R also consults packages.list
 # internally for seapp_contexts per-app labeling rules; without read access
