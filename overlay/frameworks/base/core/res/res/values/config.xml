@@ -43,7 +43,9 @@
          * The remote submix module "audio.r_submix.default" must be installed on the device.
          * The device must be provisioned with HDCP keys (for protected content).
     -->
-    <bool name="config_enableWifiDisplay">true</bool>
+    <!-- IchthysOS: Miracast / wireless display off (kusti420/ichthysos-tracker#9). The remote
+         submix module stays installed because screen recording also uses it. -->
+    <bool name="config_enableWifiDisplay">false</bool>
 
     <!-- The default refresh rate for a given device. Change this value to set a higher default
          refresh rate. If the hardware composer on the device supports display modes with a higher
