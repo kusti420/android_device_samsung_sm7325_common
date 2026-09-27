@@ -1,0 +1,14 @@
+# IchthysOS declarative configuration service (ichthys.nix, IchthysConfigService, tracker#50).
+
+type ichthys_config_service, system_server_service, service_manager_type;
+
+# Generations: /data/system/ichthys/<user>/gen-N.{nix,meta}.
+type ichthys_config_data_file, file_type, data_file_type, core_data_file_type;
+type_transition system_server system_data_file:dir ichthys_config_data_file "ichthys";
+allow system_server ichthys_config_data_file:dir create_dir_perms;
+allow system_server ichthys_config_data_file:file create_file_perms;
+
+# Settings (Theme Studio) and `adb shell cmd ichthys_config`. The binder calls are further
+# gated by android.permission.MANAGE_ICHTHYS_CONFIG (or the shell/system uid).
+allow system_app ichthys_config_service:service_manager find;
+allow shell ichthys_config_service:service_manager find;

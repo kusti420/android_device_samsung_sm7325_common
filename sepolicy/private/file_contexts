@@ -1,0 +1,1 @@
+/data/system/ichthys(/.*)?                u:object_r:ichthys_config_data_file:s0

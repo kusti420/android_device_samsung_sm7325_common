@@ -533,3 +533,7 @@ PRODUCT_ENFORCE_VINTF_MANIFEST := false
 
 # IchthysOS: the bring-up host adb key is no longer baked in; display bring-up is done, so
 # "Allow USB debugging?" can be approved on screen. (kusti420/ichthysos-tracker#14)
+
+# IchthysOS: theme presets for ichthys.nix theme.preset (tracker#50).
+PRODUCT_PACKAGES += \
+    ichthys_theme_presets
