@@ -230,35 +230,41 @@
      Spline interpolation is used to determine the auto-brightness
      backlight values for lux levels between these control points.
 
-     Must be overridden in platform specific overlays -->
+     Must be overridden in platform specific overlays
+
+     IchthysOS: recalibrated for the stk_stk31610 under-display ALS as it behaves on
+     AOSP. Measured on a52sxq (2026-07-27, sensor readings identical whether the panel
+     backlight is at 1/486 or 486/486, i.e. no panel light bleed into the sensor):
+       dark room / screen off        ->    0.0 lux
+       lit room, evening, face up    ->   26-30 lux
+       lamp pointed at the sensor    ->  150-580 lux (observed peaks 455.7 / 579.8)
+       hardware ceiling              ->  4095.9 lux (Sensor.getMaximumRange())
+     The stock array was calibrated for Samsung's screen-light-compensated ALS stack
+     and assumed several hundred lux indoors, so on AOSP only its first few control
+     points were ever reached (26 lux -> 128 nits) and everything from 5000 lux up was
+     dead code the sensor can never report - which also capped auto-brightness at
+     ~631 of the panel's 800 nits even in direct sun. Rewritten so the sensor's real
+     0..4096 lux range spans the whole panel range. -->
     <integer-array name="config_autoBrightnessLevels">
         <item>1</item>
         <item>2</item>
-        <item>3</item>
         <item>4</item>
-        <item>5</item>
-        <item>10</item>
-        <item>20</item>
-        <item>30</item>
+        <item>8</item>
+        <item>15</item>
+        <item>25</item>
         <item>40</item>
-        <item>50</item>
         <item>60</item>
         <item>100</item>
-        <item>300</item>
-        <item>500</item>
-        <item>1000</item>
-        <item>2000</item>
-        <item>2999</item>
-        <item>3000</item>
+        <item>150</item>
+        <item>250</item>
+        <item>400</item>
+        <item>600</item>
+        <item>900</item>
+        <item>1300</item>
+        <item>1800</item>
+        <item>2500</item>
+        <item>3200</item>
         <item>4000</item>
-        <item>5000</item>
-        <item>6000</item>
-        <item>7000</item>
-        <item>8000</item>
-        <item>9000</item>
-        <item>10000</item>
-        <item>20000</item>
-        <item>40000</item>
     </integer-array>
 
     <!-- Whether WM DisplayContent supports high performance transitions
@@ -762,35 +768,38 @@
          in the config_autoBrightnessLevels array.  This array should have size one greater
          than the size of the config_autoBrightnessLevels array.
          The brightness values must be between 0 and 255 and be non-decreasing.
-         This must be overridden in platform specific overlays -->
+         This must be overridden in platform specific overlays
+
+         IchthysOS: recalibrated together with config_autoBrightnessLevels above.
+         Each entry was derived from a target nit value via config_screenBrightnessNits
+         (backlight 0..486 -> 2..800 nits); the framework turns these ints into floats
+         with (v - 1) / 254. Resulting lux -> nits curve (old -> new):
+              0 lux    39.8 ->  39.8   (night behaviour deliberately unchanged)
+              8 lux    96.9 -> 109.8
+             27 lux   128.4 -> 191.3   (typical lit room - the "too dim" complaint)
+             85 lux   180.0 -> 284.2
+            455 lux   421.5 -> 442.5
+           4095 lux   631.0 -> 800.0   (100% is now reachable at all) -->
     <integer-array name="config_autoBrightnessLcdBacklightValues">
         <item>22</item>
-        <item>25</item>
-        <item>28</item>
+        <item>26</item>
         <item>31</item>
-        <item>36</item>
-        <item>40</item>
-        <item>46</item>
-        <item>52</item>
-        <item>55</item>
-        <item>58</item>
-        <item>63</item>
-        <item>67</item>
+        <item>38</item>
+        <item>48</item>
+        <item>59</item>
         <item>72</item>
-        <item>98</item>
-        <item>145</item>
-        <item>163</item>
-        <item>172</item>
-        <item>181</item>
-        <item>191</item>
-        <item>200</item>
-        <item>209</item>
-        <item>218</item>
-        <item>227</item>
-        <item>227</item>
-        <item>236</item>
-        <item>236</item>
-        <item>245</item>
+        <item>83</item>
+        <item>92</item>
+        <item>104</item>
+        <item>112</item>
+        <item>124</item>
+        <item>136</item>
+        <item>152</item>
+        <item>168</item>
+        <item>186</item>
+        <item>204</item>
+        <item>223</item>
+        <item>241</item>
         <item>255</item>
     </integer-array>
 
@@ -1294,8 +1303,15 @@
          for debouncing the light sensor.  Different constants are used to debounce the light sensor
          when adapting to brighter or darker environments.  This parameter controls how quickly
          brightness changes occur in response to an observed change in light level that exceeds the
-         hysteresis threshold. -->
-    <integer name="config_autoBrightnessBrighteningLightDebounce">10000</integer>
+         hysteresis threshold.
+
+         IchthysOS: these were both 10000 but had never actually taken effect (see the
+         auto-brightness responsiveness block at the end of this file). Brightening is pulled
+         back to the AOSP 4s so that walking into sunlight still gets a prompt response;
+         under-brightening is the one direction that hurts usability. Darkening stays at 10s
+         because transient darkening (a shadow, a hand over the panel, turning the phone) is
+         the main source of the "jumpy" feel and a briefly-too-bright screen costs nothing. -->
+    <integer name="config_autoBrightnessBrighteningLightDebounce">4000</integer>
     <integer name="config_autoBrightnessDarkeningLightDebounce">10000</integer>
 
     <!-- Screen brightness used to dim the screen when the user activity
@@ -1365,10 +1381,165 @@
          it to 1 in its common overlay, which we don't inherit, so set it here. -->
     <integer name="config_longPressOnPowerBehavior">1</integer>
 
+    <!-- ==================================================================================
+         IchthysOS: no assistant. The user does not want any assistant / voice-assist
+         surface on this device, so the framework-level defaults that hand gestures to an
+         assistant are all turned off here.
+
+         config_longPressOnPowerForAssistantSettingAvailable=false additionally removes
+         Settings > System > Gestures > "Press and hold power button" entirely: that whole
+         screen exists only to choose between the power menu and the digital assistant
+         (PowerMenuSettingsUtils.isLongPressPowerSettingAvailable gates both the entry in
+         gestures.xml and every preference inside it), and with the assistant gone the
+         only remaining choice is the power menu, which is already what
+         config_longPressOnPowerBehavior=1 gives.
+
+         These are defaults only - PhoneWindowManager, SystemUI's NavBarHelper and
+         Launcher's ContextualSearchInvoker are also neutered in code, so a stale value
+         written into Settings.Secure by a restore/backup cannot re-enable anything.
+         ================================================================================== -->
+    <!-- Default for Settings.Secure.ASSIST_LONG_PRESS_HOME_ENABLED -->
+    <bool name="config_assistLongPressHomeEnabledDefault">false</bool>
+    <!-- Default for Settings.Secure.ASSIST_TOUCH_GESTURE_ENABLED (bottom-corner swipe) -->
+    <bool name="config_assistTouchGestureEnabledDefault">false</bool>
+    <!-- Default for Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED (Contextual Search,
+         i.e. the assistant override of long-press-home / long-press-nav-handle) -->
+    <bool name="config_searchAllEntrypointsEnabledDefault">false</bool>
+    <!-- Hides the whole "Press and hold power button" settings screen; see above. -->
+    <bool name="config_longPressOnPowerForAssistantSettingAvailable">false</bool>
+
     <!-- IchthysOS: make the FRAMEWORK send STK "SEND SHORT MESSAGE" proactive commands
          (via CatService.sendStkSms) instead of delegating to the modem. AOSP defaults this
          false → the Samsung modem never transmits the SIM applet's outgoing SMS, which
          breaks SIM-toolkit auth like Mobile-ID (EE) at the final response step. Samsung's
          stock firmware sets this true; so do we. -->
     <bool name="config_stk_sms_send_support">true</bool>
+
+    <!-- ==================================================================================
+         IchthysOS: auto-brightness responsiveness.
+
+         Two separate complaints are being fixed here: auto-brightness *reacts* to light
+         changes that are too small/too short-lived, and once it does react the visible
+         change *lands* too abruptly.
+
+         Background, because it drives every number below:
+
+         (a) This device has no display config XML (no /vendor/etc/displayconfig/*.xml), so
+             DisplayDeviceConfig reports mLoadedFrom=<config.xml> and every knob has to come
+             from this file. That also means the DDC-only knobs are unavailable to us:
+             ambientLightHorizon{Short,Long} stay pinned at the Java defaults 2000/10000 ms,
+             the hysteresis "minimum" absolute deltas stay at 0, and
+             screenBrightnessRamp{Increase,Decrease}MaxMillis stay at 0 (uncapped). If the
+             outdoor ramp ever feels sluggish, the right follow-up is a real DDC XML with
+             screenBrightnessRampIncreaseMaxMillis, not faster ramp rates here.
+
+         (b) The ALS (stk_stk31610) sits UNDER the display. AOSP has none of Samsung's
+             screen-light compensation, so the readings are heavily attenuated and squashed
+             towards zero: ~0.08 lux in a dark room, ~6.9 lux with a lamp pointed straight
+             at the sensor. Practically the whole indoor operating range lands in the first
+             few control points of config_autoBrightnessLevels above.
+
+             This is why the stock hysteresis is so twitchy here. The thresholds are pure
+             *percentages* of the current lux with no absolute floor (see (a)), so AOSP's
+             10% brightening threshold means a 0.008 lux wobble at 0.08 lux is enough to
+             re-evaluate brightness. On a normal top-mounted ALS reading hundreds of lux
+             that same 10% is a real change; here it is sensor noise. The fix is to express
+             the floor as much larger percentages in the low-lux bands, since that is the
+             only lever config.xml gives us.
+         ================================================================================== -->
+
+    <!-- Sample the ALS every 500ms instead of 250ms. With a >=4s debounce, 250ms timing
+         granularity buys nothing, and it halves the number of pointless hysteresis
+         evaluations. Tradeoff: the 2s short horizon now averages 4 samples instead of 8, so
+         the fast lux estimate is slightly noisier, more than paid for by the much wider
+         thresholds below. This is the least important change here and the easiest to revert. -->
+    <integer name="config_autoBrightnessLightSensorRate">500</integer>
+
+    <!-- ...but keep the first post-doze sample at 250ms so screen-on still picks up the
+         ambient level quickly. Must be <= config_autoBrightnessLightSensorRate. -->
+    <integer name="config_autoBrightnessInitialLightSensorRate">250</integer>
+
+    <!-- Ambient lux hysteresis, banded. Values are permille (tenths of a percent) of the
+         current lux; the threshold is lux * (1 +/- value/1000). AOSP ships a single flat
+         band of 100 (10%) brightening / 200 (20%) darkening.
+
+         The low bands are deliberately huge because of the under-display ALS (see (b)):
+           < 1 lux    150% -> 0.08 lux must reach 0.20 lux. Noise can't trip it, but a room
+                              light coming on easily can.
+           1-3 lux    100% -> the region this phone actually lives in indoors, and also the
+                              steepest part of the brightness curve per lux, so it gets the
+                              most damping of any band where real changes still occur.
+           3-10 lux    70%
+         The upper bands taper towards conventional values; by then the absolute lux deltas
+         are large enough that a percentage threshold behaves sanely on its own.
+
+         Darkening stays well under 100%: at 100% the threshold collapses to 0 lux and the
+         screen could never darken again. -->
+    <integer-array name="config_ambientThresholdLevels">
+        <item>1</item>
+        <item>3</item>
+        <item>10</item>
+        <item>50</item>
+        <item>300</item>
+        <item>2000</item>
+    </integer-array>
+    <integer-array name="config_ambientBrighteningThresholds">
+        <item>1500</item>
+        <item>1000</item>
+        <item>700</item>
+        <item>500</item>
+        <item>400</item>
+        <item>350</item>
+        <item>300</item>
+    </integer-array>
+    <integer-array name="config_ambientDarkeningThresholds">
+        <item>500</item>
+        <item>400</item>
+        <item>350</item>
+        <item>300</item>
+        <item>250</item>
+        <item>250</item>
+        <item>250</item>
+    </integer-array>
+
+    <!-- Screen-brightness hysteresis: the second damper. Even once the ambient lux clears
+         its threshold, the newly computed brightness has to differ from the current one by
+         this much before it is applied at all. Levels are on the legacy 0-255 scale
+         (26/51/102 ~= 0.10/0.20/0.40); thresholds are permille as above.
+
+         Kept modest on purpose; widening this too far trades "twitchy" for "staircase",
+         which reads as worse. It is skewed a little towards suppressing darkening. -->
+    <integer-array name="config_screenThresholdLevels">
+        <item>26</item>
+        <item>51</item>
+        <item>102</item>
+    </integer-array>
+    <integer-array name="config_screenBrighteningThresholds">
+        <item>250</item>
+        <item>200</item>
+        <item>150</item>
+        <item>120</item>
+    </integer-array>
+    <integer-array name="config_screenDarkeningThresholds">
+        <item>300</item>
+        <item>250</item>
+        <item>220</item>
+        <item>200</item>
+    </integer-array>
+
+    <!-- Ramp rates, in brightness units per second on the 0-255 scale. On the config.xml
+         path these two ints feed all four of fast/slow x increase/decrease.
+
+         slow (AOSP 60 -> 40, i.e. 0.157/s) is the one that matters: every steady-state
+         auto-brightness change uses the slow rate. A typical indoor step (delta <= 0.2)
+         now eases in over ~1.3s instead of snapping in ~0.85s, which is the "changes too
+         fast" complaint. Tradeoff: a full indoor->sunlight swing (delta ~0.6) takes ~3.8s
+         rather than ~2.5s. Don't push this lower without the DDC max-millis cap from (a).
+
+         fast (AOSP 180 -> 150, i.e. 0.588/s) covers the first auto-brightness application
+         after screen-on and user slider changes. Screen-on is a moment people notice
+         abruptness, so it gets gentler too, but only mildly: a full-range slider slam is
+         1.7s instead of 1.4s and a normal slider drag is indistinguishable. -->
+    <integer translatable="false" name="config_brightness_ramp_rate_fast">150</integer>
+    <integer translatable="false" name="config_brightness_ramp_rate_slow">40</integer>
 </resources>

@@ -106,6 +106,11 @@ PRODUCT_PACKAGES += \
     libvolumelistener \
     libqti_vndfwk_detect.vendor:32
 
+# IchthysOS: per-ear hearing-compensation effect, loaded from /vendor/lib*/soundfx via
+# audio_effects.xml above.
+PRODUCT_PACKAGES += \
+    libichthyshearing
+
 # QCOM audio source modules (effects bundle, visualizer, voiceproc) read these
 # from the qtiaudio soong namespace. The board sets the make-vars
 # AUDIO_FEATURE_ENABLED_GKI/INSTANCE_ID (BoardConfigCommon), but the audio tree
@@ -113,6 +118,7 @@ PRODUCT_PACKAGES += \
 # GKI: our kernel's techpack audio_effects.h uses AUDIO_EFFECTS_CONFIG_SET (GKI naming).
 $(call soong_config_set,qtiaudio,feature_gki,true)
 $(call soong_config_set,qtiaudio,feature_instance_id,true)
+$(call soong_config_set,qtiaudio,feature_extended_compress_format,true)
 
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/configs/audio_effects.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_effects.xml \
@@ -210,7 +216,8 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     FlipFlap
 
-# Gatekeeper
+# Gatekeeper — Samsung hardware (TEE), so auth tokens are HMAC'd with the TEE key
+# that Samsung's fingerprint TA can validate
 PRODUCT_PACKAGES += \
     android.hardware.gatekeeper@1.0-impl \
     android.hardware.gatekeeper@1.0-service
@@ -221,31 +228,40 @@ PRODUCT_PACKAGES += \
     android.hardware.health-service.samsung-recovery
 
 # HotwordEnrollement app permissions
+#
+# IchthysOS: NOT installed. This file pre-grants KEYPHRASE_ENROLLMENT_APPLICATION and
+# MANAGE_VOICE_KEYPHRASES to Google's hotword-enrollment privileged apps
+# (com.android.hotwordenrollment.okgoogle / .xgoogle), i.e. it is the allowlist that lets
+# "Hey Google" always-on keyphrase detection be enrolled against the SoundTrigger HAL.
+# This ROM ships no such app and the user does not want voice/hotword features, so the
+# allowlist is dropped rather than shipped dormant. Nothing in this ROM references those
+# packages; removing the file cannot fail a build or a boot (privapp-permissions files only
+# matter for packages that are actually present in /system/priv-app).
+#
+# Restoring it is a one-line uncomment; the file itself is kept at
+# configs/permissions/privapp-permissions-hotword.xml.
+# PRODUCT_COPY_FILES += \
+#     $(LOCAL_PATH)/configs/permissions/privapp-permissions-hotword.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/privapp-permissions-hotword.xml
+
+# IchthysOS: no assistant / voice search. Declares android.software.voice_recognizers
+# unavailable, which stops VoiceInteractionManagerService from ever binding a
+# VoiceInteractionService (and hence any hotword detector). See the file's own comment.
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/configs/permissions/privapp-permissions-hotword.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/privapp-permissions-hotword.xml
+    $(LOCAL_PATH)/configs/permissions/ichthysos-no-voice-recognizers.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/ichthysos-no-voice-recognizers.xml
 
 # Keylayout
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/keylayout/sec_touchscreen.kl:$(TARGET_COPY_OUT_VENDOR)/usr/keylayout/sec_touchscreen.kl
 
-# Keymaster
-# IchthysOS/AOSP-17 a52sxq bringup: the Samsung keymaster@4.0 HIDL HAL fails
-# `QSEECom_start_app` (its TrustZone keymaster TA won't load) and never registers,
-# spamming the log 100s of times/sec (skeymaster/QSEECOMAPI/keymaster_tee errors)
-# which drowns the pstore so the real KeyMint startup is invisible. keystore2 uses the
-# AIDL software KeyMint below, so this HIDL HAL is dead weight. Remove it (unfloods logs,
-# drops a broken HAL). Revisit if/when the Samsung TZ keymaster is made to load.
-# PRODUCT_PACKAGES += \
-#     android.hardware.keymaster@4.0-service.samsung
-#
-# $(call soong_config_set,samsungVars,target_keymaster4_library,//vendor/samsung/sm7325-common:libskeymaster4device)
+# Keymaster — Samsung TEE keymaster@4.0 loads skeymast TA for fingerprint HMAC.
+# Software KeyMint handles boot; Samsung keymaster provides TEE HMAC for fingerprint.
+PRODUCT_PACKAGES += \
+    android.hardware.keymaster@4.0-service.samsung
+# IchthysOS: removed android.hardware.security.sharedsecret-service.samsung
+# The binary was never extracted from stock firmware and the VINTF manifest
+# without a binary makes keystore2 retry the binder connection every 6 seconds.
+$(call soong_config_set,samsungVars,target_keymaster4_library,//vendor/samsung/sm7325-common:libskeymaster4device)
 
-# IchthysOS/AOSP-17 bringup: the Samsung TrustZone keymaster@4.0 HIDL HAL never
-# registers on the A17 tree, so keystore2 blocks and vold hangs the boot in
-# post-fs-data. Add AOSP's software KeyMint (nonsecure, in-process TA) so keystore2
-# gets a working KeyMint-V5 AIDL backend directly and boot proceeds. NOTE: software
-# crypto, NOT hardware-backed (no StrongBox/attestation) — a bring-up stopgap until
-# the TZ keymaster is fixed. keystore2 prefers the AIDL KeyMint over the HIDL one.
 PRODUCT_PACKAGES += \
     android.hardware.security.keymint-service.nonsecure
 

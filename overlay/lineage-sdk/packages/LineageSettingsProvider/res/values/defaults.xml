@@ -4,6 +4,14 @@
      SPDX-License-Identifier: Apache-2.0
 -->
 <resources>
-    <!-- Default for Settings.Global.DISABLE_WINDOW_BLURS -->
-    <integer name="def_disable_window_blurs">1</integer>
+    <!-- Default for Settings.Global.DISABLE_WINDOW_BLURS.
+         IchthysOS: was 1 (blurs off). The SoC genuinely supports it
+         (ro.surface_flinger.supports_background_blur=1 in vendor.prop) and it is one of the five
+         gates in WMS BlurController; with it set, FLAG_BLUR_BEHIND is silently ignored for every
+         window on the device — the recents backdrop, the power menu, everything. Turned on because
+         the One UI recents styles depend on a blurred wallpaper behind them, which is the single
+         most recognisable part of that look. Note this is real GPU work on an Adreno 642L; if it
+         costs noticeable battery or jank, set it back to 1 and the recents styles fall back to a
+         heavier scrim automatically (OneUiRecentsActivity listens for the change). -->
+    <integer name="def_disable_window_blurs">0</integer>
 </resources>

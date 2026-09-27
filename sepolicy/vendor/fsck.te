@@ -2,3 +2,6 @@ allow fsck self:capability kill;
 
 # EFS
 allow fsck { efs_block_device sec_efs_block_device }:blk_file rw_file_perms;
+
+# /sys/devices/.../block/sda/sdaN/partition and queue/zoned (f2fs fsck at boot)
+allow fsck sysfs:file { getattr read open };
