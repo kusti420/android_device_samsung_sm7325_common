@@ -65,3 +65,15 @@ on property:sys.usb.config=mtp,adb && property:sys.usb.configfs=1
 
 on property:sys.usb.config=none && property:sys.usb.configfs=1
     stop adbd
+
+# IchthysOS: compose the adb gadget only while adbd runs. On this device the gadget is bound to
+# the UDC by init.usb.configfs.rc when sys.usb.config=adb; the Samsung gadget HAL doesn't do it
+# alone. The old Qualcomm rule (init.target.rc) set sys.usb.config=adb unconditionally at boot,
+# i.e. adb without Developer options; removing it outright left USB data dead in the booted OS
+# (kusti420/ichthysos-tracker#14). AdbService starts adbd (ctl.start) only when the user has
+# enabled USB debugging, so following init.svc.adbd gives USB debugging exactly when it's on.
+on property:init.svc.adbd=running && property:sys.usb.configfs=1 && property:sys.boot_completed=1
+    setprop sys.usb.config adb
+
+on property:init.svc.adbd=stopped && property:sys.usb.configfs=1 && property:sys.boot_completed=1
+    setprop sys.usb.config none
