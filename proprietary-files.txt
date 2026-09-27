@@ -77,9 +77,8 @@ vendor/lib/libspatializerparamstorage.so
 vendor/lib/spatializer-aidl-V1-cpp.so
 vendor/etc/audio_tuning_mixer.txt
 
-# Soundtrigger
-vendor/lib/hw/sound_trigger.primary.lahaina.so
-vendor/lib64/hw/sound_trigger.primary.lahaina.so
+# Soundtrigger: only the shared library stays (libhfp, a2dp offload and the speaker path
+# link against it). The wake-word HAL module was removed (kusti420/ichthysos-tracker#8).
 vendor/lib/libaudio_soundtrigger.so
 vendor/lib/libgcs.so
 vendor/lib/libgcs-ipc.so
@@ -471,11 +470,6 @@ vendor/gpu/kbc/unified_kbcs_32.bin
 vendor/gpu/kbc/unified_kbcs_64.bin
 vendor/gpu/kbc/unified_ksqs.bin
 
-# HotwordEnrollment
--product/priv-app/HotwordEnrollmentOKGoogleEx3HEXAGON/HotwordEnrollmentOKGoogleEx3HEXAGON.apk
--product/priv-app/HotwordEnrollmentXGoogleEx3HEXAGON/HotwordEnrollmentXGoogleEx3HEXAGON.apk
-system_ext/etc/permissions/com.android.hotwordenrollment.common.util.xml
-system_ext/framework/com.android.hotwordenrollment.common.util.jar
 
 # IOP
 vendor/bin/hw/vendor.qti.hardware.iop@2.0-service

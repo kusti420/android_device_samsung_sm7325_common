@@ -97,7 +97,6 @@ PRODUCT_PACKAGES += \
     android.hardware.audio.service \
     android.hardware.audio@7.0-impl.samsung-sm7325 \
     android.hardware.audio.effect@7.0-impl \
-    android.hardware.soundtrigger@2.3-impl \
     audio.r_submix.default \
     audio.usb.default \
     libqcomvisualizer \
@@ -127,8 +126,6 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/audio/configs/audio_platform_info_intcodec.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_platform_info_intcodec.xml \
     $(LOCAL_PATH)/audio/configs/audio_policy_configuration.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy_configuration.xml \
     $(LOCAL_PATH)/audio/configs/mixer_usb_default.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_usb_default.xml \
-    $(LOCAL_PATH)/audio/configs/sound_trigger_mixer_paths.xml:$(TARGET_COPY_OUT_VENDOR)/etc/sound_trigger_mixer_paths.xml \
-    $(LOCAL_PATH)/audio/configs/sound_trigger_platform_info.xml:$(TARGET_COPY_OUT_VENDOR)/etc/sound_trigger_platform_info.xml \
     frameworks/av/services/audiopolicy/config/audio_policy_volumes.xml:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy_volumes.xml \
     frameworks/av/services/audiopolicy/config/bluetooth_audio_policy_configuration_7_0.xml:$(TARGET_COPY_OUT_VENDOR)/etc/bluetooth_audio_policy_configuration_7_0.xml \
     frameworks/av/services/audiopolicy/config/default_volume_tables.xml:$(TARGET_COPY_OUT_VENDOR)/etc/default_volume_tables.xml \
@@ -233,10 +230,9 @@ PRODUCT_PACKAGES += \
 # MANAGE_VOICE_KEYPHRASES to Google's hotword-enrollment privileged apps
 # (com.android.hotwordenrollment.okgoogle / .xgoogle), i.e. it is the allowlist that lets
 # "Hey Google" always-on keyphrase detection be enrolled against the SoundTrigger HAL.
-# This ROM ships no such app and the user does not want voice/hotword features, so the
-# allowlist is dropped rather than shipped dormant. Nothing in this ROM references those
-# packages; removing the file cannot fail a build or a boot (privapp-permissions files only
-# matter for packages that are actually present in /system/priv-app).
+# The user does not want voice/hotword features. Since tracker#8 the apps themselves, their
+# util jar, the SoundTrigger HAL (soundtrigger@2.3-impl + sound_trigger.primary.lahaina) and
+# its configs are gone too, so there is nothing left for this allowlist to apply to.
 #
 # Restoring it is a one-line uncomment; the file itself is kept at
 # configs/permissions/privapp-permissions-hotword.xml.
