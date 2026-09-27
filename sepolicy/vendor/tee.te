@@ -4,3 +4,10 @@ set_prop(tee, vendor_qseecomd_prop)
 # This is for randomly generated TEE directories in /efs
 allow tee efs_file:dir { search read write open add_name };
 allow tee efs_file:file { read write open getattr create };
+
+# IchthysOS: Samsung's gatekeeper TA keeps its secure failure records in /data/vendor/gatekeeper
+# via qseecomd (tz_load/tz_save). A17 labels that dir gatekeeper_vendor_data_file, which only the
+# AOSP gatekeeper HAL could access, so every verify failed (-506), the failure count was pinned
+# at 10 and the correct pattern never unlocked; fingerprint enroll failed for the same reason.
+allow tee gatekeeper_vendor_data_file:dir rw_dir_perms;
+allow tee gatekeeper_vendor_data_file:file create_file_perms;
