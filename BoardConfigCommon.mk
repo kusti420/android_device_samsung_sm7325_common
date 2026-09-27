@@ -17,6 +17,7 @@
 COMMON_PATH := device/samsung/sm7325-common
 
 BUILD_BROKEN_DUP_RULES := true
+BUILD_BROKEN_DUP_SYSPROP := true
 BUILD_BROKEN_ELF_PREBUILT_PRODUCT_COPY_FILES := true
 
 # APEX image
@@ -62,14 +63,11 @@ TARGET_LINUX_KERNEL_VERSION := 5.4
 
 # Kernel flags
 BOARD_KERNEL_CMDLINE += console=null androidboot.hardware=qcom androidboot.memcg=1 lpm_levels.sleep_disabled=1 video=vfb:640x400,bpp=32,memsize=3072000 msm_rtb.filter=0x237 service_locator.enable=1 androidboot.usbcontroller=a600000.dwc3 swiotlb=0 loop.max_part=7 cgroup.memory=nokmem,nosocket firmware_class.path=/vendor/firmware_mnt/image pcie_ports=compat loop.max_part=7 iptable_raw.raw_before_defrag=1 ip6table_raw.raw_before_defrag=1 printk.devkmsg=on
-# IchthysOS/AOSP-17 bringup: boot SELinux permissive so incomplete bring-up policy
-# doesn't block HALs (keymint/keystore2/qseecom/sscrpcd) from registering.
-# NOTE: this Samsung sm7325 kernel IGNORES the userspace androidboot.selinux knob
-# (security/selinux/selinuxfs.c forces enforce on user builds via setenforce), so the
-# reliable lever is the KERNEL param `enforcing=0` (hooks.c __setup("enforcing="));
-# CONFIG_ALWAYS_ENFORCE is unset so selinux_enforcing_boot defaults 0 and enforcing=0
-# (appended last) overrides the stock enforcing=1. Tighten (write policy) once booting.
-BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive enforcing=0
+# IchthysOS: SELinux enforcing.  The remaining permissive-only denials (hal_power
+# writing sched_boost, hal_thermal reading amp temperature, keystore2 probing the
+# Samsung shared-secret HAL) are covered by device-specific sepolicy rules.
+# Play Integrity BASIC requires enforcing — DroidGuard checks /sys/fs/selinux/enforce.
+BOARD_KERNEL_CMDLINE += androidboot.selinux=enforcing enforcing=1
 BOARD_BOOT_HEADER_VERSION := 3
 
 BOARD_KERNEL_BASE            := 0x00000000

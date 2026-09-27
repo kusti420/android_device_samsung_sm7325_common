@@ -1,0 +1,80 @@
+# IchthysOS first-boot setup domain.
+#
+# Runs from init via seclabel u:r:ichthys_setup:s0.
+# Used by heliboard-setup.sh to copy default prefs/DB into app DE storage
+# and set the default IME. Needs broader access than the shell domain:
+# writing to app_data_file, creating dirs under /data/misc, and calling
+# settings/ime commands via binder.
+
+type ichthys_setup, domain, coredomain;
+
+# Cross the per-user MCS category boundary: /data/user_de/0/... and
+# /data/system/users/0/... are labeled with categories (e.g. c512,c768) tied
+# to the owning user. Without this, "search" into those directories is denied
+# under enforcing even though the type-level allow rules below grant it,
+# which silently breaks the DE-storage prefs/DB seeding this domain exists for.
+typeattribute ichthys_setup mlstrustedsubject;
+
+# Allow init to transition into this domain (seclabel mechanism).
+allow init ichthys_setup:process transition;
+dontaudit init ichthys_setup:process { noatsecure rlimitinh siginh };
+
+# Execute /system/bin/sh (the service's binary) — entrypoint needed for seclabel transition.
+allow ichthys_setup shell_exec:file { entrypoint read open execute execute_no_trans getattr map };
+
+# Execute common shell utilities (stat, mkdir, cp, chown, chmod, touch).
+allow ichthys_setup toolbox_exec:file { read open execute execute_no_trans getattr map };
+allow ichthys_setup system_file:file { read open execute execute_no_trans getattr map };
+
+# Read default config from /product/etc/heliboard/ (product partition is labeled system_file).
+allow ichthys_setup system_file:dir { search read open getattr };
+
+# Write to HeliBoard's device-encrypted storage (/data/user_de/0/helium314.keyboard/).
+allow ichthys_setup app_data_file:dir { create write add_name remove_name search read open getattr setattr };
+allow ichthys_setup app_data_file:file { create write read open getattr setattr };
+
+# Create /data/misc/ichthys/ for marker files (legacy, now uses Settings.Global).
+allow ichthys_setup system_data_file:dir { create write add_name search read open getattr setattr };
+allow ichthys_setup system_data_file:file { create write read open getattr setattr };
+
+# chown/chmod on copied files.
+allow ichthys_setup self:capability { chown fowner fsetid dac_override dac_read_search };
+
+# restorecon on copied files. restorecon -R also consults packages.list
+# internally for seapp_contexts per-app labeling rules; without read access
+# that lookup fails (logged, cosmetic — the actual relabel of our target
+# path still succeeds via the generic app_data_file file_contexts rule).
+allow ichthys_setup file_contexts_file:file { read open getattr map };
+allow ichthys_setup packages_list_file:file { read open getattr };
+allow ichthys_setup app_data_file:dir relabelto;
+allow ichthys_setup app_data_file:file relabelto;
+
+# Run 'settings put' and 'ime set/enable' — these use binder to system_server.
+binder_use(ichthys_setup)
+allow ichthys_setup system_server:binder { call transfer };
+allow ichthys_setup settings_service:service_manager find;
+allow ichthys_setup input_method_service:service_manager find;
+allow ichthys_setup activity_service:service_manager find;
+allow ichthys_setup package_service:service_manager find;
+
+# Allow talking to the settings content provider. The 'cmd'/'dumpsys' binary
+# hands its stdio fds to system_server over binder for the reply, so the
+# permission has to be granted in both directions.
+allow ichthys_setup system_server:fd use;
+allow system_server ichthys_setup:fd use;
+allow system_server ichthys_setup:{ fifo_file chr_file } { read write getattr };
+
+# 'settings get/put' (Settings.NameValueCache) calls back INTO the client
+# domain to deliver the ContentProvider.call() reply — this is a genuine
+# reverse binder *call*, not just a transfer on the original transaction.
+# Without this the shell command blocks forever waiting for a reply SELinux
+# silently drops, hanging the oneshot service (confirmed via /proc/<pid>/stat
+# showing the "settings get" child stuck indefinitely).
+allow system_server ichthys_setup:binder call;
+
+# /proc and /dev access needed by shell utilities.
+allow ichthys_setup proc:file { read open getattr };
+allow ichthys_setup devpts:chr_file { read write open getattr };
+
+# stdin/stdout/stderr from init.
+allow ichthys_setup null_device:chr_file { read write open };

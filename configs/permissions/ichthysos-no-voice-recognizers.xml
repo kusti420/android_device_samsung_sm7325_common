@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     IchthysOS: declare android.software.voice_recognizers UNAVAILABLE on this device.
+
+     Rationale
+     The user does not want assistant or voice-search features. This one feature flag is the
+     master switch for the whole voice-interaction subsystem:
+
+       * VoiceInteractionManagerService.shouldEnableService() returns
+         hasSystemFeature(FEATURE_VOICE_RECOGNIZERS) (unless
+         config_forceVoiceInteractionServicePackage is set, which it is not here). With the
+         feature gone, mEnableService is false and the service never binds ANY
+         VoiceInteractionService - which is the only way an AlwaysOnHotwordDetector or a
+         HotwordDetectionService can ever be created. That is the always-listening path.
+       * Settings' DefaultVoiceInputPreferenceController gates the "Voice input" default-app
+         picker on the same feature, so that entry disappears too.
+
+     AOSP declares the feature in frameworks/native/data/etc/handheld_core_hardware.xml, which
+     is a shared file we do not want to patch; SystemConfig supports <unavailable-feature> for
+     exactly this case, and /product/etc/permissions is a partition where feature declarations
+     are honoured (SystemConfig.productPermissionFlag includes ALLOW_FEATURES).
+
+     What this does NOT do
+     It does not touch android.speech.SpeechRecognizer / RecognitionService: an installed app
+     that bundles its own recogniser (or a keyboard with its own voice typing) still works.
+     Killing that would be collateral damage on ordinary apps, not an OS feature removal.
+     It also does not remove the vendor SoundTrigger HAL, which is part of the Samsung/QCOM
+     vendor image and is referenced by the vendor VINTF manifest - removing it there would risk
+     a VINTF mismatch. It stays dormant: with no VoiceInteractionService there is nothing to
+     enrol a keyphrase model against it.
+-->
+<permissions>
+    <unavailable-feature name="android.software.voice_recognizers" />
+</permissions>

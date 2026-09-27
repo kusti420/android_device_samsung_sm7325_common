@@ -1,0 +1,6 @@
+# /sys/class/udc/
+allow hal_usb_gadget_default sysfs_udc:dir search;
+
+# /sys/devices/platform/soc/a600000.ssusb/a600000.dwc3/udc/a600000.dwc3/current_speed
+allow hal_usb_gadget_default vendor_sysfs_usb_controller:dir search;
+allow hal_usb_gadget_default vendor_sysfs_usb_controller:file { read open getattr };
