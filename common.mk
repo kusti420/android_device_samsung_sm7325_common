@@ -427,10 +427,10 @@ $(call soong_config_set,samsungUsbGadgetVars,gadget_name,a600000.dwc3)
 # sys.usb.configfs=1, already set in init.target.rc) composes the adb/mtp gadget, so the
 # QTI-specific bits are not needed for bringup.
 
-# Samsung Ext Flash
-PRODUCT_PACKAGES += \
-    vendor.samsung_ext.hardware.camera.flashlight-service \
-    FlashControl
+# IchthysOS: no samsung-ext flashlight HAL / FlashControl. The camera HAL exposes the 5 torch
+# levels itself (hardware/samsung CameraDevice.cpp) and the QS tile's long-press slider drives
+# them. FlashControl re-applied its own saved level on every FLASHLIGHT_ENABLED change and
+# fought the slider. (kusti420/ichthysos-tracker#43)
 
 # Vibrator
 PRODUCT_PACKAGES += \
