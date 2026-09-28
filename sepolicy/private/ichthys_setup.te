@@ -2,7 +2,8 @@
 #
 # Runs from init via seclabel u:r:ichthys_setup:s0.
 # Used by heliboard-setup.sh to copy default prefs/DB into app DE storage
-# and set the default IME. Needs broader access than the shell domain:
+# and set the default IME, and by termux-setup.sh to seed Termux's CE home
+# (files/home/.bashrc). Needs broader access than the shell domain:
 # writing to app_data_file, creating dirs under /data/misc, and calling
 # settings/ime commands via binder.
 
@@ -33,6 +34,14 @@ allow ichthys_setup system_file:dir { search read open getattr };
 allow ichthys_setup app_data_file:dir { create write add_name remove_name search read open getattr setattr };
 allow ichthys_setup app_data_file:file { create write read open getattr setattr };
 
+# termux-setup.sh appends to an existing ~/.bashrc (O_APPEND is checked as
+# "append", not "write").
+allow ichthys_setup app_data_file:file append;
+
+# termux-setup.sh lstat()s paths to refuse app-planted symlinks. Deliberately
+# no lnk_file read: this root domain must never follow a symlink an app made.
+allow ichthys_setup app_data_file:lnk_file getattr;
+
 # chown/chmod on copied files.
 allow ichthys_setup self:capability { chown fowner fsetid dac_override };
 
@@ -44,6 +53,10 @@ allow ichthys_setup file_contexts_file:file { read open getattr map };
 allow ichthys_setup packages_list_file:file { read open getattr };
 allow ichthys_setup app_data_file:dir relabelto;
 allow ichthys_setup app_data_file:file relabelto;
+# Files this domain creates get its plain s0 level; moving them to the owning
+# app's MCS categories (restorecon in heliboard-setup, chcon in termux-setup)
+# is a relabel *from* app_data_file:s0 as well as *to* app_data_file:s0:cN.
+allow ichthys_setup app_data_file:{ dir file } relabelfrom;
 
 # Run 'settings put' and 'ime set/enable' — these use binder to system_server.
 binder_use(ichthys_setup)
