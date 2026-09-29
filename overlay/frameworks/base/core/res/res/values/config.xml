@@ -1550,4 +1550,11 @@
          which hides their QS tiles and Settings pages. (Lineage's common overlay sets it, but it
          does not reach framework-res in this build.) -->
     <bool name="config_setColorTransformAccelerated">true</bool>
+
+    <!-- IchthysOS: f.lux-style Night Light range. AOSP stops at 2596 K; allow down to 1200 K
+         (deep amber / red). Below 2596 K ColorDisplayService's NightDisplayTintController
+         follows the Planckian locus instead of extrapolating the stock quadratic coefficients.
+         The QS Night Light dialog and the Settings slider both read this through
+         ColorDisplayManager.getMinimumColorTemperature(). -->
+    <integer name="config_nightDisplayColorTemperatureMin">1200</integer>
 </resources>
