@@ -1,0 +1,11 @@
+# IchthysOS Guard platform service (IchthysGuardService, "ichthys_guard", tracker#27).
+# State lives in /data/system/ichthys_guard_*.xml (system_data_file, owned by system_server).
+
+type ichthys_guard_service, system_server_service, service_manager_type;
+
+# The Guard app (org.ichthys.guard) is platform-signed and runs as platform_app (priv_app if it
+# is ever re-signed differently). The binder calls are further gated by the signature permission
+# org.ichthys.permission.MANAGE_ICHTHYS_GUARD.
+allow platform_app ichthys_guard_service:service_manager find;
+allow system_app ichthys_guard_service:service_manager find;
+allow shell ichthys_guard_service:service_manager find;

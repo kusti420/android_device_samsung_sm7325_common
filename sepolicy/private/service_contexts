@@ -1,1 +1,2 @@
 ichthys_config                            u:object_r:ichthys_config_service:s0
+ichthys_guard                             u:object_r:ichthys_guard_service:s0
