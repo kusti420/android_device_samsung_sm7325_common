@@ -1544,4 +1544,10 @@
          1.7s instead of 1.4s and a normal slider drag is indistinguishable. -->
     <integer translatable="false" name="config_brightness_ramp_rate_fast">150</integer>
     <integer translatable="false" name="config_brightness_ramp_rate_slow">40</integer>
+
+    <!-- IchthysOS: the SM7325 Qualcomm HWC applies colour transforms in hardware. Without this
+         the framework reports Night Light and Extra Dim (reduce bright colours) as unavailable,
+         which hides their QS tiles and Settings pages. (Lineage's common overlay sets it, but it
+         does not reach framework-res in this build.) -->
+    <bool name="config_setColorTransformAccelerated">true</bool>
 </resources>
