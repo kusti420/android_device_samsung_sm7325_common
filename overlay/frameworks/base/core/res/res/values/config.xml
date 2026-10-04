@@ -105,6 +105,11 @@
          during initialization when the setting is still null. -->
     <bool name="config_dozeAlwaysOnEnabled">true</bool>
 
+    <!-- IchthysOS: there is no notification LED, but the notification dot stands in for one
+         (statusBar.notificationDot.logic = light). True makes the notification service run its
+         light rules and Settings show the "Blink light" switches, global and per category. -->
+    <bool name="config_intrusiveNotificationLed">true</bool>
+
     <!-- Power Management: Specifies whether to decouple the interactive state of the
          device from the display on/off state.
          When false, setInteractive(..., true) will be called before the display is turned on
