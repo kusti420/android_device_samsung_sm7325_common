@@ -44,6 +44,9 @@ allow ichthys_setup app_data_file:lnk_file getattr;
 
 # chown/chmod on copied files.
 allow ichthys_setup self:capability { chown fowner fsetid dac_override };
+# The kernel asks for dac_read_search before dac_override; the latter is what is granted, so the
+# first denial is only log noise.
+dontaudit ichthys_setup self:capability dac_read_search;
 
 # restorecon on copied files. restorecon -R also consults packages.list
 # internally for seapp_contexts per-app labeling rules; without read access

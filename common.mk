@@ -141,9 +141,9 @@ PRODUCT_PACKAGES += \
 $(call soong_config_set_bool,samsungCameraVars,needs_sec_reserved_field,true)
 $(call soong_config_set,samsungCameraVars,extra_ids,54) # ID=54 is macro
 
-# CAS
-PRODUCT_PACKAGES += \
-    android.hardware.cas@1.2-service
+# IchthysOS: no CAS HAL (conditional access for broadcast TV; nothing on a phone uses MediaCas).
+# android.hardware.cas@1.2-service used to be listed here; it also overrode the AIDL
+# com.android.hardware.cas APEX from base_vendor.mk, which RemovePackages now drops instead.
 
 # Charger
 PRODUCT_PACKAGES += \
@@ -206,10 +206,6 @@ $(call soong_config_set,lineage_health,fast_charge_value_fast_charge,0)
 # Fingerprint
 PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint-service.samsung
-
-# FlipFlap
-PRODUCT_PACKAGES += \
-    FlipFlap
 
 # Gatekeeper — Samsung hardware (TEE), so auth tokens are HMAC'd with the TEE key
 # that Samsung's fingerprint TA can validate
@@ -392,9 +388,9 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.sensors-service.samsung-multihal
 
-# Touch features
-PRODUCT_PACKAGES += \
-    vendor.lineage.touch-service.samsung
+# IchthysOS: no vendor.lineage.touch HAL (glove mode, touch polling rate, touchscreen gestures).
+# Only LineageParts drove it and LineageParts isn't built. Its VINTF entry is gone from
+# configs/manifest_lahaina.xml too: a HAL declared there but not installed blocks its clients.
 
 # Vendor service manager
 PRODUCT_PACKAGES += \
