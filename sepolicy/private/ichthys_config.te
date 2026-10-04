@@ -12,3 +12,9 @@ allow system_server ichthys_config_data_file:file create_file_perms;
 # gated by android.permission.MANAGE_ICHTHYS_CONFIG (or the shell/system uid).
 allow system_app ichthys_config_service:service_manager find;
 allow shell ichthys_config_service:service_manager find;
+# Ichthys Apps (org.ichthys.apps) is platform-signed with its own uid, so it runs as platform_app
+# (platform_app_36 once it targets SDK 36+). It reads and writes apps.* through this service;
+# without the rule every save failed ("Could not save to ichthys.nix") and none of its switches
+# or the recommended list could be stored.
+allow platform_app ichthys_config_service:service_manager find;
+allow platform_app_36 ichthys_config_service:service_manager find;
