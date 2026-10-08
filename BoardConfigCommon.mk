@@ -122,17 +122,14 @@ BOARD_SUPER_PARTITION_SIZE                      := 10643046400
 BOARD_SUPER_PARTITION_GROUPS                    := samsung_dynamic_partitions
 BOARD_SAMSUNG_DYNAMIC_PARTITIONS_PARTITION_LIST := system vendor product odm
 BOARD_SAMSUNG_DYNAMIC_PARTITIONS_SIZE           := 10643046400
-# IchthysOS: dropped for dynamic/super build (content+reserved+ext4 overhead overflowed)
-# BOARD_SYSTEMIMAGE_PARTITION_RESERVED_SIZE       := 3000000000
-# IchthysOS: dropped for dynamic/super build (content+reserved+ext4 overhead overflowed)
-# BOARD_VENDORIMAGE_PARTITION_RESERVED_SIZE       := 400000000
-# IchthysOS: dropped for dynamic/super build (content+reserved+ext4 overhead overflowed)
-# BOARD_PRODUCTIMAGE_PARTITION_RESERVED_SIZE      := 1500000000
-# IchthysOS/AOSP-17: with use_dynamic_partition_size, the odm partition is sized to exactly
-# content+reserved, so ext4 metadata overhead always overflowed our minimal (~2MB) odm no
-# matter the reserve. Dropped the per-partition reserve (not needed for a super/dynamic build;
-# spare lives in super), so odm is sized to fit content + fs overhead.
-# BOARD_ODMIMAGE_PARTITION_RESERVED_SIZE     	:= 50000000
+# IchthysOS: free space inside each image, so that `adb remount` can make the partitions
+# writable in place and pushed files survive a reboot (kusti420/ichthysos-tracker#51; see
+# remount/remount.sh). build_image also keeps spare inodes for the reserve. With these, the
+# four partitions take about 4.5 GB of the 10.6 GB super.
+BOARD_SYSTEMIMAGE_PARTITION_RESERVED_SIZE       := 1073741824
+BOARD_VENDORIMAGE_PARTITION_RESERVED_SIZE       := 268435456
+BOARD_PRODUCTIMAGE_PARTITION_RESERVED_SIZE      := 536870912
+BOARD_ODMIMAGE_PARTITION_RESERVED_SIZE          := 16777216
 # IchthysOS: removed EXTFS_INODE_COUNT=-1 (newer mke2fs 1.47.2 rejects "-N -1"; auto-computes)
 # BOARD_SYSTEMIMAGE_EXTFS_INODE_COUNT             := -1
 # IchthysOS: removed EXTFS_INODE_COUNT=-1 (newer mke2fs 1.47.2 rejects "-N -1"; auto-computes)

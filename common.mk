@@ -188,6 +188,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     fastbootd
 
+# adb remount (stands in for AOSP's tool, which RemovePackages drops; debug builds only, as there)
+PRODUCT_PACKAGES_DEBUG += \
+    remount.ichthys
+
 # ION
 $(call soong_config_set_bool,libion,legacy_impl,true)
 

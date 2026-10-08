@@ -1,0 +1,13 @@
+//
+// Copyright (C) 2026 IchthysOS
+// SPDX-License-Identifier: Apache-2.0
+//
+
+// `adb remount` runs "remount" from the shell's PATH. /system_ext/bin comes before /system/bin
+// there, and AOSP's tool in /system/bin is dropped by RemovePackages.
+sh_binary {
+    name: "remount.ichthys",
+    src: "remount.sh",
+    filename: "remount",
+    system_ext_specific: true,
+}
