@@ -11,5 +11,5 @@ allow init efs_file:dir mounton;
 # Mounting older BL rev's firmware files
 allow init vendor_firmware_file:file mounton;
 
-# IchthysOS vendor init scripts (init.ichthys.crashlog.sh etc.)
+# IchthysOS vendor init scripts
 allow init vendor_file:file execute;

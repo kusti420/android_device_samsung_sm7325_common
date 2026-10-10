@@ -196,19 +196,6 @@ prebuilt_etc {
     soc_specific: true,
 }
 
-prebuilt_etc {
-    name: "init.ichthys.crashlog.rc",
-    src: "init.ichthys.crashlog.rc",
-    sub_dir: "init",
-    soc_specific: true,
-}
-
-sh_binary {
-    name: "init.ichthys.crashlog.sh",
-    src: "init.ichthys.crashlog.sh",
-    soc_specific: true,
-}
-
 sh_binary {
     name: "init.qcom.post_boot.sh",
     src: "init.qcom.post_boot.sh",
