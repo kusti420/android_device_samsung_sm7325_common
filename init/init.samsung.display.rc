@@ -422,6 +422,11 @@ on init
 	chown system system /sys/class/lcd/panel1/actual_mask_brightness
 	chmod 0440 /sys/class/lcd/panel1/actual_mask_brightness
 
+# IchthysOS: the DDI's local green circle at the sensor (TX_SELF_MASK_GREEN_CIRCLE_ON), for the
+# fingerprint HAL's opt-in local illumination (/data/vendor/biometrics/ichthys_local_illum).
+	chown system system /sys/class/lcd/panel/fp_green_circle
+	chmod 0660 /sys/class/lcd/panel/fp_green_circle
+
 # UB CONN DET 
 	chown system system /sys/class/lcd/panel/conn_det
 	chmod 0660 /sys/class/lcd/panel/conn_det
