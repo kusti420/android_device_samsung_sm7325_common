@@ -1,0 +1,7 @@
+# IchthysOS: frame-synced UDFPS mask HBM switch, persist.ichthys.udfps_sync.
+# SystemUI (platform-signed: platform_app, or platform_app_36 when it targets SDK 36+) reads it to
+# pick the synced mask window; `adb shell setprop` turns it on/off without a rebuild.
+# The vendor readers (composer, fingerprint HAL) are in vendor/hal_*_default.te.
+get_prop(platform_app, ichthys_udfps_prop)
+get_prop(platform_app_36, ichthys_udfps_prop)
+set_prop(shell, ichthys_udfps_prop)

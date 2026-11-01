@@ -1,0 +1,4 @@
+# IchthysOS: frame-synced UDFPS mask HBM switch (persist.ichthys.udfps_sync). Read by SystemUI,
+# the display composer and the fingerprint HAL, so it is a public platform type the vendor policy
+# can name too.
+product_public_prop(ichthys_udfps_prop)

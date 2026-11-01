@@ -1,0 +1,2 @@
+# IchthysOS: frame-synced UDFPS mask HBM (SystemUI + composer + fingerprint HAL), default off.
+persist.ichthys.udfps_sync    u:object_r:ichthys_udfps_prop:s0 exact bool

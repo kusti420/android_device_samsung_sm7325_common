@@ -30,3 +30,6 @@ allow hal_fingerprint_default uhid_device:chr_file rw_file_perms;
 # /sys/devices/virtual/lcd/panel/ (mask_brightness for UDFPS HBM)
 allow hal_fingerprint_default sysfs_lcd_writable:dir search;
 allow hal_fingerprint_default sysfs_lcd_writable:file rw_file_perms;
+
+# IchthysOS: frame-synced UDFPS mask HBM switch (persist.ichthys.udfps_sync)
+get_prop(hal_fingerprint_default, ichthys_udfps_prop)

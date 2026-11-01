@@ -1,1 +1,4 @@
 get_prop(hal_graphics_composer_default, vendor_mpctl_prop)
+
+# IchthysOS: frame-synced UDFPS mask HBM switch (persist.ichthys.udfps_sync), read per commit
+get_prop(hal_graphics_composer_default, ichthys_udfps_prop)
