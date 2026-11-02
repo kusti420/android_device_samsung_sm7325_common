@@ -20,3 +20,11 @@ persist.ichthys.udfps_lut3_r  u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_lut3_g  u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_lut3_b  u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_lut_bl  u:object_r:ichthys_udfps_prop:s0 exact string
+# IchthysOS: parametric UDFPS mask curve (display composer, used when no knot point above is set):
+# persist.ichthys.udfps_model = 12 numbers "a0 a1 p0 p1" per channel r g b; the dim separator's
+# keep factor persist.ichthys.udfps_sep_keep (read by SystemUI and the composer, default 0.94);
+# ichthys.udfps_applied_alpha = the dim alpha SystemUI applied to the current mask window (not
+# persistent, set by SystemUI on every mask, read by the composer).
+persist.ichthys.udfps_model     u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_sep_keep  u:object_r:ichthys_udfps_prop:s0 exact string
+ichthys.udfps_applied_alpha     u:object_r:ichthys_udfps_prop:s0 exact int
