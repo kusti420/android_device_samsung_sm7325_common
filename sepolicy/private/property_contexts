@@ -7,3 +7,16 @@ persist.ichthys.udfps_rgb     u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_lut_r   u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_lut_g   u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_lut_b   u:object_r:ichthys_udfps_prop:s0 exact string
+# IchthysOS: brightness-dependent UDFPS mask curve: calibration points 1..3 (same format as point 0
+# above) and persist.ichthys.udfps_lut_bl, the comma list of their screen brightness levels
+# (0..255 setting unit, field n = point n). Unset = point 0 alone, as before.
+persist.ichthys.udfps_lut1_r  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut1_g  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut1_b  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut2_r  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut2_g  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut2_b  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut3_r  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut3_g  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut3_b  u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut_bl  u:object_r:ichthys_udfps_prop:s0 exact string

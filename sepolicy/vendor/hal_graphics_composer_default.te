@@ -1,4 +1,9 @@
 get_prop(hal_graphics_composer_default, vendor_mpctl_prop)
 
 # IchthysOS: frame-synced UDFPS mask HBM switch (persist.ichthys.udfps_sync), read per commit
+# (also persist.ichthys.udfps_lut_r/_g/_b, the mask tone curve put on the DSPP GC, same type;
+# its calibration points udfps_lut1..3_* and the brightness list udfps_lut_bl, same type)
+# IchthysOS: the curve's brightness comes from /sys/class/backlight/panel0-backlight/brightness,
+# which the composer already writes (vendor_sysfs_graphics, rw in sepolicy_vndr common) and reads
+# under r_dir_file(hal_graphics_composer_default, sysfs_type): no extra rule needed.
 get_prop(hal_graphics_composer_default, ichthys_udfps_prop)
