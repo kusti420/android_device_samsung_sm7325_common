@@ -5,3 +5,5 @@
 get_prop(platform_app, ichthys_udfps_prop)
 get_prop(platform_app_36, ichthys_udfps_prop)
 set_prop(shell, ichthys_udfps_prop)
+# SurfaceFlinger reads persist.ichthys.udfps_rgb (colour gains while the UDFPS mask is shown).
+get_prop(surfaceflinger, ichthys_udfps_prop)
