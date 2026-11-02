@@ -2,3 +2,8 @@
 persist.ichthys.udfps_sync    u:object_r:ichthys_udfps_prop:s0 exact bool
 # IchthysOS: per-channel colour gains applied with the UDFPS mask frame (SurfaceFlinger), "r g b".
 persist.ichthys.udfps_rgb     u:object_r:ichthys_udfps_prop:s0 exact string
+# IchthysOS: UDFPS mask tone curve per channel (display composer, DSPP GC on mask frames only),
+# 33 knots x 2 base64url chars = 66 chars each; unset/empty/invalid = no curve.
+persist.ichthys.udfps_lut_r   u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut_g   u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_lut_b   u:object_r:ichthys_udfps_prop:s0 exact string
