@@ -5,6 +5,8 @@ get_prop(hal_graphics_composer_default, vendor_mpctl_prop)
 # its calibration points udfps_lut1..3_* and the brightness list udfps_lut_bl, same type)
 # (also the parametric curve persist.ichthys.udfps_model, persist.ichthys.udfps_sep_keep and
 # SystemUI's ichthys.udfps_applied_alpha, same type)
+# (also the physics curve's udfps_physics / udfps_gamma / udfps_wb and the mask level
+# udfps_mask_level, same type)
 # IchthysOS: the curve's brightness comes from /sys/class/backlight/panel0-backlight/brightness,
 # which the composer already writes (vendor_sysfs_graphics, rw in sepolicy_vndr common) and reads
 # under r_dir_file(hal_graphics_composer_default, sysfs_type): no extra rule needed.
