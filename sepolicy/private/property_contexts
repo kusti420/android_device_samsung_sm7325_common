@@ -36,3 +36,6 @@ persist.ichthys.udfps_physics     u:object_r:ichthys_udfps_prop:s0 exact bool
 persist.ichthys.udfps_gamma       u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_wb          u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_mask_level  u:object_r:ichthys_udfps_prop:s0 exact int
+# IchthysOS: physics curve exponent p(L) = clamp(p0 + p1 ln L, 0.6, 1), "p0 p1"
+# (default "0.787 0.0466").
+persist.ichthys.udfps_pexp        u:object_r:ichthys_udfps_prop:s0 exact string
