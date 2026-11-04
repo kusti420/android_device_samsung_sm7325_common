@@ -22,7 +22,7 @@ persist.ichthys.udfps_lut3_b  u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_lut_bl  u:object_r:ichthys_udfps_prop:s0 exact string
 # IchthysOS: parametric UDFPS mask curve (display composer, used when no knot point above is set):
 # persist.ichthys.udfps_model = 12 numbers "a0 a1 p0 p1" per channel r g b; the dim separator's
-# keep factor persist.ichthys.udfps_sep_keep (read by SystemUI and the composer, default 254/255);
+# keep factor persist.ichthys.udfps_sep_keep (read by SystemUI and the composer, default 252/255);
 # ichthys.udfps_applied_alpha = the dim alpha SystemUI applied to the current mask window (not
 # persistent, set by SystemUI on every mask, read by the composer).
 persist.ichthys.udfps_model     u:object_r:ichthys_udfps_prop:s0 exact string
@@ -39,3 +39,7 @@ persist.ichthys.udfps_mask_level  u:object_r:ichthys_udfps_prop:s0 exact int
 # IchthysOS: physics curve exponent p(L) = clamp(p0 + p1 ln L, 0.6, 1), "p0 p1"
 # (default "0.787 0.0466").
 persist.ichthys.udfps_pexp        u:object_r:ichthys_udfps_prop:s0 exact string
+# IchthysOS: physics curve toe lift of the darkest content under the mask HBM, "tr tg tb" (each
+# 0..0.05, default "0 0 0" = off), and its knee c1 (0.02..0.5, default 0.1).
+persist.ichthys.udfps_toe         u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_toe_knee    u:object_r:ichthys_udfps_prop:s0 exact string
