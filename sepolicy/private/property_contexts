@@ -43,3 +43,6 @@ persist.ichthys.udfps_pexp        u:object_r:ichthys_udfps_prop:s0 exact string
 # 0..0.05, default "0 0 0" = off), and its knee c1 (0.02..0.5, default 0.1).
 persist.ichthys.udfps_toe         u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_toe_knee    u:object_r:ichthys_udfps_prop:s0 exact string
+# IchthysOS: toe for a channel lit alone (the other two dark), "tr tg tb" like udfps_toe; unset =
+# udfps_toe everywhere (no DSPP 3D gamut stage). Mask frames blend it with udfps_toe per colour.
+persist.ichthys.udfps_toe_alone   u:object_r:ichthys_udfps_prop:s0 exact string
