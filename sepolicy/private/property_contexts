@@ -47,8 +47,9 @@ persist.ichthys.udfps_toe_knee    u:object_r:ichthys_udfps_prop:s0 exact string
 # udfps_toe everywhere (no DSPP 3D gamut stage). Mask frames blend it with udfps_toe per colour.
 persist.ichthys.udfps_toe_alone   u:object_r:ichthys_udfps_prop:s0 exact string
 # IchthysOS: measured residual on the mask 3D gamut: 375 signed bytes (5x5x5 content nodes x r g b,
-# ratio 1 + q * 0.0025) as base64url, concatenated over res0..res6 (each <= 88 chars); unset /
-# invalid / all zero = no residual. udfps_lut_ref.py resprops <residual.json> prints them.
+# ratio 1 + q * 0.0025, res0..res6) or 1029 (7x7x7, levels 0 8 16 24 48 72 96, res0..res15) as
+# base64url, concatenated over res0..res15 (each <= 88 chars); unset / invalid / all zero = no
+# residual. udfps_lut_ref.py resprops <residual.json> prints them.
 persist.ichthys.udfps_res0        u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_res1        u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_res2        u:object_r:ichthys_udfps_prop:s0 exact string
@@ -56,3 +57,21 @@ persist.ichthys.udfps_res3        u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_res4        u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_res5        u:object_r:ichthys_udfps_prop:s0 exact string
 persist.ichthys.udfps_res6        u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res7        u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res8        u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res9        u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res10       u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res11       u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res12       u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res13       u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res14       u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_res15       u:object_r:ichthys_udfps_prop:s0 exact string
+# IchthysOS: fine dark-end correction of the physics mask curve per channel: 16 signed bytes
+# (multipliers 1 + q * 0.0025 at output y = k * 0.0075) as base64url (22 chars); unset / invalid /
+# all zero = none. udfps_lut_ref.py darkprops <dark.json> prints them.
+persist.ichthys.udfps_dark_r      u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_dark_g      u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_dark_b      u:object_r:ichthys_udfps_prop:s0 exact string
+# IchthysOS: panel PP dither forced to 8 bit while the mask curve is applied (default on; 0 / false
+# = leave the colour mode's dither state).
+persist.ichthys.udfps_dither      u:object_r:ichthys_udfps_prop:s0 exact string
