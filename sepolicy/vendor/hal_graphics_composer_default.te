@@ -11,3 +11,10 @@ get_prop(hal_graphics_composer_default, vendor_mpctl_prop)
 # which the composer already writes (vendor_sysfs_graphics, rw in sepolicy_vndr common) and reads
 # under r_dir_file(hal_graphics_composer_default, sysfs_type): no extra rule needed.
 get_prop(hal_graphics_composer_default, ichthys_udfps_prop)
+
+# IchthysOS: the UDFPS mask curve's temperature trim reads the battery temperature once per mask
+# session (default persist.ichthys.udfps_tpath = /sys/class/power_supply/battery/temp, a symlink
+# into /sys/devices/platform/.../soc:battery/power_supply/battery, sysfs_battery in genfs_contexts).
+# The qcom common r_dir_file(hal_graphics_composer_default, sysfs_type) already covers it (and
+# thermal_zone nodes); explicit so it survives that broad rule going away.
+r_dir_file(hal_graphics_composer_default, sysfs_battery)

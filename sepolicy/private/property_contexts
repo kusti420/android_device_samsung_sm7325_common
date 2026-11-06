@@ -75,3 +75,10 @@ persist.ichthys.udfps_dark_b      u:object_r:ichthys_udfps_prop:s0 exact string
 # IchthysOS: panel PP dither forced to 8 bit while the mask curve is applied (default on; 0 / false
 # = leave the colour mode's dither state).
 persist.ichthys.udfps_dither      u:object_r:ichthys_udfps_prop:s0 exact string
+# IchthysOS: temperature trim of the physics mask curve: read at mask-on from udfps_tpath (absolute
+# sysfs path, default /sys/class/power_supply/battery/temp, tenths of a degree C), reference
+# temperature udfps_tref (C, default 31), udfps_tcoef "kr kg kb" (fractional multiplier change per
+# C, each clamped to +-0.03; unset = no trim).
+persist.ichthys.udfps_tpath       u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_tref        u:object_r:ichthys_udfps_prop:s0 exact string
+persist.ichthys.udfps_tcoef       u:object_r:ichthys_udfps_prop:s0 exact string
