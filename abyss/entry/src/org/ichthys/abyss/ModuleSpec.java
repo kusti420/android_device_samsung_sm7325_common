@@ -1152,9 +1152,9 @@ final class ModuleSpec {
             if (o == null) {
                 throw c.err(p, "a URL starts with http(s)://host or a hole");
             }
-            if (o.startsWith("https:")) {
-                needFeature(c, required, "net:https", p);
-            }
+            // https URLs need no "net:https" in requires.features: modules installed before that
+            // feature string existed (WeAreOne.FM 0.1.0) used https already, and API 1 only grows
+            // (a host without HTTPS fails such a fetch at run time with "needs HTTPS").
             netLiteral.add(o);
         }
 

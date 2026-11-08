@@ -224,7 +224,9 @@ public final class ModuleInstallTest {
         bad = liveErr.apply(liveMan.replace("\"menu:get-at\" ", ""), liveMenu);
         check(bad != null && bad.contains("menu:get-at"), "get.at needs its feature: " + bad);
         bad = liveErr.apply(liveMan.replace("\"net:https\" ", ""), liveMenu);
-        check(bad != null && bad.contains("net:https"), "an https URL needs net:https: " + bad);
+        // API 1 only grows: modules from before "net:https" (WeAreOne.FM 0.1.0) use https URLs
+        // without declaring it and must stay valid.
+        check(bad == null, "an https URL is valid without net:https: " + bad);
         bad = liveErr.apply(liveMan, liveMenu.replace("at = \"/$station", "at = \"$station"));
         check(bad != null && bad.contains("JSON pointer"), "at is a pointer: " + bad);
         bad = liveErr.apply(liveMan, liveMenu.replace("icy = true;", "icy = \"yes\";"));
