@@ -859,7 +859,7 @@ impl Engine {
     }
 
     fn probe_file(&self, path: &PathBuf) -> Result<Box<dyn FormatReader>> {
-        let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+        let file = open_track(path)?;
         let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
         let mut hint = Hint::new();
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -1070,7 +1070,7 @@ impl Engine {
     }
 
     fn open(&mut self, path: &PathBuf, start_ms: u64) -> Result<Decoding> {
-        let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+        let file = open_track(path)?;
         let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
         let mut hint = Hint::new();
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -1255,6 +1255,44 @@ impl Engine {
             }
         }
     }
+}
+
+/// Opens a track and reads the WHOLE file once on a helper thread, so it sits in the page cache
+/// (posix_fadvise WILLNEED / readahead(2) would be simpler, but 5.4's
+/// force_page_cache_readahead clamps them to one readahead window). A FLAC is 20-60 MB and RAM
+/// is plentiful with the framework stopped, so within a second the player reads from RAM only:
+/// the SD card and its host controller stay idle for the rest of the track instead of waking for
+/// a readahead every second or two. Read errors only cost the prefetch, never playback.
+/// A newer open_track call stops an older prefetch (skipping through tracks reads only the last).
+static PREFETCH_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn open_track(path: &PathBuf) -> Result<File> {
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let my_gen = PREFETCH_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+    let (p, name) = (path.clone(), path.display().to_string());
+    let _ = std::thread::Builder::new().name("abyssd-prefetch".into()).spawn(move || {
+        // Its own fd: the player's file offset stays untouched.
+        let Ok(mut f) = File::open(&p) else { return };
+        let t0 = clock::now_ms();
+        let mut buf = vec![0u8; 1 << 20];
+        let mut total = 0u64;
+        loop {
+            if PREFETCH_GEN.load(Ordering::SeqCst) != my_gen {
+                return;
+            }
+            match f.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => total += n as u64,
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                Err(e) => {
+                    warn!("prefetch {name}: {e}");
+                    return;
+                }
+            }
+        }
+        info!("prefetch: {} MB in RAM in {} ms", total >> 20, clock::now_ms().saturating_sub(t0));
+    });
+    Ok(file)
 }
 
 fn codec_name(c: CodecType) -> &'static str {
