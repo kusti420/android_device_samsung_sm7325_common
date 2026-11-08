@@ -23,7 +23,7 @@
 #
 # Stop/start lists follow AOSP toolbox `stop`/`start` (system/core/toolbox/start.cpp
 # ControlDefaultServices: netd surfaceflinger audioserver zygote zygote_secondary), minus
-# netd (DNS for later Wi-Fi use), plus the display composer HAL, cameraserver and the media
+# netd while in Abyss (abyss-net uses it for Wi-Fi; it is restarted clean on leave), plus the display composer HAL, cameraserver and the media
 # services. Nothing is stopped by class: `class_stop main` would also take netd, wificond,
 # statsd, installd and the vendor main-class daemons; cnss-daemon is class late_start.
 #
@@ -193,6 +193,16 @@ on property:sys.abyss.request=leave && property:sys.abyss.state=active
     # Wi-Fi off BEFORE the framework: stops wpa_supplicant (Android's Wi-Fi starts its own) and
     # abyss-net, which removes the Abyss network from netd and takes wlan0 down on SIGTERM.
     setprop sys.abyss.wifi off
+    # netd outlives the framework stop/start, so it kept Android's old networks (a VPN that no
+    # longer existed kept every app's DNS: "unknown host" in all apps after the return, and the
+    # next network the new ConnectivityService made clashed on its netId). Stock Android avoids
+    # this with `onrestart restart netd` on the zygote, which an explicit stop/start never runs.
+    # abyss-net goes first and explicitly (the wifi=off trigger above only queues), then netd is
+    # stopped and started with an empty state before the framework comes back. Not `restart`:
+    # netd.rc has `onrestart restart zygote`.
+    stop abyss-net
+    stop netd
+    start netd
     # Put Android's level back before the composer starts (it also re-applies its own level once
     # system_server is up; this covers the boot animation and a framework that never comes up).
     # The file is init's own (root, 0600), so `copy` accepts it. Missing file = logged, no-op.
