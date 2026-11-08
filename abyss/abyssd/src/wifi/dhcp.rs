@@ -362,6 +362,8 @@ pub enum How {
     InitReboot,
     RapidCommit,
     Discover,
+    /// Android's static address for the network (no DHCP).
+    Static,
 }
 
 impl How {
@@ -370,6 +372,7 @@ impl How {
             How::InitReboot => "init-reboot",
             How::RapidCommit => "rapid-commit",
             How::Discover => "discover",
+            How::Static => "static",
         }
     }
 }

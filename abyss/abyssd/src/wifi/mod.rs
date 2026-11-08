@@ -9,10 +9,15 @@
 //! 1. `sys.abyss.wifi=on` → abyss.rc starts Android's `wpa_supplicant` (global control socket
 //!    only) and the `abyss-net` helper (netcfg.rs).
 //! 2. wpa.rs: INTERFACE_ADD wlan0 (the supplicant brings the link up; the WCN6750 firmware
-//!    starts on link up), country code, the saved networks from the hand-over (handoff.rs):
-//!    first only the last network on its last frequency/BSSID (one-channel scan), then all of
-//!    them with a full scan.
-//! 3. dhcp.rs: INIT-REBOOT with the cached address, else DISCOVER (Rapid Commit).
+//!    starts on link up), country code, the saved networks from the hand-over (handoff.rs),
+//!    each turned into supplicant network blocks the way Android's Wi-Fi HAL glue would
+//!    (netblock.rs: every security type Android can save; the ones abyssd cannot join are
+//!    listed with the reason on the Battery screen): first only the last network on its last
+//!    frequency/BSSID (one-channel scan), then all of them with a full scan, in Android's order
+//!    (the network Android is on, abyssd's last one, then by Android's last connection and
+//!    signal).
+//! 3. dhcp.rs: INIT-REBOOT with the cached address, else DISCOVER (Rapid Commit). A network
+//!    Android has with a static address uses it (no DHCP).
 //! 4. netcfg.rs: abyss-net configures netd (network 42 + address + routes + default network).
 //! 5. `SET ps 1` (802.11 power save).
 //!
@@ -33,6 +38,7 @@ mod dns;
 mod handoff;
 mod http;
 pub mod netcfg;
+mod netblock;
 mod netd;
 mod wpa;
 
@@ -52,7 +58,8 @@ use log::{info, warn};
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 
 use crate::{clock, control};
-use handoff::{Handoff, Network, Sec};
+use handoff::{Handoff, Network};
+use netblock::{Mac, Opts};
 use netcfg::NetCfg;
 use wpa::{Wpa, IFACE};
 
@@ -117,6 +124,8 @@ struct Shared {
     test_running: bool,
     last_test: Option<TestResult>,
     notes: VecDeque<Note>,
+    /// Saved networks abyssd cannot join, "SSID: why" (for the Battery screen).
+    skipped: Vec<String>,
 }
 
 enum Cmd {
@@ -219,6 +228,7 @@ impl Wifi {
             test_running: false,
             last_test: None,
             notes: VecDeque::new(),
+            skipped: Vec::new(),
         }));
         let abort = Arc::new(AtomicBool::new(false));
         let worker = Worker {
@@ -365,6 +375,11 @@ impl Wifi {
         self.shared.lock().ok().and_then(|s| s.last_test.clone())
     }
 
+    /// Saved networks that cannot be used in Abyss, each "SSID: reason".
+    pub fn skipped(&self) -> Vec<String> {
+        self.shared.lock().map(|s| s.skipped.clone()).unwrap_or_default()
+    }
+
     /// Stops the worker. `budget_ms`: how long a clean tear-down may take (abyss.rc's leave path
     /// stops both services anyway, and abyss-net cleans netd on SIGTERM).
     pub fn shutdown(&mut self, budget_ms: u64) {
@@ -397,6 +412,8 @@ struct Link {
     lease_at: u64,
     renew_at: u64,
     associated: bool,
+    /// Android's static address: no DHCP at all (renew, reconnect).
+    static_ip: bool,
 }
 
 impl Link {
@@ -471,6 +488,11 @@ impl Worker {
             self.linger_max_ms / 1000,
             if self.factory_mac { "factory" } else { "hand-over" }
         );
+        // Which saved networks cannot be used here, for the Battery screen before any lease.
+        if let Some(ho) = handoff::load() {
+            let n = self.candidates(&ho, handoff::load_cache().as_ref()).len();
+            info!("wifi: {} saved networks handed over, {n} usable in Abyss", ho.networks.len());
+        }
         loop {
             let now = clock::now_ms();
             let timeout = match self.next_deadline() {
@@ -609,6 +631,10 @@ impl Worker {
     /// RENEWING (and, past T2, REBINDING; both are a broadcast REQUEST with ciaddr here).
     fn renew(&mut self, now: u64) {
         let Some(l) = self.link.as_mut() else { return };
+        if l.static_ip {
+            l.renew_at = u64::MAX;
+            return;
+        }
         match l.dhcp.renew(&l.lease, &self.abort) {
             Ok(Some(new)) => {
                 info!("dhcp: renewed {} for {} s", new.ip, new.lease_s);
@@ -694,7 +720,8 @@ impl Worker {
         let Some(l) = self.link.as_mut() else { return };
         l.associated = true;
         let ip = l.lease.ip;
-        match l.dhcp.obtain(Some(ip), &self.abort) {
+        let got = if l.static_ip { Ok((l.lease.clone(), dhcp::How::Static)) } else { l.dhcp.obtain(Some(ip), &self.abort) };
+        match got {
             Ok((lease, _)) if lease.ip == ip => {
                 let now = clock::now_ms();
                 l.lease = lease;
@@ -730,85 +757,54 @@ impl Worker {
         }
     }
 
-    /// Network blocks for the hand-over entry `n`.
-    fn add_network(
-        &self,
-        w: &Wpa,
-        n: &Network,
-        mac: Option<&str>,
-        freq: Option<u32>,
-        bssid: Option<&str>,
-        priority: usize,
-    ) -> Result<u32> {
-        let id = w.add_network()?;
-        w.set_network(id, "ssid", &n.ssid_hex)?;
-        if n.hidden {
-            w.set_network(id, "scan_ssid", "1")?;
-        }
-        // Android keeps a home network saved with a password as "WPA2 or WPA3" (security params
-        // PSK + auto-upgraded SAE) and joins with whatever the router offers, but the legacy
-        // key-management bits the hand-over reads can show only SAE. Joining SAE-only (with PMF
-        // required) then skips a WPA2 router ("key mgmt mismatch", "MFP Required but network
-        // not MFP Capable") and the lease timed out in SCANNING. A password network is offered
-        // as WPA2/WPA3 transition, like Android does; a valid WPA2 passphrase is 8..63 chars.
-        let sae_with_psk = !has_psk(n)
-            && n.security.contains(&Sec::Sae)
-            && n.passphrase.as_deref().is_some_and(|p| (8..=63).contains(&p.len()));
-        let has = |s: Sec| n.security.contains(&s) || (sae_with_psk && s == Sec::Psk);
-        // key_mgmt takes a space-separated list (the control interface passes the rest of the
-        // line as the value).
-        let (km, pmf) = if has(Sec::Psk) && has(Sec::Sae) {
-            ("WPA-PSK SAE", 1)
-        } else if has(Sec::Sae) {
-            ("SAE", 2)
-        } else if has(Sec::Psk) {
-            ("WPA-PSK", 0)
-        } else if has(Sec::Owe) {
-            ("OWE", 2)
-        } else {
-            ("NONE", 0)
-        };
-        w.set_network(id, "key_mgmt", km)?;
-        if pmf > 0 {
-            w.set_network(id, "ieee80211w", &pmf.to_string())?;
-        }
-        if has(Sec::Psk) {
-            // The precomputed PMK skips 4096 rounds of PBKDF2 per connect (battery-nerd §4.3).
-            match (&n.pmk, &n.passphrase) {
-                (Some(pmk), _) => w.set_network(id, "psk", pmk)?,
-                (None, Some(p)) => w.set_network(id, "psk", &wpa::quoted(p)?)?,
-                (None, None) => bail!("{}: no passphrase in the hand-over", n.ssid),
+    /// The supplicant network blocks for the hand-over entry `n` (netblock.rs). A block the
+    /// supplicant refuses (an AKM it was built without) is removed again and the others stay;
+    /// the network fails only when none goes in.
+    fn add_network(&self, w: &Wpa, n: &Network, o: &Opts) -> Result<Vec<u32>> {
+        let blocks = netblock::plan(n, o).map_err(|e| anyhow!("{e}"))?;
+        let mut ids = Vec::new();
+        let mut first_err = None;
+        for b in &blocks {
+            let id = w.add_network()?;
+            let r = (|| -> Result<()> {
+                for (k, v) in &b.fields {
+                    match w.set_network(id, k, v) {
+                        Ok(()) => {}
+                        Err(e) if netblock::non_fatal(k, v) => info!("wifi: {}: {k} not taken: {e:#}", n.ssid),
+                        Err(e) => return Err(e),
+                    }
+                }
+                Ok(())
+            })();
+            match r {
+                Ok(()) => ids.push(id),
+                Err(e) => {
+                    let _ = w.remove_network(id);
+                    if b.lower {
+                        info!("wifi: {}: fallback block not taken: {e:#}", n.ssid);
+                    } else {
+                        warn!("wifi: {}: block not taken: {e:#}", n.ssid);
+                    }
+                    first_err.get_or_insert(e);
+                }
             }
         }
-        if has(Sec::Sae) {
-            let p = n.passphrase.as_deref().ok_or_else(|| anyhow!("{}: no SAE password", n.ssid))?;
-            // An unquoted str value is hex: any byte is safe on the control interface.
-            w.set_network(id, "sae_password", &wpa::hex(p.as_bytes()))?;
+        match (ids.is_empty(), first_err) {
+            (true, Some(e)) => Err(e),
+            (true, None) => bail!("{}: no network block", n.ssid),
+            _ => Ok(ids),
         }
-        match mac {
-            Some(m) => {
-                w.set_network(id, "mac_addr", "3")?;
-                w.set_network(id, "mac_value", m)?;
-            }
-            None => w.set_network(id, "mac_addr", "0")?,
-        }
-        if let Some(f) = freq {
-            w.set_network(id, "scan_freq", &f.to_string())?;
-        }
-        if let Some(b) = bssid {
-            if let Err(e) = w.set_network(id, "bssid_hint", b) {
-                info!("wifi: bssid_hint not taken: {e:#}");
-            }
-        }
-        w.set_network(id, "priority", &(MAX_NETWORKS - priority.min(MAX_NETWORKS)).to_string())?;
-        Ok(id)
     }
 
     /// Polls STATUS until COMPLETED; returns the STATUS pairs. Early exit on a wrong password
-    /// or (fast attempt) "network not found".
-    fn wait_completed(&self, timeout_ms: u64, fast: bool) -> Result<Vec<(String, String)>> {
+    /// or (fast attempt) "network not found". What the supplicant reported on the way (EAP
+    /// failure, a certificate error, a refused association, a credential it asked for) goes
+    /// into the timeout message, so the screen says why.
+    fn wait_completed(&self, timeout_ms: u64, fast: bool, added: &Added) -> Result<Vec<(String, String)>> {
         let w = self.wpa.as_ref().ok_or_else(|| anyhow!("no supplicant"))?;
         let deadline = clock::now_ms() + timeout_ms;
+        let keystore = added.iter().any(|(_, n)| netblock::uses_keystore(n));
+        let mut hint: Option<String> = None;
         loop {
             if self.aborted() {
                 bail!("aborted");
@@ -820,16 +816,49 @@ impl Worker {
                 if fast && e.contains("CTRL-EVENT-NETWORK-NOT-FOUND") {
                     bail!("not found on the last channel");
                 }
+                if let Some(h) = netblock::event_hint(&e, keystore) {
+                    info!("wifi: {h}");
+                    hint = Some(h);
+                }
             }
             let st = w.status()?;
             if kv(&st, "wpa_state") == Some("COMPLETED") {
                 return Ok(st);
             }
             if clock::now_ms() >= deadline {
-                bail!("not associated within {} s (state {})", timeout_ms / 1000, kv(&st, "wpa_state").unwrap_or("?"));
+                let state = kv(&st, "wpa_state").unwrap_or("?");
+                match hint {
+                    Some(h) => bail!("not connected within {} s: {h}", timeout_ms / 1000),
+                    None => bail!("not associated within {} s (state {state})", timeout_ms / 1000),
+                }
             }
             std::thread::sleep(Duration::from_millis(STATUS_POLL_MS));
         }
+    }
+
+    /// The hand-over's networks in Android's order, without those abyssd cannot join (their
+    /// reasons go to the Battery screen).
+    fn candidates(&self, ho: &Handoff, cache: Option<&handoff::Cached>) -> Vec<Network> {
+        let mut skipped = Vec::new();
+        let mut usable: Vec<Network> = Vec::new();
+        for n in &ho.networks {
+            match netblock::unusable(n, ho.wep_allowed) {
+                Some(why) => {
+                    warn!("wifi: {} cannot be used in Abyss: {why}", n.ssid);
+                    skipped.push(format!("{}: {why}", n.ssid));
+                }
+                None => usable.push(n.clone()),
+            }
+        }
+        for p in &ho.passpoint_profiles {
+            // Android joins these through ANQP matching; abyssd only knows saved networks (a
+            // Passpoint network Android was on since boot is one and is handed over).
+            skipped.push(format!("{p}: Passpoint profiles are not supported in Abyss yet"));
+        }
+        if let Ok(mut s) = self.shared.lock() {
+            s.skipped = skipped;
+        }
+        netblock::order(usable, ho.current.as_ref().map(|c| c.ssid_hex.as_str()), cache.map(|c| c.ssid_hex.as_str()), MAX_NETWORKS)
     }
 
     fn bring_up(&mut self) -> Result<()> {
@@ -843,34 +872,27 @@ impl Worker {
             bail!("no saved Wi-Fi networks were handed over (connect to Wi-Fi in Android once, then enter Abyss again)");
         }
         let cache = handoff::load_cache();
-
-        // Candidate order: Android's current network, abyssd's last one, the rest.
-        let mut order: Vec<Network> = Vec::new();
-        let push = |hex: Option<&str>, all: &[Network], order: &mut Vec<Network>| {
-            if let Some(h) = hex {
-                if let Some(n) = all.iter().find(|n| n.ssid_hex == h) {
-                    if !order.iter().any(|o| o.ssid_hex == n.ssid_hex) {
-                        order.push(n.clone());
-                    }
-                }
-            }
-        };
-        push(ho.current.as_ref().map(|c| c.ssid_hex.as_str()), &ho.networks, &mut order);
-        push(cache.as_ref().map(|c| c.ssid_hex.as_str()), &ho.networks, &mut order);
-        for n in &ho.networks {
-            push(Some(n.ssid_hex.as_str()), &ho.networks, &mut order);
+        let order = self.candidates(&ho, cache.as_ref());
+        if order.is_empty() {
+            let why = self.shared.lock().map(|s| s.skipped.join("; ")).unwrap_or_default();
+            bail!("none of the saved Wi-Fi networks can be used in Abyss ({why})");
         }
-        order.truncate(MAX_NETWORKS);
 
+        // Android's MAC per network: the one in use right now for the current network, else its
+        // persistent random MAC, a fresh random one (non-persistent), or the factory MAC.
         let factory = self.factory_mac;
-        let mac_for = |n: &Network| -> Option<String> {
-            if factory {
-                return None;
-            }
-            match &ho.current {
-                Some(c) if c.ssid_hex == n.ssid_hex && c.mac.is_some() => c.mac.clone(),
-                _ => n.mac.clone(),
-            }
+        let wep_allowed = ho.wep_allowed;
+        let opts_for = |n: &Network, i: usize| -> Opts {
+            let in_use = ho.current.as_ref().filter(|c| c.ssid_hex == n.ssid_hex).and_then(|c| c.mac.clone());
+            let mac = match in_use.or_else(|| n.mac.clone()) {
+                _ if factory => Mac::Factory,
+                Some(m) => Mac::Fixed(m),
+                None if n.mac_random => Mac::Random,
+                None => Mac::Factory,
+            };
+            // Two priority steps per network: its main block, then its fallback block.
+            let priority = 2 * (MAX_NETWORKS - i.min(MAX_NETWORKS)) as u32;
+            Opts { mac, freq: None, bssid: None, priority, wep_allowed }
         };
 
         control::set(PROP_WIFI, "on");
@@ -908,11 +930,17 @@ impl Worker {
         if let Some(f) = freq {
             self.set_phase(Phase::Associating(first.ssid.clone()));
             let w = self.wpa.as_ref().ok_or_else(|| anyhow!("no supplicant"))?;
-            let id = self.add_network(w, &first, mac_for(&first).as_deref(), Some(f), bssid.as_deref(), 0)?;
-            w.iface_ok(&format!("SELECT_NETWORK {id}"))?;
-            added.push((id, first.clone()));
+            let o = Opts { freq: Some(f), bssid: bssid.clone(), ..opts_for(&first, 0) };
+            let ids = self.add_network(w, &first, &o)?;
+            // SELECT_NETWORK disables every other block; the network's own other blocks
+            // (fallback AKMs, open next to OWE) are enabled again.
+            w.iface_ok(&format!("SELECT_NETWORK {}", ids[0]))?;
+            for id in &ids[1..] {
+                w.iface_ok(&format!("ENABLE_NETWORK {id}"))?;
+            }
+            added.extend(ids.iter().map(|&id| (id, first.clone())));
             info!("wifi: fast attempt {} on {f} MHz{}", first.ssid, bssid.as_deref().map(|b| format!(" ({b})")).unwrap_or_default());
-            match self.wait_completed(FAST_ASSOC_MS, true) {
+            match self.wait_completed(FAST_ASSOC_MS, true, &added) {
                 Ok(st) => status = Some(st),
                 Err(e) if self.aborted() => return Err(e),
                 Err(e) => info!("wifi: fast attempt failed: {e:#}; full scan"),
@@ -923,10 +951,19 @@ impl Worker {
             let w = self.wpa.as_ref().ok_or_else(|| anyhow!("no supplicant"))?;
             w.iface_ok("REMOVE_NETWORK all")?;
             added.clear();
+            let mut refused = Vec::new();
             for (i, n) in order.iter().enumerate() {
-                match self.add_network(w, n, mac_for(n).as_deref(), None, None, i) {
-                    Ok(id) => added.push((id, n.clone())),
-                    Err(e) => warn!("wifi: skipping {}: {e:#}", n.ssid),
+                match self.add_network(w, n, &opts_for(n, i)) {
+                    Ok(ids) => added.extend(ids.into_iter().map(|id| (id, n.clone()))),
+                    Err(e) => {
+                        warn!("wifi: skipping {}: {e:#}", n.ssid);
+                        refused.push(format!("{}: the supplicant refused it ({e:#})", n.ssid));
+                    }
+                }
+            }
+            if !refused.is_empty() {
+                if let Ok(mut s) = self.shared.lock() {
+                    s.skipped.extend(refused);
                 }
             }
             if added.is_empty() {
@@ -934,7 +971,7 @@ impl Worker {
             }
             w.iface_ok("ENABLE_NETWORK all")?;
             w.iface_ok("REASSOCIATE")?;
-            status = Some(self.wait_completed(FULL_ASSOC_MS, false)?);
+            status = Some(self.wait_completed(FULL_ASSOC_MS, false, &added)?);
         }
         let st = status.ok_or_else(|| anyhow!("not associated"))?;
         let t_assoc = clock::now_ms();
@@ -956,7 +993,8 @@ impl Worker {
             t_assoc - t_sup
         );
 
-        // DHCP: INIT-REBOOT with the cached address of this network, if any.
+        // DHCP: INIT-REBOOT with the cached address of this network, if any. A network Android
+        // has with a static address keeps it.
         self.set_phase(Phase::Dhcp(net.ssid.clone()));
         let cached_ip = cache
             .as_ref()
@@ -964,7 +1002,23 @@ impl Worker {
             .map(|c| c.lease.ip)
             .or_else(|| ho.current.as_ref().filter(|c| c.ssid_hex == net.ssid_hex).and_then(|c| c.ip));
         let mut client = dhcp::Client::open(IFACE, mac, ho.vendor_class.clone())?;
-        let (lease, how) = client.obtain(cached_ip, &self.abort)?;
+        let (lease, how) = match &net.static_ip {
+            Some(st) => (
+                dhcp::Lease {
+                    ip: st.ip,
+                    prefix: st.prefix,
+                    gateway: st.gateway,
+                    dns: st.dns.clone(),
+                    server: None,
+                    lease_s: u32::MAX,
+                    t1_s: u32::MAX,
+                    t2_s: u32::MAX,
+                    mtu: None,
+                },
+                dhcp::How::Static,
+            ),
+            None => client.obtain(cached_ip, &self.abort)?,
+        };
         let t_dhcp = clock::now_ms();
 
         let mut nc = NetCfg::connect(3_000)?;
@@ -983,8 +1037,11 @@ impl Worker {
             lease: lease.clone(),
             wall_s: handoff::wall_s(),
         };
-        if let Err(e) = handoff::save_cache(&c) {
-            warn!("wifi: lease cache: {e:#}");
+        // A static address is no lease (and u32::MAX seconds would overflow the validity check).
+        if net.static_ip.is_none() {
+            if let Err(e) = handoff::save_cache(&c) {
+                warn!("wifi: lease cache: {e:#}");
+            }
         }
         info!(
             "wifi: on {} {}/{} gw {} dns {:?} ({}) in {} ms: supplicant {} ms, assoc {} ms, dhcp {} ms, netd {} ms",
@@ -1012,6 +1069,7 @@ impl Worker {
             lease_at: now,
             lease,
             associated: true,
+            static_ip: net.static_ip.is_some(),
         });
         if let Some(l) = &self.link {
             self.set_phase(Phase::On { ssid: l.ssid.clone(), ip: l.lease.ip });
@@ -1102,9 +1160,4 @@ impl Worker {
         );
         Ok((code, line))
     }
-}
-
-/// Whether the hand-over already lists WPA2-Personal for this network.
-fn has_psk(n: &handoff::Network) -> bool {
-    n.security.contains(&Sec::Psk)
 }

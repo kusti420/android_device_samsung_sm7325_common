@@ -136,6 +136,10 @@ impl Wpa {
         r.trim().parse::<u32>().map_err(|_| anyhow!("ADD_NETWORK -> {}", r.trim()))
     }
 
+    pub fn remove_network(&self, id: u32) -> Result<()> {
+        self.iface_ok(&format!("REMOVE_NETWORK {id}"))
+    }
+
     /// `SET_NETWORK <id> <name> <value>`.
     pub fn set_network(&self, id: u32, name: &str, value: &str) -> Result<()> {
         self.iface_ok(&format!("SET_NETWORK {id} {name} {value}"))
@@ -196,28 +200,10 @@ impl Drop for Wpa {
     }
 }
 
-/// Never log secrets: SET_NETWORK psk / sae_password values are replaced.
+/// Never log secrets: SET_NETWORK / SET_CRED values of secret fields are replaced
+/// (netblock.rs `is_secret`: passwords, PSK, SAE password, EAP identities, WEP keys, DPP keys).
 pub fn redact(cmd: &str) -> String {
-    for key in [" psk ", " sae_password ", " password "] {
-        if let Some(i) = cmd.find(key) {
-            return format!("{}{key}<hidden>", &cmd[..i]);
-        }
-    }
-    cmd.to_string()
-}
-
-/// Lowercase hex of raw bytes (SSIDs go to the supplicant hex-encoded, so any byte is safe).
-pub fn hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect()
-}
-
-/// The supplicant's own quoting for a passphrase: "...". Passphrases are printable ASCII
-/// (WPA: 8..63 chars); the supplicant takes everything between the first and the last quote.
-pub fn quoted(s: &str) -> Result<String> {
-    if s.chars().any(|c| c.is_control()) {
-        bail!("passphrase with control characters");
-    }
-    Ok(format!("\"{s}\""))
+    super::netblock::redact(cmd)
 }
 
 #[cfg(test)]
@@ -228,6 +214,5 @@ mod tests {
     fn redacts() {
         assert_eq!(redact("IFNAME=wlan0 SET_NETWORK 0 psk \"secret\""), "IFNAME=wlan0 SET_NETWORK 0 psk <hidden>");
         assert_eq!(redact("IFNAME=wlan0 SET_NETWORK 0 ssid 4142"), "IFNAME=wlan0 SET_NETWORK 0 ssid 4142");
-        assert_eq!(hex(b"Ab"), "4162");
     }
 }

@@ -18,17 +18,21 @@ package org.ichthys.abyss;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.IpConfiguration;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.RouteInfo;
+import android.net.StaticIpConfiguration;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiEnterpriseConfig;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiSsid;
 import android.os.Build;
+import android.provider.Settings;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
@@ -40,6 +44,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +54,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -60,11 +68,21 @@ import javax.crypto.spec.SecretKeySpec;
  * passphrases. Mode 0640 system:system (setgid dir), so abyssd (uid root, group system, no
  * CAP_DAC_OVERRIDE) can read it and no app can.
  *
- * <p>What goes in, per saved network: SSID (raw bytes as hex), hidden flag, security (open, owe,
- * psk, sae; enterprise and WEP are left out), passphrase, the WPA PMK (PBKDF2, so abyssd's
- * supplicant skips 4096 rounds per connect), Android's per-network MAC (or "factory"), and the
- * strongest BSSID + frequency from the last scan. Plus the network Android is on right now with
- * its address (for DHCP INIT-REBOOT), the country code and Android's DHCP vendor class.
+ * <p>What goes in, per saved network (format v2): SSID (raw bytes as hex), hidden flag, every
+ * security type Android has for it (WifiManager hands out one copy per type; {@link
+ * WifiSecurity} merges them back by network id) plus the ones a transition-disable indication
+ * turned off, the passphrase and WPA PMK (PBKDF2, so abyssd's supplicant skips 4096 rounds per
+ * connect), SAE H2E/PK-only flags, WEP keys, the enterprise settings (method, phase 2,
+ * identities, password, CA / client certificate references into the keystore, domain, OCSP,
+ * minimum TLS), Easy Connect keys, a static IP configuration, Android's MAC policy and
+ * per-network MAC, the last connection time, and the strongest BSSID + frequency + signal from
+ * the last scan. Plus the network Android is on right now with its address (for DHCP
+ * INIT-REBOOT), the country code, "Allow WEP networks" and Android's DHCP vendor class. abyssd
+ * (abyssd/src/wifi/netblock.rs) decides what it can join and says why not on its Wi-Fi screen.
+ *
+ * <p>Hidden Wi-Fi APIs (SecurityParams, WifiEnterpriseConfig.getFieldValue, queryWepAllowed) are
+ * read by reflection: this app is platform-signed, so the hidden-API checks let it, and every
+ * one has a public/system-API fallback.
  *
  * <p>Never throws; a failed hand-over only means Abyss has no Wi-Fi.
  */
@@ -134,7 +152,7 @@ final class WifiHandoff {
             }
         }
         JSONObject root = new JSONObject();
-        root.put("v", 1);
+        root.put("v", 2);
         root.put("written_ms", System.currentTimeMillis());
         root.put("dhcp_vendor_class", "android-dhcp-" + Build.VERSION.RELEASE);
         try {
@@ -146,43 +164,64 @@ final class WifiHandoff {
             Log.w(TAG, "wifi hand-over: no country code", e);
         }
 
+        root.put("wep_allowed", wepAllowed(wm));
+        boolean forceNonPersistent = false;
+        try {
+            forceNonPersistent = Settings.Global.getInt(c.getContentResolver(),
+                    "non_persistent_mac_randomization_force_enabled", 0) == 1;
+        } catch (RuntimeException e) {
+            // Default off.
+        }
+
         WifiInfo info = wm.getConnectionInfo();
         int currentId = info != null ? info.getNetworkId() : -1;
         JSONObject current = null;
-        List<WifiConfiguration> ordered = new ArrayList<>();
+        List<Integer> ids = new ArrayList<>();
+        List<Integer> types = new ArrayList<>();
+        List<Boolean> enabled = new ArrayList<>();
         for (WifiConfiguration w : configs) {
-            if (w.networkId == currentId) {
-                ordered.add(0, w);
+            ids.add(w.networkId);
+            types.add(securityType(w));
+            enabled.add(w.getNetworkSelectionStatus().getNetworkSelectionDisableReason()
+                    != WifiConfiguration.NetworkSelectionStatus
+                            .DISABLED_TRANSITION_DISABLE_INDICATION);
+        }
+        List<WifiSecurity.Merge<WifiConfiguration>> merged =
+                WifiSecurity.merge(configs, ids, types, enabled);
+        List<WifiSecurity.Merge<WifiConfiguration>> ordered = new ArrayList<>();
+        for (WifiSecurity.Merge<WifiConfiguration> g : merged) {
+            if (g.first.networkId == currentId) {
+                ordered.add(0, g);
             } else {
-                ordered.add(w);
+                ordered.add(g);
             }
         }
 
         JSONArray nets = new JSONArray();
         int pmks = 0;
-        for (WifiConfiguration w : ordered) {
+        for (WifiSecurity.Merge<WifiConfiguration> g : ordered) {
             if (nets.length() >= MAX_NETWORKS) {
                 break;
             }
+            WifiConfiguration w = g.first;
             byte[] ssid = ssidBytes(w.SSID);
             if (ssid == null || ssid.length == 0 || ssid.length > 32) {
                 continue;
             }
-            JSONArray sec = security(w);
-            if (sec.length() == 0) {
-                continue;
-            }
             String hex = hex(ssid);
             JSONObject n = new JSONObject();
+            n.put("key", String.valueOf(w.networkId));
             n.put("ssid", new String(ssid, StandardCharsets.UTF_8));
             n.put("ssid_hex", hex);
             n.put("hidden", w.hiddenSSID);
-            n.put("security", sec);
-            String psk = w.preSharedKey;
-            if (psk != null && psk.length() > 2 && psk.startsWith("\"") && psk.endsWith("\"")) {
-                String pass = psk.substring(1, psk.length() - 1);
+            n.put("security", new JSONArray(g.on));
+            n.put("security_off", new JSONArray(g.off));
+            boolean psk = g.on.contains("psk");
+            String pre = w.preSharedKey;
+            if (pre != null && pre.length() > 2 && pre.startsWith("\"") && pre.endsWith("\"")) {
+                String pass = pre.substring(1, pre.length() - 1);
                 n.put("passphrase", pass);
-                if (has(sec, "psk") && pmks < MAX_PMK) {
+                if (psk && pmks < MAX_PMK && pass.length() >= 8 && pass.length() <= 63) {
                     try {
                         n.put("pmk", hex(pbkdf2Sha1(pass.getBytes(StandardCharsets.UTF_8), ssid, 4096, 32)));
                         pmks++;
@@ -190,20 +229,66 @@ final class WifiHandoff {
                         Log.w(TAG, "wifi hand-over: PMK", e);
                     }
                 }
-            } else if (psk != null && psk.length() == 64) {
+            } else if (pre != null && pre.length() == 64) {
                 // Stored as a raw PMK already (no passphrase known: WPA-PSK only).
-                n.put("pmk", psk.toLowerCase(Locale.ROOT));
+                n.put("pmk", pre.toLowerCase(Locale.ROOT));
             }
-            if (w.macRandomizationSetting == WifiConfiguration.RANDOMIZATION_NONE) {
-                n.put("mac_policy", "factory");
-            } else {
-                n.put("mac_policy", "randomized");
+            WifiConfiguration sae = g.byType.get("sae");
+            if (sae != null) {
+                n.put("sae_h2e_only", paramFlag(sae, "isSaeH2eOnlyMode"));
+                n.put("sae_pk_only", paramFlag(sae, "isSaePkOnlyMode"));
+            }
+            if (g.byType.containsKey("wep") && w.wepKeys != null) {
+                JSONArray keys = new JSONArray();
+                for (int i = 0; i < 4; i++) {
+                    String k = i < w.wepKeys.length ? w.wepKeys[i] : null;
+                    keys.put(k != null ? k : JSONObject.NULL);
+                }
+                n.put("wep_keys", keys);
+                n.put("wep_tx_keyidx", w.wepTxKeyIndex);
+            }
+            WifiConfiguration ent = g.byType.get("eap_suiteb");
+            if (ent == null) ent = g.byType.get("eap_wpa3");
+            if (ent == null) ent = g.byType.get("eap");
+            if (ent != null && ent.enterpriseConfig != null) {
+                n.put("eap", eap(ent.enterpriseConfig));
+                JSONArray fils = new JSONArray();
+                if (ent.allowedKeyManagement.get(WifiSecurity.KM_FILS_SHA256)) fils.put("sha256");
+                if (ent.allowedKeyManagement.get(WifiSecurity.KM_FILS_SHA384)) fils.put("sha384");
+                n.put("fils", fils);
+            }
+            WifiConfiguration suiteb = g.byType.get("eap_suiteb");
+            if (suiteb != null) {
+                JSONArray sb = new JSONArray();
+                // WifiConfiguration.SuiteBCipher.ECDHE_ECDSA = 0, ECDHE_RSA = 1.
+                if (suiteb.allowedSuiteBCiphers.get(1)) sb.put("rsa");
+                if (suiteb.allowedSuiteBCiphers.get(0)) sb.put("ecdsa");
+                n.put("suiteb", sb);
+            }
+            if (g.byType.containsKey("dpp")) {
+                JSONObject d = new JSONObject();
+                d.put("connector", new String(w.getDppConnector(), StandardCharsets.UTF_8));
+                d.put("csign_hex", hex(w.getDppCSignKey()));
+                d.put("netaccesskey_hex", hex(w.getDppNetAccessKey()));
+                n.put("dpp", d);
+            }
+            boolean staticIp = addStaticIp(w, n);
+            boolean open = g.on.contains("open") || g.on.contains("owe");
+            WifiConfiguration.NetworkSelectionStatus ns = w.getNetworkSelectionStatus();
+            String policy = WifiSecurity.macPolicy(w.macRandomizationSetting, open, staticIp,
+                    ns.hasEverConnected(), neverCaptive(ns),
+                    // config_wifiAllowNonPersistentMacRandomizationOnOpenSsids (device overlay).
+                    true, forceNonPersistent);
+            n.put("mac_policy", policy);
+            if (!"factory".equals(policy)) {
                 n.put("mac", w.getRandomizedMacAddress().toString());
             }
+            n.put("last_connected_ms", w.lastConnected);
             ScanResult r = best.get(hex);
             if (r != null) {
                 n.put("bssid", r.BSSID);
                 n.put("freq", r.frequency);
+                n.put("rssi", r.level);
             }
             nets.put(n);
             if (w.networkId == currentId && info != null) {
@@ -220,6 +305,7 @@ final class WifiHandoff {
             }
         }
         root.put("networks", nets);
+        root.put("passpoint_profiles", passpointProfiles(wm, configs));
         root.put("current", current != null ? current : JSONObject.NULL);
         return root;
     }
@@ -263,38 +349,200 @@ final class WifiHandoff {
         }
     }
 
-    private static boolean has(JSONArray a, String v) {
-        for (int i = 0; i < a.length(); i++) {
-            if (v.equals(a.optString(i))) {
-                return true;
+    /**
+     * The security type of one per-type copy: SecurityParams.getSecurityType() (hidden), else
+     * the legacy bit sets.
+     */
+    private static int securityType(WifiConfiguration w) {
+        Object p = defaultParams(w);
+        if (p != null) {
+            try {
+                Object t = p.getClass().getMethod("getSecurityType").invoke(p);
+                if (t instanceof Integer) {
+                    return (Integer) t;
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                // Fall back below.
             }
         }
-        return false;
+        return WifiSecurity.fromLegacy(w.allowedKeyManagement, w.allowedProtocols,
+                w.allowedPairwiseCiphers, w.allowedGroupCiphers, w.requirePmf,
+                w.wepKeys != null && w.wepKeys[0] != null);
     }
 
-    /** What abyssd can join: open, owe, psk, sae. Enterprise / WEP / WAPI give an empty list. */
-    private static JSONArray security(WifiConfiguration w) {
-        JSONArray a = new JSONArray();
-        java.util.BitSet km = w.allowedKeyManagement;
-        if (km.get(WifiConfiguration.KeyMgmt.WPA_EAP) || km.get(WifiConfiguration.KeyMgmt.IEEE8021X)) {
-            return a;
+    private static Object defaultParams(WifiConfiguration w) {
+        try {
+            return WifiConfiguration.class.getMethod("getDefaultSecurityParams").invoke(w);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
         }
-        if (w.wepKeys != null && w.wepKeys[0] != null) {
-            return a;
+    }
+
+    /** A boolean getter of the copy's SecurityParams (false when it cannot be read). */
+    private static boolean paramFlag(WifiConfiguration w, String getter) {
+        Object p = defaultParams(w);
+        if (p == null) {
+            return false;
         }
-        if (km.get(WifiConfiguration.KeyMgmt.WPA_PSK)) {
-            a.put("psk");
+        try {
+            return Boolean.TRUE.equals(p.getClass().getMethod(getter).invoke(p));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
         }
-        if (km.get(WifiConfiguration.KeyMgmt.SAE)) {
-            a.put("sae");
+    }
+
+    private static boolean neverCaptive(WifiConfiguration.NetworkSelectionStatus ns) {
+        try {
+            Method m = ns.getClass().getMethod("hasNeverDetectedCaptivePortal");
+            return Boolean.TRUE.equals(m.invoke(ns));
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
         }
-        if (a.length() == 0 && km.get(WifiConfiguration.KeyMgmt.OWE)) {
-            a.put("owe");
+    }
+
+    /** Android's "Allow WEP networks" (Android 15+); true when it cannot be asked. */
+    private static boolean wepAllowed(WifiManager wm) {
+        try {
+            Method m = WifiManager.class.getMethod("queryWepAllowed",
+                    java.util.concurrent.Executor.class, java.util.function.Consumer.class);
+            CountDownLatch done = new CountDownLatch(1);
+            AtomicReference<Boolean> out = new AtomicReference<>(Boolean.TRUE);
+            java.util.function.Consumer<Boolean> cb = v -> {
+                out.set(v);
+                done.countDown();
+            };
+            m.invoke(wm, (java.util.concurrent.Executor) Runnable::run, cb);
+            done.await(500, TimeUnit.MILLISECONDS);
+            return !Boolean.FALSE.equals(out.get());
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return true;
         }
-        if (a.length() == 0 && (km.isEmpty() || km.get(WifiConfiguration.KeyMgmt.NONE))) {
-            a.put("open");
+    }
+
+    /** A supplicant field as Android stores it (WifiEnterpriseConfig.getFieldValue, hidden). */
+    private static String field(WifiEnterpriseConfig ec, String key) {
+        try {
+            Object v = WifiEnterpriseConfig.class.getMethod("getFieldValue", String.class)
+                    .invoke(ec, key);
+            return v instanceof String && !((String) v).isEmpty() ? (String) v : null;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
         }
-        return a;
+    }
+
+    private static void putIf(JSONObject o, String k, String v) throws JSONException {
+        if (v != null && !v.isEmpty()) {
+            o.put(k, v);
+        }
+    }
+
+    /** The enterprise settings the Wi-Fi HAL would give the supplicant. */
+    private static JSONObject eap(WifiEnterpriseConfig ec) throws JSONException {
+        JSONObject e = new JSONObject();
+        String method = WifiSecurity.eapMethod(ec.getEapMethod());
+        putIf(e, "method", method);
+        e.put("phase2", WifiSecurity.phase2(ec.getPhase2Method()));
+        putIf(e, "identity", ec.getIdentity());
+        String anon = ec.getAnonymousIdentity();
+        String prefix = field(ec, "decorated_username_prefix");
+        if (anon != null && !anon.isEmpty() && prefix != null) {
+            anon = prefix + anon;
+        }
+        putIf(e, "anonymous_identity", anon);
+        putIf(e, "password", ec.getPassword());
+        String ca = field(ec, "ca_cert");
+        if (ca == null) {
+            try {
+                ca = WifiSecurity.caCertField(ec.getCaCertificateAliases());
+            } catch (RuntimeException ex) {
+                ca = null;
+            }
+        }
+        putIf(e, "ca_cert", ca);
+        putIf(e, "ca_path", ec.getCaPath());
+        String alias = ec.getClientCertificateAlias();
+        boolean hasAlias = alias != null && !alias.isEmpty();
+        String cc = field(ec, "client_cert");
+        putIf(e, "client_cert", cc != null ? cc : hasAlias ? "keystore://USRCERT_" + alias : null);
+        String key = field(ec, "key_id");
+        putIf(e, "key_id", key != null ? key : hasAlias ? "USRPKEY_" + alias : null);
+        String engine = field(ec, "engine");
+        e.put("engine", engine != null ? "1".equals(engine) : hasAlias);
+        String engineId = field(ec, "engine_id");
+        putIf(e, "engine_id", engineId != null ? engineId : hasAlias ? "keystore" : null);
+        putIf(e, "domain_suffix_match", ec.getDomainSuffixMatch());
+        putIf(e, "altsubject_match", ec.getAltSubjectMatch());
+        putIf(e, "subject_match", field(ec, "subject_match"));
+        e.put("ocsp", ec.getOcsp());
+        e.put("erp", "1".equals(field(ec, "eap_erp")));
+        e.put("min_tls", ec.getMinimumTlsVersion());
+        return e;
+    }
+
+    /**
+     * Names of the Passpoint profiles that are not among the saved networks (Android makes a
+     * network of a profile only once it matched an AP). abyssd lists them as not joinable.
+     */
+    private static JSONArray passpointProfiles(WifiManager wm, List<WifiConfiguration> configs) {
+        JSONArray out = new JSONArray();
+        try {
+            List<android.net.wifi.hotspot2.PasspointConfiguration> ps =
+                    wm.getPasspointConfigurations();
+            if (ps == null) {
+                return out;
+            }
+            for (android.net.wifi.hotspot2.PasspointConfiguration p : ps) {
+                if (p.getHomeSp() == null) {
+                    continue;
+                }
+                String fqdn = p.getHomeSp().getFqdn();
+                boolean saved = false;
+                for (WifiConfiguration w : configs) {
+                    if (w.isPasspoint() && fqdn != null && fqdn.equals(w.FQDN)) {
+                        saved = true;
+                        break;
+                    }
+                }
+                if (!saved) {
+                    String name = p.getHomeSp().getFriendlyName();
+                    out.put(name != null && !name.isEmpty() ? name : String.valueOf(fqdn));
+                }
+            }
+        } catch (RuntimeException e) {
+            Log.w(TAG, "wifi hand-over: no Passpoint profiles", e);
+        }
+        return out;
+    }
+
+    /** Android's static IPv4 settings for the network, if it has some; returns whether. */
+    private static boolean addStaticIp(WifiConfiguration w, JSONObject n) throws JSONException {
+        IpConfiguration ipc = w.getIpConfiguration();
+        if (ipc == null || ipc.getIpAssignment() != IpConfiguration.IpAssignment.STATIC) {
+            return false;
+        }
+        StaticIpConfiguration st = ipc.getStaticIpConfiguration();
+        if (st == null || st.getIpAddress() == null
+                || !(st.getIpAddress().getAddress() instanceof Inet4Address)) {
+            return true;
+        }
+        JSONObject o = new JSONObject();
+        o.put("ip", st.getIpAddress().getAddress().getHostAddress());
+        o.put("prefix", st.getIpAddress().getPrefixLength());
+        if (st.getGateway() instanceof Inet4Address) {
+            o.put("gateway", st.getGateway().getHostAddress());
+        }
+        JSONArray dns = new JSONArray();
+        for (InetAddress a : st.getDnsServers()) {
+            if (a instanceof Inet4Address) {
+                dns.put(a.getHostAddress());
+            }
+        }
+        o.put("dns", dns);
+        n.put("static_ip", o);
+        return true;
     }
 
     /** WifiConfiguration.SSID is "\"name\"" (UTF-8) or bare hex for other byte strings. */

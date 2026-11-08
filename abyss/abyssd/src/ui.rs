@@ -1154,6 +1154,15 @@ impl Ui {
             SMALL.draw(cv, MARGIN, y, "Test running…", DIM);
             y += SMALL_LH;
         }
+        // Saved networks Abyss cannot join, with the reason (wifi/netblock.rs `unusable`).
+        let skipped = v.wifi.skipped();
+        if !skipped.is_empty() {
+            let text = format!("Not usable in Abyss: {}", skipped.join(" · "));
+            for l in wrap(&SMALL, &text, max_w).into_iter().take(4) {
+                SMALL.draw(cv, MARGIN, y, &l, DIM);
+                y += SMALL_LH;
+            }
+        }
         y + 30
     }
 
