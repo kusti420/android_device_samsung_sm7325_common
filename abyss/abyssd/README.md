@@ -6,7 +6,7 @@ Installed as `/system_ext/bin/abyssd` (`rust_binary` in `../Android.bp`). The se
 
 ## What v1-lite does (r2, after the first on-device run)
 
-- **Screen.** The canvas boards (Main, Library, Player, Help) redrawn for the 1080 x 2400 panel, in a KMS dumb buffer on `/dev/dri/card0`, using the 60 Hz panel mode (the 120 Hz mode is skipped). OLED palette: black, text #A8A290, dim #7D7869, accent #5DB04C, warn #D08A2A, lines #25231C. The selected row is "▸ " + bold accent; values sit dim on the right of each row. **Every screen ends with a key guide** for what the keys do on that screen. Fonts: SMALL 40 px (status, guide), BODY 48 px and BODY_BOLD 48 px (rows), BIG 72 px (titles, numbers). A frame is pushed only on change; the screen turns off `persist.abyss.screen_timeout_s` after the last key (default 15 s, 5..120 s, read at start; the ● ● peek uses the same time; Help: 30 s or the setting, whichever is longer).
+- **Screen.** The canvas boards (Main, Library, Player, Help) redrawn for the 1080 x 2400 panel, in a KMS dumb buffer on `/dev/dri/card0`, using the 60 Hz panel mode (the 120 Hz mode is skipped). OLED palette: black, text #A8A290, dim #7D7869, accent #5DB04C, warn #D08A2A, lines #25231C. The selected row is "▸ " + bold accent; values sit dim on the right of each row. **Every screen ends with a key guide** for what the keys do on that screen. **Every screen starts with a status line** left and right of the camera: the time, the output (and "wi-fi" while it is on), battery % and the hours of screen-off music left; it redraws on the minute while the screen is on, nothing more. Fonts: SMALL 40 px (status, guide), BODY 48 px and BODY_BOLD 48 px (rows), BIG 72 px (titles, numbers). A frame is pushed only on change; the screen turns off `persist.abyss.screen_timeout_s` after the last key (default 15 s, 5..120 s, read at start; the ● ● peek uses the same time; Help: 30 s or the setting, whichever is longer).
 - **Brightness.** abyssd cannot write the panel's sysfs node (vendor type), so after the first frame and on every wake it sets `sys.abyss.brightness` to `persist.abyss.brightness` (default 160, clamped to 1..486) and abyss.rc writes that to `panel0-backlight` while `sys.abyss.state=active`. init saves Android's level on enter and restores it on every leave path. Screen off is DPMS off.
 - **Screens.**
   - Home: "ICHTHYS ABYSS", "Android is asleep…", status lines (battery % and ≈ hours of music, output, radios off), then Music ›, Now playing ("Continue" when paused or only remembered: plays and opens it, library or radio), the installed modules, Bluetooth › (off / on / the connected headphones), Battery, Help, Back to Android · about 30 s, Power off (separate "Yes, power off" row). Library lists open where you left them (per screen, this session); an artist with one album opens the album; a letter with one name opens it. Music › Output › opens Bluetooth.
@@ -19,19 +19,23 @@ Installed as `/system_ext/bin/abyssd` (`rust_binary` in `../Android.bp`). The se
   | Where | Keys | Action |
   |---|---|---|
   | Now playing, and screen off with music loaded | tap ▲ / tap ▼ | volume (screen on: a volume box for 2 s; screen off: stays dark) |
-  | same | hold ▲ ≥ 600 ms / hold ▼ ≥ 600 ms | next / previous |
+  | same, and a playing station's own module screen | hold ▲ ≥ 600 ms / hold ▼ ≥ 600 ms | next / previous track; with a radio stream the next / previous station of the list it was picked from |
   | same | ● | play / pause (after the 400 ms double-press window) |
-  | same | ● ● | the menu; with the screen off a "look": wakes on Now playing (`persist.abyss.nav.wake=last`: on the screen you left), ● ● again returns |
-  | same | ▲ + ▼ (short) | play / pause |
+  | Screen off, music loaded | ● ● | **wakes the screen only**, on the screen you left |
+  | Screen off, music loaded | ▲ + ▼ (short) | play / pause |
+  | Now playing (screen on) | ▲ + ▼ (short) / ● ● | back to the menu / nothing (the screen is already on) |
+  | A playing station's module screen | tap ▲ / ▼, ● | move (on release), select |
   | Menus | ▲ ▼ / ● | move / select (on release); lists wrap around |
   | Menus | hold ▲ / hold ▼ | keeps moving (after 600 ms, a row every 150 ms, stops after 5 s) |
   | Menus (library and module screens) | ▲ + ▼ (short) | Back one level (the cursor is not moved first); nothing on Home |
+  | Anywhere | ▲ + ● short (same timing as capture) | Now playing (wakes on it when the screen is off) |
   | Screen off, nothing loaded or nothing plugged in | first press | only wakes the screen |
+  | After any wake | a lone press within 500 ms (the 2nd tap of ● ●) | only keeps the screen on: waking never selects, moves or goes back |
   | Anywhere | hold ▲ + ▼ 2 s | Help |
   | Anywhere | hold ● 3 s | "Back to Android in 3 s, any key cancels" |
   | Anywhere | key held > 5 s | ignored until released (the ● hold is the exception) |
   | Anywhere | ▼ + ● short (both down within 300 ms, first release within 1.5 s) | **Capture** (see below); fires on release |
-  | Anywhere | ▼ + ● held longer | never acted on (Samsung force restart = ~7 s hold) |
+  | Anywhere | ▼ + ● / ▲ + ● held longer | never acted on (Samsung force restart = ▼ + ● ~7 s hold) |
   | Headset remote | 1× / 2× / 3× | play·pause / next / previous (presses within 450 ms count together); its own volume keys = volume |
 
   Starting any song (Resume, Shuffle, an album, a track…) opens Now playing.
@@ -64,7 +68,6 @@ Installed as `/system_ext/bin/abyssd` (`rust_binary` in `../Android.bp`). The se
 | `persist.abyss.brightness` | `160` | backlight level in Abyss (1..486); abyssd only reads it |
 | `persist.abyss.screen_timeout_s` | `15` | screen-off time after the last key, in seconds (clamped to 5..120; read at start) |
 | `persist.abyss.nav.start` | `player` | `player`: Abyss opens on Now playing with the last song loaded paused at its place (one ● plays it, screen on or off); `home`: opens on Home (read at start; Settings › Abyss) |
-| `persist.abyss.nav.wake` | `player` | what ● ● with the screen off shows while music is loaded: `player` = Now playing, `last` = the screen you left (read at start; Settings › Abyss) |
 | `sys.abyss.brightness` | – | abyssd writes the level; abyss.rc applies it to the panel |
 | `sys.abyss.hal` | – | watched; `restarted` makes abyssd re-apply the audio route |
 | `persist.abyss.suspend` | `0` | experimental suspend loop |

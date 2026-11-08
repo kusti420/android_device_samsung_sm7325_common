@@ -70,8 +70,7 @@ import java.util.Set;
  *     sys.abyss.request=enter; init (abyss.rc) stops the framework, which ends this process.</li>
  * <li><b>Captures</b>: what abyssd saved on Volume Down + Power ({@link Captures}).</li>
  * <li><b>Settings</b>: persist.abyss.brightness, persist.abyss.screen_timeout_s,
- *     persist.abyss.nav.start / persist.abyss.nav.wake (where Abyss opens, what a screen-off
- *     ● ● shows), persist.abyss.suspend (abyssd reads them on entry), the volume limit (information only)
+ *     persist.abyss.nav.start (where Abyss opens), persist.abyss.suspend (abyssd reads them on entry), the volume limit (information only)
  *     and the paired Bluetooth headphones abyss-btd will offer.</li>
  * <li><b>Scripts</b> (v1.1) and <b>Apps &amp; containers</b> (v1.2): "coming next" cards only.</li>
  * </ul>
@@ -102,10 +101,6 @@ public final class EntryActivity extends Activity {
     private static final String PROP_NAV_START = "persist.abyss.nav.start";
     private static final String[] NAV_START_VALUES = {"player", "home"};
     private static final int[] NAV_START_LABELS = {R.string.nav_start_player, R.string.nav_start_home};
-    /** What ● ● with the screen off shows while music plays: "player" (default) or "last". */
-    private static final String PROP_NAV_WAKE = "persist.abyss.nav.wake";
-    private static final String[] NAV_WAKE_VALUES = {"player", "last"};
-    private static final int[] NAV_WAKE_LABELS = {R.string.nav_wake_player, R.string.nav_wake_last};
 
     /** Experimental kernel suspend while idle (abyssd suspend.rs), off by default. */
     private static final String PROP_SUSPEND = "persist.abyss.suspend";
@@ -140,7 +135,6 @@ public final class EntryActivity extends Activity {
     private LinearLayout mScreenTimeout;
     private TextView mScreenTimeoutOther;
     private LinearLayout mNavStart;
-    private LinearLayout mNavWake;
     private Switch mSuspend;
     private boolean mBinding;
     private LinearLayout mBtList;
@@ -528,8 +522,6 @@ public final class EntryActivity extends Activity {
 
         mNavStart = findViewById(R.id.nav_start);
         addChoices(mNavStart, PROP_NAV_START, NAV_START_VALUES, NAV_START_LABELS);
-        mNavWake = findViewById(R.id.nav_wake);
-        addChoices(mNavWake, PROP_NAV_WAKE, NAV_WAKE_VALUES, NAV_WAKE_LABELS);
 
         mSuspend = findViewById(R.id.suspend);
         mSuspend.setOnCheckedChangeListener((b, on) -> {
@@ -566,7 +558,6 @@ public final class EntryActivity extends Activity {
         }
         showScreenTimeout(secs);
         showChoice(mNavStart, SystemProperties.get(PROP_NAV_START, ""), NAV_START_VALUES);
-        showChoice(mNavWake, SystemProperties.get(PROP_NAV_WAKE, ""), NAV_WAKE_VALUES);
         mSuspend.setChecked(SystemProperties.getBoolean(PROP_SUSPEND, false));
         mBinding = false;
         refreshBluetooth();

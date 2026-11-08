@@ -1,18 +1,29 @@
-//! The key grammar (DECISIONS "Added 18:58"; fixed defaults, chords in v1.1).
+//! The key grammar (DECISIONS "Added 18:58", navigation rounds 1-2 of 2026-11-08;
+//! fixed defaults, chords in v1.1). One rule above all: a press that wakes the
+//! screen never also navigates or selects.
 //!
-//! Music keys: on the Now playing screen, and with the screen off while a
-//! queue is loaded:
+//! Screen off, music loaded (playing or paused, or the radio shown ready): blind
+//! music keys, nothing else happens and the screen stays dark:
 //!   tap ▲ / tap ▼        volume up / down (on release, < 600 ms)
-//!   hold ▲ ≥ 600 ms      next track (fires once while held)
-//!   hold ▼ ≥ 600 ms      previous track
+//!   hold ▲ ≥ 600 ms      next track / next station (fires once while held)
+//!   hold ▼ ≥ 600 ms      previous track / previous station
 //!   ●                    play / pause (after the 400 ms double-press window)
-//!   ● ●                  the menu (wakes the screen if it is off)
-//!   ▲ + ▼ (short)        play / pause (as on the Music board)
-//! Menus (screen on, any other screen):
+//!   ▲ + ▼ (short)        play / pause
+//!   ● ●                  wake the screen, on the screen you left (nothing else)
+//!   ▲ + ● (short)        wake on Now playing (the deliberate "what plays?")
+//! Screen off, nothing loaded: the first press of any key only wakes the screen.
+//! After any wake, a lone press within 500 ms (the second tap of a ● ● habit)
+//! only keeps the screen on.
+//! Screen on, Now playing:
+//!   tap ▲ / ▼ volume, hold ▲ / ▼ next / previous (track or station),
+//!   ● play / pause, ● ● nothing (the screen is already on), ▲ + ▼ back to the menu.
+//! Screen on, a module's station screen (the playing station's own screen):
+//!   tap ▲ / ▼ move (on release), hold ▲ / ▼ next / previous station, ● select.
+//! Screen on, menus:
 //!   ▲ ▼ move (on press), ● select (on release, so a long ● hold never selects)
 //!   hold ▲ / ▼           keeps moving (after 600 ms, one row every 150 ms, up to 5 s)
-//!   ▲ + ▼ (short)        Back one level (the cursor does not move first)
-//! Screen off, nothing loaded: the first press of any key only wakes the screen.
+//!   ▲ + ▼ (short)        back one level (the cursor does not move first)
+//!   ▲ + ● (short)        Now playing
 //! Always:
 //!   hold ▲ + ▼ 2 s       Help
 //!   hold ● 3 s           "Back to Android in 3 s, any key cancels", then leave
@@ -20,7 +31,8 @@
 //!   ▼ + ● short          Capture (the screenshot chord): both down within
 //!                        300 ms of each other, first release within 1.5 s of
 //!                        the first press. Fires on that release.
-//!   ▼ + ● longer         never acted on (Samsung force restart = ▼+● ~7 s;
+//!   ▲ + ● short          Now playing, same timing rules as Capture.
+//!   ▼ + ● / ▲ + ● longer never acted on (Samsung force restart = ▼+● ~7 s;
 //!                        DECISIONS: never bind ▼+● holds)
 //!
 //! The machine is pure: it takes key edges and the current time and returns
@@ -34,16 +46,18 @@ pub const LEAVE_HOLD_MS: u64 = 3000;
 pub const LEAVE_CANCEL_MS: u64 = 3000;
 pub const IGNORE_HELD_MS: u64 = 5000;
 pub const HELP_HOLD_MS: u64 = 2000;
-/// Capture chord: ▼ and ● must go down at most this far apart ...
+/// Capture / Now playing chords: the two keys must go down at most this far apart ...
 pub const CAPTURE_GAP_MS: u64 = 300;
 /// ... and the first of them must come up within this time of the first press.
 pub const CAPTURE_RELEASE_MS: u64 = 1500;
 /// Menus: a held ▲ / ▼ moves again every this often (the first repeat comes at HOLD_MS).
 pub const REPEAT_MS: u64 = 150;
+/// After a wake, a lone press starting within this time only keeps the screen on.
+pub const WAKE_GUARD_MS: u64 = 500;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
-    /// Turn the screen on (no other effect).
+    /// Turn the screen on (no other effect: the screen the person left shows).
     Wake,
     MenuUp,
     MenuDown,
@@ -53,10 +67,11 @@ pub enum Action {
     Next,
     Prev,
     PlayPause,
-    /// ● ● on Now playing or with the screen off: open the menu.
-    Menu,
-    /// ▲ + ▼ short in a menu: one level back (the Back row without going to it).
+    /// ▲ + ▼ short with the screen on: one level back (the Back row without going to
+    /// it); from Now playing back to the menu.
     Back,
+    /// ▲ + ● short: show Now playing (wakes the screen on it when it is off).
+    Player,
     /// ▲ + ▼ held 2 s.
     Help,
     /// ● held 3 s: show the cancel banner (screen on).
@@ -80,6 +95,8 @@ pub struct Ctx {
     pub player: bool,
     /// A queue is loaded (playing or paused).
     pub loaded: bool,
+    /// The playing station's own module screen is in front (hold ▲ / ▼ = station).
+    pub station: bool,
 }
 
 impl Ctx {
@@ -91,6 +108,29 @@ impl Ctx {
             self.loaded
         }
     }
+
+    /// What a ▲ / ▼ press does, decided when it goes down.
+    fn tap(self) -> Tap {
+        if self.music() {
+            Tap::Volume
+        } else if self.screen_on && self.station {
+            Tap::Move
+        } else {
+            Tap::None
+        }
+    }
+}
+
+/// A ▲ / ▼ press that decides on release (tap) or in tick() (hold = next / previous).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Tap {
+    /// Not one: menus move on press (and repeat while held).
+    #[default]
+    None,
+    /// Tap = volume (Now playing, screen off with music).
+    Volume,
+    /// Tap = move (a station screen).
+    Move,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -108,14 +148,32 @@ struct KeyState {
     moved: bool,
     /// Menus: the next auto-repeat move of this held key (0 = none).
     repeat_at: u64,
+    /// This press woke the screen (or was swallowed right after a wake).
+    woke: bool,
+    /// ▲ / ▼: decided on release / hold (see `Tap`).
+    tap: Tap,
 }
 
-/// A ▼ + ● press pair in progress.
+/// What a short ▲ + ▼ does, decided when the second key goes down.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Pair {
+    /// Nothing (it woke the screen, or the first key was already scrolling).
+    #[default]
+    None,
+    /// Screen off with music: play / pause.
+    PlayPause,
+    /// Screen on: back.
+    Back,
+}
+
+/// A ● + ▼ (capture) or ● + ▲ (Now playing) press pair in progress.
 #[derive(Clone, Copy)]
 struct Chord {
     /// When the first of the two keys went down.
     first: u64,
-    /// Still a valid capture (not too far apart, not three keys, not decided).
+    /// The volume key of the pair.
+    vol: Key,
+    /// Still valid (not too far apart, not three keys, not decided).
     ok: bool,
 }
 
@@ -126,9 +184,8 @@ pub struct KeyMachine {
     combo_ud: bool,
     combo_since: u64,
     combo_done: bool,
-    /// The ▲ + ▼ press began in a menu (its first key moved the cursor, which was undone):
-    /// a short one is Back.
-    combo_menu: bool,
+    /// What the current ▲ + ▼ does when it is short.
+    combo_kind: Pair,
     /// Time ● was released after a short music-mode press (waiting for a 2nd).
     power_tap: Option<u64>,
     /// While Some, the "back to Android" cancel window ends at this time.
@@ -136,8 +193,10 @@ pub struct KeyMachine {
     /// The release of the current ● press must be ignored (second half of
     /// ● ●, or the press that woke the screen).
     skip_power_release: bool,
-    /// ▼ and ● were down together during the current presses.
+    /// ● and a volume key were down together during the current presses.
     chord: Option<Chord>,
+    /// A lone press starting before this time only keeps the screen on (after a wake).
+    guard_until: u64,
 }
 
 impl KeyMachine {
@@ -173,8 +232,15 @@ impl KeyMachine {
         out
     }
 
+    /// Emits a wake and starts the guard against a following second tap.
+    fn wake(&mut self, t: u64, out: &mut Vec<Action>) {
+        out.push(Action::Wake);
+        self.guard_until = t + WAKE_GUARD_MS;
+    }
+
     fn press(&mut self, key: Key, t: u64, ctx: Ctx, out: &mut Vec<Action>) {
         let i = key.idx();
+        let others_down = self.any_down();
         self.st[i] = KeyState { down: true, since: t, ..KeyState::default() };
 
         // Any press during the cancel window cancels going back.
@@ -188,42 +254,55 @@ impl KeyMachine {
             return;
         }
 
+        // Right after a wake: a lone press (the second tap of ● ●) only keeps the screen on.
+        // A ● stays alive for the 3 s leave hold; its release does nothing.
+        if t < self.guard_until && !others_down {
+            self.st[i].woke = true;
+            if key == Key::Power {
+                self.skip_power_release = true;
+            } else {
+                self.st[i].consumed = true;
+            }
+            return;
+        }
+
         let up = self.st[Key::Up.idx()].down;
         let dn = self.st[Key::Down.idx()].down;
         let pw = self.st[Key::Power.idx()].down;
 
-        // ▼ + ●: the capture chord when short, else Samsung's force restart.
-        // Both presses are poisoned (no volume / prev / play-pause / leave hold);
-        // release() decides the capture, holds never act.
-        if dn && pw {
-            self.st[Key::Down.idx()].consumed = true;
-            self.st[Key::Power.idx()].consumed = true;
-            self.st[Key::Up.idx()].repeat_at = 0;
-            self.st[Key::Down.idx()].repeat_at = 0;
+        // ● + ▼ (capture) / ● + ▲ (Now playing) when short; holds never act (▼ + ● long is
+        // Samsung's force restart). Every press involved is poisoned (no volume / skip /
+        // play-pause / leave hold / menu repeat); release() decides.
+        if pw && (up || dn) {
+            for s in self.st.iter_mut().filter(|s| s.down) {
+                s.consumed = true;
+                s.repeat_at = 0;
+            }
             self.skip_power_release = true;
             self.power_tap = None;
-            if key == Key::Up {
-                // A third key: no capture, and no ▲ + ▼ action either.
-                self.st[i].consumed = true;
-                if let Some(c) = &mut self.chord {
-                    c.ok = false;
+            if up && dn {
+                // Three keys: nothing at all, and no ▲ + ▼ action either.
+                match &mut self.chord {
+                    Some(c) => c.ok = false,
+                    None => self.chord = Some(Chord { first: t, vol: Key::Down, ok: false }),
                 }
                 self.combo_done = true;
                 return;
             }
-            let other = self.st[if key == Key::Down { Key::Power } else { Key::Down }.idx()];
+            let vol = if dn { Key::Down } else { Key::Up };
+            let other = self.st[if key == Key::Power { vol } else { Key::Power }.idx()];
             let ok = t.saturating_sub(other.since) <= CAPTURE_GAP_MS
-                && !up
                 && !other.no_chord
                 && !self.st[i].no_chord
                 && !other.hold_fired;
-            if up {
-                self.combo_done = true; // ▲ + ▼ already down: no play/pause or Help
+            // In a menu the volume key already moved the cursor: move it back.
+            if ok && key == Key::Power && other.moved {
+                out.push(if vol == Key::Up { Action::MenuDown } else { Action::MenuUp });
             }
-            self.chord = Some(Chord { first: other.since, ok });
+            self.chord = Some(Chord { first: other.since, vol, ok });
             return;
         }
-        // ▲ + ▼ together: play/pause (short) or Help (2 s).
+        // ▲ + ▼ together: short = play/pause (screen off) or Back (screen on), 2 s = Help.
         if up && dn {
             self.st[Key::Up.idx()].consumed = true;
             self.st[Key::Down.idx()].consumed = true;
@@ -233,13 +312,21 @@ impl KeyMachine {
                 self.combo_ud = true;
                 self.combo_since = t;
                 self.combo_done = false;
-                // In a menu the first key already moved the cursor: move it back, so ▲ + ▼
-                // (Back, or Help when held) leaves the list where it was. Not when that key
-                // was held long enough to scroll: then it is no Back either.
                 let first = if key == Key::Up { Key::Down } else { Key::Up };
                 let f = self.st[first.idx()];
-                self.combo_menu = f.moved && t.saturating_sub(f.since) < HOLD_MS;
-                if self.combo_menu {
+                // Back only for a fresh pair: not when the first key woke the screen, or was
+                // held long enough to scroll / skip.
+                let fresh = !f.woke && !f.hold_fired && t.saturating_sub(f.since) < HOLD_MS;
+                self.combo_kind = if !ctx.screen_on && ctx.loaded {
+                    Pair::PlayPause
+                } else if ctx.screen_on && fresh && (f.moved || f.tap != Tap::None) {
+                    Pair::Back
+                } else {
+                    Pair::None
+                };
+                // In a menu the first key already moved the cursor: move it back, so the
+                // list is where it was (for Back and for Help).
+                if f.moved && fresh {
                     out.push(if first == Key::Up { Action::MenuDown } else { Action::MenuUp });
                 }
             }
@@ -248,7 +335,8 @@ impl KeyMachine {
 
         // Screen off, nothing to control: the first press only wakes.
         if !ctx.screen_on && !ctx.loaded {
-            out.push(Action::Wake);
+            self.wake(t, out);
+            self.st[i].woke = true;
             if key == Key::Power {
                 // Keep the press alive for the 3 s leave hold.
                 self.skip_power_release = true;
@@ -258,32 +346,37 @@ impl KeyMachine {
             return;
         }
 
-        if ctx.music() {
-            if key == Key::Power {
+        if key == Key::Power {
+            if ctx.music() {
                 if let Some(t0) = self.power_tap.take() {
                     if t.saturating_sub(t0) <= DOUBLE_MS {
-                        out.push(Action::Menu);
-                        // The press stays alive for the 3 s leave hold, but
-                        // its release must not toggle playback.
+                        // ● ●: wakes a dark screen where it was left; on a lit Now playing
+                        // nothing. The press stays alive for the 3 s leave hold, but its
+                        // release must not toggle playback.
+                        if !ctx.screen_on {
+                            self.wake(t, out);
+                            self.st[i].woke = true;
+                        }
                         self.skip_power_release = true;
                     }
                 }
             }
-            // ▲ / ▼ decide on release (tap) or in tick() (hold).
+            return; // music: decided after the double window; menus: select on release
+        }
+
+        // ▲ / ▼ deciding on release (tap) or in tick() (hold).
+        let tap = ctx.tap();
+        if tap != Tap::None {
+            self.st[i].tap = tap;
             return;
         }
 
         // Menu keys: move on press, keep moving while held (tick()).
-        match key {
-            Key::Up | Key::Down => {
-                out.push(if key == Key::Up { Action::MenuUp } else { Action::MenuDown });
-                let s = &mut self.st[i];
-                s.consumed = true;
-                s.moved = true;
-                s.repeat_at = t + HOLD_MS;
-            }
-            Key::Power => {} // select on release
-        }
+        out.push(if key == Key::Up { Action::MenuUp } else { Action::MenuDown });
+        let s = &mut self.st[i];
+        s.consumed = true;
+        s.moved = true;
+        s.repeat_at = t + HOLD_MS;
     }
 
     fn release(&mut self, key: Key, t: u64, ctx: Ctx, out: &mut Vec<Action>) {
@@ -295,27 +388,32 @@ impl KeyMachine {
         }
         let held = t.saturating_sub(s.since);
 
-        // ▼ + ● chord: decide on the first release of the pair.
+        // ● + volume key chord: decide on the first release of the pair.
         if let Some(c) = self.chord {
-            if matches!(key, Key::Down | Key::Power) {
-                if c.ok {
-                    if t.saturating_sub(c.first) <= CAPTURE_RELEASE_MS {
+            if c.ok && (key == Key::Power || key == c.vol) {
+                if t.saturating_sub(c.first) <= CAPTURE_RELEASE_MS {
+                    if c.vol == Key::Down {
                         out.push(Action::Capture);
+                    } else {
+                        if !ctx.screen_on {
+                            self.guard_until = t + WAKE_GUARD_MS;
+                        }
+                        out.push(Action::Player);
                     }
-                    self.chord = Some(Chord { ok: false, ..c });
                 }
-                if key == Key::Power {
-                    self.skip_power_release = false;
-                }
-                if !self.st[Key::Down.idx()].down && !self.st[Key::Power.idx()].down {
-                    self.chord = None;
-                }
-                if self.combo_ud && !self.st[Key::Up.idx()].down && !self.st[Key::Down.idx()].down {
-                    self.combo_ud = false;
-                    self.combo_menu = false;
-                }
-                return;
+                self.chord = Some(Chord { ok: false, ..c });
             }
+            if key == Key::Power {
+                self.skip_power_release = false;
+            }
+            if !self.any_down() {
+                self.chord = None;
+            }
+            if self.combo_ud && !self.st[Key::Up.idx()].down && !self.st[Key::Down.idx()].down {
+                self.combo_ud = false;
+                self.combo_kind = Pair::None;
+            }
+            return;
         }
 
         // ▲ + ▼ combo: decide on the first release of the pair.
@@ -323,18 +421,17 @@ impl KeyMachine {
             if !self.combo_done {
                 self.combo_done = true;
                 if t.saturating_sub(self.combo_since) < HELP_HOLD_MS {
-                    if ctx.music() {
-                        out.push(Action::PlayPause);
-                    } else if self.combo_menu {
-                        out.push(Action::Back);
-                    } else if !ctx.screen_on {
-                        out.push(Action::Wake);
+                    match self.combo_kind {
+                        Pair::PlayPause => out.push(Action::PlayPause),
+                        Pair::Back => out.push(Action::Back),
+                        Pair::None if !ctx.screen_on => self.wake(t, out),
+                        Pair::None => {}
                     }
                 }
             }
             if !self.st[Key::Up.idx()].down && !self.st[Key::Down.idx()].down {
                 self.combo_ud = false;
-                self.combo_menu = false;
+                self.combo_kind = Pair::None;
             }
             return;
         }
@@ -348,8 +445,12 @@ impl KeyMachine {
 
         match key {
             Key::Up | Key::Down => {
-                if ctx.music() && held < HOLD_MS {
-                    out.push(if key == Key::Up { Action::VolUp } else { Action::VolDown });
+                if held < HOLD_MS {
+                    match s.tap {
+                        Tap::Volume => out.push(if key == Key::Up { Action::VolUp } else { Action::VolDown }),
+                        Tap::Move => out.push(if key == Key::Up { Action::MenuUp } else { Action::MenuDown }),
+                        Tap::None => {}
+                    }
                 }
             }
             Key::Power => {
@@ -357,7 +458,7 @@ impl KeyMachine {
                     return;
                 }
                 if ctx.music() {
-                    // Wait for a possible second press (● ● = menu).
+                    // Wait for a possible second press (● ●).
                     self.power_tap = Some(t);
                 } else {
                     out.push(Action::Select);
@@ -391,18 +492,21 @@ impl KeyMachine {
             self.combo_done = true;
             out.push(Action::Help);
         }
-        if ctx.music() {
-            for key in [Key::Up, Key::Down] {
-                let s = &mut self.st[key.idx()];
-                if s.down && !s.consumed && !s.hold_fired {
-                    let held = now.saturating_sub(s.since);
-                    if (HOLD_MS..=IGNORE_HELD_MS).contains(&held) {
-                        s.hold_fired = true;
+        // Hold ▲ / ▼ (music, a station screen): next / previous, once per press.
+        for key in [Key::Up, Key::Down] {
+            let s = &mut self.st[key.idx()];
+            if s.down && s.tap != Tap::None && !s.consumed && !s.hold_fired {
+                let held = now.saturating_sub(s.since);
+                if held >= HOLD_MS {
+                    // Past IGNORE_HELD_MS (a late tick): done silently, so the deadline ends.
+                    s.hold_fired = true;
+                    if held <= IGNORE_HELD_MS {
                         out.push(if key == Key::Up { Action::Next } else { Action::Prev });
                     }
                 }
             }
-        } else if ctx.screen_on {
+        }
+        if ctx.screen_on && !ctx.music() {
             // A held ▲ / ▼ in a menu keeps moving. It stops for good once ● joins in or
             // the key is held past IGNORE_HELD_MS (a key stuck in a pocket).
             let pw = self.st[Key::Power.idx()].down;
@@ -442,14 +546,13 @@ impl KeyMachine {
         if self.combo_ud && !self.combo_done {
             min(self.combo_since + HELP_HOLD_MS);
         }
-        if ctx.music() {
-            for key in [Key::Up, Key::Down] {
-                let s = &self.st[key.idx()];
-                if s.down && !s.consumed && !s.hold_fired {
-                    min(s.since + HOLD_MS);
-                }
+        for key in [Key::Up, Key::Down] {
+            let s = &self.st[key.idx()];
+            if s.down && s.tap != Tap::None && !s.consumed && !s.hold_fired {
+                min(s.since + HOLD_MS);
             }
-        } else if ctx.screen_on {
+        }
+        if ctx.screen_on && !ctx.music() {
             // tick() either moves (the next repeat lies ahead again) or stops the repeat.
             for key in [Key::Up, Key::Down] {
                 let s = &self.st[key.idx()];
@@ -470,10 +573,11 @@ impl KeyMachine {
 mod tests {
     use super::*;
 
-    const OFF_MUSIC: Ctx = Ctx { screen_on: false, player: false, loaded: true };
-    const OFF_IDLE: Ctx = Ctx { screen_on: false, player: false, loaded: false };
-    const MENU: Ctx = Ctx { screen_on: true, player: false, loaded: true };
-    const PLAYER: Ctx = Ctx { screen_on: true, player: true, loaded: true };
+    const OFF_MUSIC: Ctx = Ctx { screen_on: false, player: false, loaded: true, station: false };
+    const OFF_IDLE: Ctx = Ctx { screen_on: false, player: false, loaded: false, station: false };
+    const MENU: Ctx = Ctx { screen_on: true, player: false, loaded: true, station: false };
+    const PLAYER: Ctx = Ctx { screen_on: true, player: true, loaded: true, station: false };
+    const STATION: Ctx = Ctx { screen_on: true, player: false, loaded: true, station: true };
 
     fn acts(v: Vec<Action>) -> Vec<Action> {
         v.into_iter().filter(|a| *a != Action::Activity).collect()
@@ -517,15 +621,114 @@ mod tests {
     }
 
     #[test]
-    fn double_power_is_menu() {
-        for ctx in [OFF_MUSIC, PLAYER] {
+    fn double_power_only_wakes() {
+        // Screen off with music: ● ● wakes the screen where it was left, nothing else.
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Power, true, 0, OFF_MUSIC);
+        m.on_key(Key::Power, false, 100, OFF_MUSIC);
+        assert_eq!(acts(m.on_key(Key::Power, true, 300, OFF_MUSIC)), vec![Action::Wake]);
+        assert!(acts(m.on_key(Key::Power, false, 400, MENU)).is_empty(), "no select on the lit menu");
+        assert!(m.tick(1000, MENU).is_empty(), "no play/pause");
+        // A lit Now playing: ● ● does nothing (no menu, no toggle).
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Power, true, 0, PLAYER);
+        m.on_key(Key::Power, false, 100, PLAYER);
+        assert!(acts(m.on_key(Key::Power, true, 300, PLAYER)).is_empty());
+        assert!(acts(m.on_key(Key::Power, false, 400, PLAYER)).is_empty());
+        assert!(m.tick(1000, PLAYER).is_empty());
+    }
+
+    #[test]
+    fn second_tap_after_a_wake_never_selects() {
+        // Screen off, nothing loaded: ● ● = one wake; the second ● must not select the row.
+        let mut m = KeyMachine::new();
+        assert_eq!(acts(m.on_key(Key::Power, true, 0, OFF_IDLE)), vec![Action::Wake]);
+        assert!(acts(m.on_key(Key::Power, false, 90, MENU)).is_empty());
+        assert!(acts(m.on_key(Key::Power, true, 250, MENU)).is_empty());
+        assert!(acts(m.on_key(Key::Power, false, 330, MENU)).is_empty());
+        // Nor ▲ ▲ / ▼ ▼ move; a press after the guard works normally.
+        let mut m = KeyMachine::new();
+        assert_eq!(acts(m.on_key(Key::Down, true, 0, OFF_IDLE)), vec![Action::Wake]);
+        m.on_key(Key::Down, false, 80, MENU);
+        assert!(acts(m.on_key(Key::Down, true, 200, MENU)).is_empty());
+        m.on_key(Key::Down, false, 260, MENU);
+        assert_eq!(acts(m.on_key(Key::Down, true, 700, MENU)), vec![Action::MenuDown]);
+        // The swallowed ● still arms "back to Android" when held 3 s.
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Power, true, 0, OFF_IDLE);
+        m.on_key(Key::Power, false, 90, MENU);
+        m.on_key(Key::Power, true, 250, MENU);
+        assert_eq!(m.tick(3250, MENU), vec![Action::LeaveArm]);
+        // ● ● with music, then a quick third ●: swallowed (no select, no toggle).
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Power, true, 0, OFF_MUSIC);
+        m.on_key(Key::Power, false, 80, OFF_MUSIC);
+        m.on_key(Key::Power, true, 200, OFF_MUSIC);
+        m.on_key(Key::Power, false, 280, MENU);
+        assert!(acts(m.on_key(Key::Power, true, 450, MENU)).is_empty());
+        assert!(acts(m.on_key(Key::Power, false, 520, MENU)).is_empty());
+        assert!(m.tick(2000, MENU).is_empty());
+    }
+
+    #[test]
+    fn up_power_is_now_playing() {
+        for ctx in [OFF_MUSIC, MENU, STATION, OFF_IDLE] {
             let mut m = KeyMachine::new();
-            m.on_key(Key::Power, true, 0, ctx);
-            m.on_key(Key::Power, false, 100, ctx);
-            assert_eq!(acts(m.on_key(Key::Power, true, 300, ctx)), vec![Action::Menu]);
-            assert!(acts(m.on_key(Key::Power, false, 400, MENU)).is_empty());
-            assert!(m.tick(1000, MENU).is_empty());
+            m.on_key(Key::Up, true, 0, ctx);
+            m.on_key(Key::Power, true, 120, ctx);
+            assert!(m.tick(900, ctx).is_empty(), "no next, no repeat");
+            assert_eq!(acts(m.on_key(Key::Power, false, 400, ctx)), vec![Action::Player], "{ctx:?}");
+            assert!(acts(m.on_key(Key::Up, false, 450, ctx)).is_empty());
+            assert!(m.tick(5000, ctx).is_empty(), "no play/pause, no leave arm");
         }
+        // In a menu the ▲ move is undone when ● joins.
+        let mut m = KeyMachine::new();
+        assert_eq!(acts(m.on_key(Key::Up, true, 0, MENU)), vec![Action::MenuUp]);
+        assert_eq!(acts(m.on_key(Key::Power, true, 100, MENU)), vec![Action::MenuDown]);
+        // ● first, then ▲; too far apart = nothing; held long = nothing.
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Power, true, 0, PLAYER);
+        m.on_key(Key::Up, true, 100, PLAYER);
+        assert_eq!(acts(m.on_key(Key::Up, false, 300, PLAYER)), vec![Action::Player]);
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Up, true, 0, OFF_MUSIC);
+        m.on_key(Key::Power, true, 450, OFF_MUSIC);
+        assert!(acts(m.on_key(Key::Power, false, 600, OFF_MUSIC)).is_empty());
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Up, true, 0, OFF_MUSIC);
+        m.on_key(Key::Power, true, 50, OFF_MUSIC);
+        assert!(m.tick(4000, OFF_MUSIC).is_empty());
+        assert!(acts(m.on_key(Key::Up, false, 4000, OFF_MUSIC)).is_empty());
+    }
+
+    #[test]
+    fn station_screen_tap_moves_hold_steps() {
+        let mut m = KeyMachine::new();
+        assert!(acts(m.on_key(Key::Down, true, 0, STATION)).is_empty(), "decides on release");
+        assert_eq!(acts(m.on_key(Key::Down, false, 150, STATION)), vec![Action::MenuDown]);
+        m.on_key(Key::Up, true, 1000, STATION);
+        assert_eq!(m.next_deadline(STATION), Some(1000 + HOLD_MS));
+        assert_eq!(m.tick(1600, STATION), vec![Action::Next]);
+        assert!(m.tick(2500, STATION).is_empty(), "once per press, no repeat");
+        assert!(acts(m.on_key(Key::Up, false, 2600, STATION)).is_empty());
+        m.on_key(Key::Down, true, 3000, STATION);
+        assert_eq!(m.tick(3600, STATION), vec![Action::Prev]);
+        m.on_key(Key::Down, false, 3700, STATION);
+        // ● selects; ▲ + ▼ goes back.
+        m.on_key(Key::Power, true, 4000, STATION);
+        assert_eq!(acts(m.on_key(Key::Power, false, 4100, STATION)), vec![Action::Select]);
+        m.on_key(Key::Up, true, 5000, STATION);
+        assert!(acts(m.on_key(Key::Down, true, 5050, STATION)).is_empty(), "nothing to undo");
+        assert_eq!(acts(m.on_key(Key::Up, false, 5200, STATION)), vec![Action::Back]);
+    }
+
+    #[test]
+    fn a_late_tick_ends_the_hold_deadline() {
+        // A tick that comes only after the stuck-key limit fires nothing and ends the deadline.
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Up, true, 0, PLAYER);
+        assert!(m.tick(IGNORE_HELD_MS + 500, PLAYER).is_empty());
+        assert_eq!(m.next_deadline(PLAYER), None);
     }
 
     #[test]
@@ -675,10 +878,10 @@ mod tests {
         m.on_key(Key::Power, true, 1000, PLAYER);
         assert!(acts(m.on_key(Key::Power, false, 1100, PLAYER)).is_empty());
         assert_eq!(m.tick(1501, PLAYER), vec![Action::PlayPause]);
-        // ● ● = menu
-        m.on_key(Key::Power, true, 2000, PLAYER);
-        m.on_key(Key::Power, false, 2100, PLAYER);
-        assert_eq!(acts(m.on_key(Key::Power, true, 2300, PLAYER)), vec![Action::Menu]);
+        // ● ● with the screen off = wake
+        m.on_key(Key::Power, true, 2000, OFF_MUSIC);
+        m.on_key(Key::Power, false, 2100, OFF_MUSIC);
+        assert_eq!(acts(m.on_key(Key::Power, true, 2300, OFF_MUSIC)), vec![Action::Wake]);
         m.on_key(Key::Power, false, 2400, MENU);
         // menus: ● selects; hold ● 3 s arms leave
         m.on_key(Key::Power, true, 3000, MENU);
@@ -787,13 +990,23 @@ mod tests {
     }
 
     #[test]
-    fn up_down_keeps_its_old_meaning_on_the_player_and_screen_off() {
-        for ctx in [PLAYER, OFF_MUSIC] {
-            let mut m = KeyMachine::new();
-            m.on_key(Key::Down, true, 0, ctx);
-            m.on_key(Key::Up, true, 40, ctx);
-            assert_eq!(acts(m.on_key(Key::Down, false, 300, ctx)), vec![Action::PlayPause]);
-        }
+    fn up_down_is_play_pause_in_the_dark_and_back_on_the_player() {
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Down, true, 0, OFF_MUSIC);
+        m.on_key(Key::Up, true, 40, OFF_MUSIC);
+        assert_eq!(acts(m.on_key(Key::Down, false, 300, OFF_MUSIC)), vec![Action::PlayPause]);
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Down, true, 0, PLAYER);
+        assert!(acts(m.on_key(Key::Up, true, 40, PLAYER)).is_empty(), "no volume, no undo");
+        assert_eq!(acts(m.on_key(Key::Down, false, 300, PLAYER)), vec![Action::Back]);
+        assert!(acts(m.on_key(Key::Up, false, 320, PLAYER)).is_empty());
+        assert!(m.tick(2000, PLAYER).is_empty());
+        // After a skip (hold fired) it is not Back.
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Up, true, 0, PLAYER);
+        assert_eq!(m.tick(600, PLAYER), vec![Action::Next]);
+        m.on_key(Key::Down, true, 700, PLAYER);
+        assert!(acts(m.on_key(Key::Up, false, 800, PLAYER)).is_empty());
     }
 
     #[test]
@@ -802,6 +1015,7 @@ mod tests {
         m.on_key(Key::Down, true, 0, MENU);
         m.on_key(Key::Power, true, 100, MENU);
         assert_eq!(m.next_deadline(MENU), None, "no repeat, no leave hold");
+        // (and the ▼ move of the menu is undone when ● joins in time)
         for t in [600, 750, 900, 1200] {
             assert!(m.tick(t, MENU).is_empty(), "tick {t}");
         }

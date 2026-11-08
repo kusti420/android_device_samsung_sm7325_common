@@ -43,29 +43,26 @@ const LETTER_ROW_MIN: usize = 24;
 pub const NO_OUTPUT_TEXT: &str =
     "No headphones. Plug in wired or USB headphones, or connect Bluetooth headphones: menu › Bluetooth.";
 
-/// Where Abyss opens and what a "look" shows. Set in the main OS (Settings › Abyss ›
-/// Navigation, entry app), read once at start.
+/// Where Abyss opens. Set in the main OS (Settings › Abyss, entry app), read once at start.
+/// (Waking always shows the screen you left; ▲ + ● is the way to Now playing, keys.rs.)
 const PROP_NAV_START: &str = "persist.abyss.nav.start";
-const PROP_NAV_WAKE: &str = "persist.abyss.nav.wake";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NavPrefs {
     /// `persist.abyss.nav.start` = `player` (default) | `home`: open on Now playing with the
     /// last song ready (paused at its place), so the first ● plays it.
     pub start_player: bool,
-    /// `persist.abyss.nav.wake` = `player` (default) | `last`: ● ● with the screen off (the
-    /// "look") shows Now playing; ● ● again returns to where you were.
-    pub wake_player: bool,
 }
 
 impl NavPrefs {
     pub fn read() -> NavPrefs {
-        let not = |prop: &str, off: &str| {
-            crate::control::prop_str(prop).is_none_or(|v| !v.trim().eq_ignore_ascii_case(off))
-        };
-        NavPrefs { start_player: not(PROP_NAV_START, "home"), wake_player: not(PROP_NAV_WAKE, "last") }
+        let start = crate::control::prop_str(PROP_NAV_START);
+        NavPrefs { start_player: start.is_none_or(|v| !v.trim().eq_ignore_ascii_case("home")) }
     }
 }
+
+/// Top of the status line (left and right of the punch-hole camera).
+const STATUS_Y: i32 = 36;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ListKind {
@@ -187,6 +184,8 @@ pub struct Ui {
     /// the same row. Session only; the library does not change while Abyss runs.
     memo: Vec<(Screen, usize, usize)>,
     pub nav: NavPrefs,
+    /// The wall-clock minute the status line last showed (its clock redraws on the minute).
+    drawn_minute: i64,
 }
 
 /// Library screens whose place is remembered. Never PowerOff (it must open on "Keep it
@@ -266,13 +265,14 @@ fn guide(screen: Screen) -> &'static [(&'static str, &'static str)] {
         Screen::Home => &[
             ("screen on", "▲ ▼ move   ● select"),
             ("screen off", "keys play music"),
+            ("▲ + ●", "now playing"),
             ("hold ▲+▼ 2 s", "help"),
             ("hold ● 3 s", "back to Android"),
         ],
         Screen::NowPlaying => &[
             ("tap ▲ / ▼", "volume up / down"),
             ("hold ▲ / ▼", "next / previous"),
-            ("● / ● ●", "play·pause / menu"),
+            ("● · ▲ + ▼", "play·pause · menu"),
             ("▼ + ● short", "save this song"),
             ("hold ● 3 s", "back to Android"),
         ],
@@ -310,10 +310,20 @@ fn guide(screen: Screen) -> &'static [(&'static str, &'static str)] {
             ("▲ ▼", "move · hold: keep moving"),
             ("● select", "a song plays at once"),
             ("▲ + ▼", "back"),
+            ("▲ + ●", "now playing"),
             ("hold ● 3 s", "back to Android"),
         ],
     }
 }
+
+/// Now playing's key guide for a radio stream: hold ▲ / ▼ changes the station.
+const RADIO_GUIDE: &[(&str, &str)] = &[
+    ("tap ▲ / ▼", "volume up / down"),
+    ("hold ▲ / ▼", "next / previous station"),
+    ("● · ▲ + ▼", "play·pause · menu"),
+    ("▼ + ● short", "save this song"),
+    ("hold ● 3 s", "back to Android"),
+];
 
 /// Rows of the Bluetooth screen. The last headphones are always offered first.
 fn bt_rows(bt: &Bt, back: impl Fn() -> Row) -> Vec<Row> {
@@ -452,7 +462,7 @@ const HOME_MODULES: usize = 3;
 
 impl Ui {
     pub fn new() -> Ui {
-        Ui { screen: Screen::Home, sel: 0, top: 0, stack: Vec::new(), memo: Vec::new(), nav: NavPrefs::read() }
+        Ui { screen: Screen::Home, sel: 0, top: 0, stack: Vec::new(), memo: Vec::new(), nav: NavPrefs::read(), drawn_minute: 0 }
     }
 
     fn rows(&self, v: &View) -> Vec<Row> {
@@ -490,6 +500,16 @@ impl Ui {
                     _ => Row::new("Now playing", RowAct::Go(Screen::NowPlaying)).meta("nothing"),
                 };
                 let mut rows = vec![Row::new("Music ›", RowAct::Go(Screen::Music)).meta(music_meta), np];
+                // Nothing to play on: the last Bluetooth headphones are one ● away (it turns
+                // Bluetooth on first), instead of Bluetooth › Connect.
+                if let (None, Some(d)) = (v.output, v.bt.last()) {
+                    if !matches!(v.bt.conn(), Conn::Connecting(_)) {
+                        rows.push(
+                            Row::new(format!("Connect {}", d.name), RowAct::Do(Request::BtConnect(None)))
+                                .meta("Bluetooth"),
+                        );
+                    }
+                }
                 // Installed modules show on Home under their own names (a few of them), so a new
                 // one is found where the person looks first; all of them stay under Apps ›.
                 let names = v.modules.names();
@@ -781,7 +801,13 @@ impl Ui {
 
     /// Whether the screen shows something that changes by itself every second.
     pub fn is_live(&self, v: &View) -> bool {
-        v.leaving_in.is_some()
+        let minute = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64 / 60_000)
+            .unwrap_or(0);
+        // The status line's clock moved on.
+        minute != self.drawn_minute
+            || v.leaving_in.is_some()
             || v.low_battery_in.is_some()
             || (self.screen == Screen::NowPlaying && v.status.state == PlayState::Playing)
             // The Wi-Fi line counts the linger down / follows the bring-up.
@@ -809,6 +835,7 @@ impl Ui {
                 if let Some(view) = v.modules.view() {
                     module_ui::draw(cv, &view, v.msg);
                 }
+                self.draw_status(cv, v);
                 return;
             }
             // A module stream, or the last radio station shown ready at entry (● starts it).
@@ -824,7 +851,8 @@ impl Ui {
                         }
                     };
                     let msg = v.status.error.as_deref().map(|e| (e, WARN)).or(v.msg);
-                    module_ui::draw_now_playing(cv, &np, state, (v.volume, v.volume_max), guide(Screen::NowPlaying), msg);
+                    module_ui::draw_now_playing(cv, &np, state, (v.volume, v.volume_max), RADIO_GUIDE, msg);
+                    self.draw_status(cv, v);
                     if v.volume_overlay {
                         self.draw_volume_overlay(cv, v);
                     }
@@ -832,11 +860,13 @@ impl Ui {
                 }
                 self.draw_now_playing(cv, v, max_w);
                 self.draw_footer(cv, guide(Screen::NowPlaying));
+                self.draw_status(cv, v);
                 return;
             }
             Screen::NowPlaying => {
                 self.draw_now_playing(cv, v, max_w);
                 self.draw_footer(cv, guide(Screen::NowPlaying));
+                self.draw_status(cv, v);
                 if v.volume_overlay {
                     self.draw_volume_overlay(cv, v);
                 }
@@ -933,6 +963,36 @@ impl Ui {
             }
         }
         self.draw_footer(cv, guide(self.screen));
+        self.draw_status(cv, v);
+    }
+
+    /// The slim status line on every screen, left and right of the camera: the time and what
+    /// plays out of where, then battery and the hours of screen-off music left
+    /// (battery.rs). Drawn with the frame, so it costs nothing extra; the clock's minute
+    /// change makes the screen live (is_live).
+    fn draw_status(&mut self, cv: &mut Canvas, v: &View) {
+        let w = cv.w as i32;
+        let half = (w / 2 - MARGIN - 60).max(100) as u32;
+        let wall = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        let (h, m, _) = crate::modules::local_hms(wall);
+        self.drawn_minute = wall.div_euclid(60_000);
+        let mut left = format!("{h:02}:{m:02}");
+        if let Some(o) = v.output {
+            left.push_str(" · ");
+            left.push_str(o.short());
+        }
+        if v.wifi.summary() != "off" && !v.wifi.summary().starts_with("off ") {
+            left.push_str(" · wi-fi");
+        }
+        SMALL.draw(cv, MARGIN, STATUS_Y, &SMALL.ellipsize(&left, half), DIM);
+        let b = v.battery;
+        let right = format!("{} · {}", pct(b), hours_short(b));
+        let right = SMALL.ellipsize(&right, half);
+        let low = b.capacity.is_some_and(|c| c <= 15) && !b.charging();
+        SMALL.draw(cv, w - MARGIN - SMALL.text_width(&right) as i32, STATUS_Y, &right, if low { WARN } else { DIM });
     }
 
     fn footer_top(&self, lines: usize) -> i32 {
@@ -1124,7 +1184,7 @@ impl Ui {
             None => {
                 BIG.draw(cv, MARGIN, y, "Nothing playing", DIM);
                 y += 110;
-                SMALL.draw(cv, MARGIN, y, "● ● opens the menu: Music › to pick songs.", DIM);
+                SMALL.draw(cv, MARGIN, y, "▲ + ▼ opens the menu: Music › to pick songs.", DIM);
                 y += SMALL_LH + 30;
             }
         }
@@ -1300,14 +1360,14 @@ impl Ui {
             y += SMALL_LH;
         }
         y += 30;
-        SMALL.draw(cv, MARGIN, y, "KEYS · Now playing and screen off", DIM);
+        SMALL.draw(cv, MARGIN, y, "KEYS · screen off, music loaded", DIM);
         y += SMALL_LH;
         let keys: &[(&str, &str)] = &[
             ("tap ▲ / ▼", "louder / quieter"),
-            ("hold ▲ / ▼", "next / previous song"),
-            ("●", "play / pause"),
-            ("● ●", "menu · dark: what plays"),
-            ("▲ + ▼", "play / pause"),
+            ("hold ▲ / ▼", "next / previous (station)"),
+            ("● or ▲ + ▼", "play / pause"),
+            ("● ●", "screen on, where you were"),
+            ("▲ + ●", "screen on: Now playing"),
             ("▼ + ● short", "save this song"),
             ("headset 1×", "play / pause"),
             ("headset 2× 3×", "next · previous"),
@@ -1320,15 +1380,15 @@ impl Ui {
             y += SMALL_LH;
         }
         y += 20;
-        SMALL.draw(cv, MARGIN, y, "KEYS · menus", DIM);
+        SMALL.draw(cv, MARGIN, y, "KEYS · screen on", DIM);
         y += SMALL_LH;
         for (k, m) in [
-            ("▲ ▼", "move"),
-            ("hold ▲ / ▼", "keep moving"),
-            ("●", "select · lists have Back"),
-            ("▲ + ▼", "back one level"),
-            ("▼ + ● short", "save the song that plays"),
-            ("hold ▼ + ●", "nothing (Samsung force restart)"),
+            ("▲ ▼", "move · hold: keep moving"),
+            ("●", "select"),
+            ("▲ + ▼", "back · Now playing: menu"),
+            ("▲ + ●", "Now playing"),
+            ("Now playing", "▲▼ volume · ● play/pause"),
+            ("hold ▼ + ●", "nothing (force restart)"),
         ] {
             SMALL.draw(cv, MARGIN, y, k, ACCENT);
             SMALL.draw(cv, MARGIN + col, y, m, TEXT);

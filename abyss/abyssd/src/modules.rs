@@ -422,8 +422,8 @@ fn wall_now_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
-/// (hour, minute, second) in the phone's time zone.
-fn local_hms(ms: i64) -> (i64, i64, i64) {
+/// (hour, minute, second) in the phone's time zone (also the status line's clock, ui.rs).
+pub fn local_hms(ms: i64) -> (i64, i64, i64) {
     let t: libc::time_t = (ms.div_euclid(1000)) as libc::time_t;
     // SAFETY: localtime_r writes into our own zeroed struct; both pointers are valid.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
@@ -901,6 +901,15 @@ impl Host {
         let eff = self.act(&o.frame, module, &def, next);
         self.stepping = false;
         eff
+    }
+
+    /// The playing station's own screen (its `show` list) is in front and the stream came
+    /// from a list: there hold ▲ / ▼ steps stations, as on Now playing (keys.rs `station`).
+    pub fn station_in_front(&self) -> bool {
+        let Some(s) = self.stream.as_ref().filter(|s| s.origin.is_some()) else { return false };
+        let Some(Place::Screen { module, screen }) = self.stack.last().map(|f| &f.place) else { return false };
+        matches!(s.frame.as_ref().map(|f| &f.place),
+            Some(Place::Screen { module: m, screen: sh }) if m == module && sh == screen)
     }
 
     pub fn poll_fd(&self) -> BorrowedFd<'_> {
@@ -2132,6 +2141,7 @@ mod tests {
         h.open_direct(0);
         assert!(matches!(h.select(), Effect::Play { .. }));
         assert_eq!(tag(&h), "a");
+        assert!(h.station_in_front(), "weareone-fm's shape: static stream rows, a list `show`");
         let depth = h.stack.len();
         // Hold ▼ / ▲: the next / previous station of that list (rows without a stream skipped).
         assert!(matches!(h.step_station(1), Effect::Play { .. }));
@@ -2168,6 +2178,48 @@ mod tests {
         assert_eq!(h.view().unwrap().sel, 2);
         h.open_direct(0);
         assert_eq!(h.view().unwrap().sel, 2, "the list opens where it was left");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn station_steps_from_a_data_list_and_its_screen_counts() {
+        // gabbee-radio's shape: stations come from `get` ($data rows); `show` is a list screen.
+        let root = std::env::temp_dir().join(format!("abyss-mod-step2-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let store = root.join("store");
+        store_with(&store, "radio", "ready", &["apps", "menu:get", "media:stream", "media:stream:http", "media:stream:screen", "menu:header"]);
+        fs::write(store.join("radio/menu.json"), json!({"menu": 1, "start": "stations", "screens": {
+            "stations": {"title": "R", "get": {"url": "http://127.0.0.1:9/stations"},
+                "items": {"from": "$data.stations", "row": {"label": "$row.name", "as": "station",
+                    "stream": {"url": "$station.url", "tag": "$station.id", "title": "$station.name", "show": "radio"}}}},
+            "radio": {"title": "$station.name", "header": ["$stream.tag"],
+                "items": {"from": "$stream.played", "row": {"label": "$row.artist", "goto": "stations"}}}}}).to_string()).unwrap();
+        let (mods, errs) = load(&store, &root.join("settings"));
+        assert!(errs.is_empty(), "{errs:?}");
+        let net: Arc<dyn Network> = Arc::new(radio_source::OpenNetwork(Arc::new(crate::http::TcpTransport::default())));
+        let mut h = Host::new(mods, errs, net).unwrap();
+        h.open_direct(0);
+        // The stations list arrives (as if fetched).
+        let st = |id: &str| json!({"id": id, "name": id.to_uppercase(), "url": format!("http://127.0.0.1:9/{id}")});
+        if let Some(f) = h.stack.last_mut() {
+            f.pages = vec![json!({"stations": [st("a"), st("b"), st("c")]})];
+            f.load = Load::Ready;
+        }
+        assert!(!h.station_in_front());
+        h.down();
+        assert!(matches!(h.select(), Effect::Play { player: false, .. }));
+        let tag = |h: &Host| h.stream_status().map(|s| s.tag).unwrap_or_default();
+        assert_eq!(tag(&h), "b");
+        assert!(h.station_in_front(), "its station screen is in front");
+        assert!(matches!(h.step_station(1), Effect::Play { .. }));
+        assert_eq!(tag(&h), "c");
+        assert!(h.station_in_front(), "still the station screen, now of the new station");
+        assert_eq!(h.view().unwrap().title, "C", "the open station screen follows");
+        h.step_station(1);
+        assert_eq!(tag(&h), "a", "wraps");
+        h.back();
+        assert!(!h.station_in_front(), "the stations list is not a station screen");
+        h.stop_stream();
         let _ = fs::remove_dir_all(&root);
     }
 

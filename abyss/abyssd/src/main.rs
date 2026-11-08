@@ -263,6 +263,8 @@ impl App {
             screen_on: self.screen_on,
             player: self.ui.screen == Screen::NowPlaying,
             loaded: loaded && self.output.is_some(),
+            // The playing station's own screen: hold ▲ / ▼ steps stations there too.
+            station: self.ui.screen == Screen::Module && self.modules.station_in_front(),
         }
     }
 
@@ -448,15 +450,10 @@ impl App {
                 }
             }
             Action::Wake => self.screen_on_for(now, self.screen_timeout_ms),
-            Action::Menu => {
-                // ● ● with the screen off is a "look": it shows Now playing (Settings › Abyss
-                // › Navigation can make it wake on the screen you left instead). Only with the
-                // screen on does it go to the menu.
-                if self.screen_on && self.ui.screen == Screen::NowPlaying {
-                    self.ui.back();
-                } else if !self.screen_on && self.ui.nav.wake_player && self.ui.screen != Screen::NowPlaying {
-                    self.ui.show_player();
-                }
+            // ▲ + ● short: Now playing (wakes on it when the screen is off). Waking alone
+            // (● ●, or any first press) never navigates.
+            Action::Player => {
+                self.ui.show_player();
                 self.screen_on_for(now, self.screen_timeout_ms);
             }
             // ▲ + ▼ in a menu: one level back (module screens: their own Back).

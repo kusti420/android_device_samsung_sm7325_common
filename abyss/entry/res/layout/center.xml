@@ -189,8 +189,8 @@
                 style="@style/AbyssDim"
                 android:visibility="gone" />
 
-            <!-- Navigation: persist.abyss.nav.start (player | home), persist.abyss.nav.wake
-                 (player | last); abyssd ui.rs NavPrefs, read on entry -->
+            <!-- Navigation: persist.abyss.nav.start (player | home); abyssd ui.rs NavPrefs,
+                 read on entry -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
@@ -209,23 +209,6 @@
 
             <LinearLayout
                 android:id="@+id/nav_start"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal" />
-
-            <TextView
-                style="@style/AbyssLabel"
-                android:layout_marginTop="16dp"
-                android:text="@string/nav_wake_title" />
-
-            <TextView
-                style="@style/AbyssDim"
-                android:layout_marginTop="2dp"
-                android:text="@string/nav_wake_summary" />
-
-            <LinearLayout
-                android:id="@+id/nav_wake"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
