@@ -15,6 +15,14 @@
 #                                                       this file (off on enter and leave); on =
 #                                                       start abyss-net + wpa_supplicant while
 #                                                       active, off = stop both
+#   sys.abyss.mobile   on | off                         abyssd (first mobile-data lease / last
+#                                                       release), this file (off on boot, enter,
+#                                                       leave); on = start abyss-net while active
+#   sys.abyss.modem    rild | abyss                     abyssd (abyss = it drives the modem over
+#                                                       QMI), this file (rild on boot, enter,
+#                                                       leave); abyss = stop vendor.sehradiomanager
+#                                                       + ril-daemon while active; leave starts
+#                                                       both again before the framework
 #   persist.abyss.after_leave  <string>             entry app only (abyssd no longer writes it:
 #                                                       Abyss Light is retired); not used here
 #
@@ -41,6 +49,8 @@ on post-fs-data
 
 on boot
     setprop sys.abyss.state off
+    setprop sys.abyss.mobile off
+    setprop sys.abyss.modem rild
     # Kernel default is 0644 and init.rc only chowns it to system, so abyssd (uid root, group
     # system, no CAP_DAC_OVERRIDE) could not write it for the experimental suspend loop.
     chmod 0660 /sys/power/wakeup_count
@@ -129,7 +139,26 @@ on property:sys.abyss.wifi=on && property:sys.abyss.state=active
 
 on property:sys.abyss.wifi=off
     stop wpa_supplicant
+
+# abyss-net also serves mobile data (network 43 on rmnet_dataN): it stops only when neither
+# Wi-Fi nor mobile data needs it. Both properties are "off" from enter on (set below), so this
+# fires on whichever goes off last.
+on property:sys.abyss.wifi=off && property:sys.abyss.mobile=off
     stop abyss-net
+
+# Mobile data leases (abyssd/src/mobile, design abyss-design reports/impl-mobile-data.md).
+# abyssd drives the modem itself with QMI over QRTR; Android's RIL must not at the same time.
+# On the first mobile lease of a session abyssd sets sys.abyss.modem=abyss: Samsung's radio
+# manager (a HIDL client of rild that exits 10 s after rild dies) and rild are stopped and stay
+# stopped until leave. The modem is in airplane mode (GoDark) then; abyssd switches it online
+# only for a call and back to the same low-power mode after it. Never fired by a session that
+# does not use mobile data.
+on property:sys.abyss.mobile=on && property:sys.abyss.state=active
+    start abyss-net
+
+on property:sys.abyss.modem=abyss && property:sys.abyss.state=active
+    stop vendor.sehradiomanager
+    stop ril-daemon
 
 # ---------------------------------------------------------------------------------------
 # ENTER (the entry app sets sys.abyss.request=enter)
@@ -162,6 +191,47 @@ on property:sys.abyss.request=enter && property:sys.abyss.state=off && property:
     stop surfaceflinger
     # Holds DRM master on /dev/dri/card0 (class hal animation, not main).
     stop vendor.qti.hardware.display.composer
+    # Daemons nothing in Abyss uses (lean Abyss, owner 2026-11-08: "no pointless battery
+    # wastage"). Measured 2026-11-08 with the screen off and Bluetooth music: together < 10
+    # wakeups/s (the sensors HAL ~7/s) and no mA the fuel gauge can resolve, but they hold
+    # hardware (NFC controller, fingerprint sensor, GNSS, sensor PD on the ADSP), boost clocks
+    # (perf HAL, power HAL) and run their own timers. All started again on leave, BEFORE zygote:
+    # the framework looks them up once at boot. Kept: thermal (safety), health, audio HAL + DSP
+    # daemons (adsprpcd, pd-mapper, qrtr-ns, dspservice, cdsprpcd), Bluetooth HAL, Wi-Fi
+    # (cnss-daemon, wificond, wifi HAL), vold, keystore2/keymaster/gatekeeper, the service
+    # managers, system_suspend, USB (adb), logd, rild (airplane mode keeps the modem idle).
+    stop vendor.sec_nfc_hal_service
+    stop vendor.fingerprint-default
+    stop vendor.camera.provider
+    stop gnss_service
+    stop loc_launcher
+    stop vendor.sensors-hal-multihal
+    stop factory_ssc
+    stop vendor.sensors
+    stop perf-hal-2-2
+    stop vendor.power-hal-aidl
+    stop statsd
+    stop traced_probes
+    stop traced
+    stop incidentd
+    stop storaged
+    stop vendor.drm-clearkey-service
+    stop vendor.drm-widevine-hal-1-3
+    stop vendor.cas-hal-1-2
+    stop credstore
+    stop gpu
+    stop vendor.livedisplay-hal-samsung-qcom
+    stop display-color-hal-1-0
+    stop vendor-qti-media-c2-hal-1-0
+    # Volume Down is a PMIC RESIN key and NOT a wakeup source by default
+    # (/sys/power/volkey_wakeup 0; kernel/power/main.c -> qpnp-power-on.c sec_set_resin_wk_int).
+    # Power (PON KPDPWR) and Volume Up (gpio_keys) wake the SoC; in Abyss every key must.
+    # Saved like the backlight (copy refuses the group-writable radio:system 0660 node).
+    rm /data/misc/abyss/volkey_wakeup.saved
+    chmod 0640 /sys/power/volkey_wakeup
+    copy /sys/power/volkey_wakeup /data/misc/abyss/volkey_wakeup.saved
+    chmod 0660 /sys/power/volkey_wakeup
+    write /sys/power/volkey_wakeup 1
     # The four big cores (cpu4-7: 3x A78 + 1x A78 prime on SM7325) are not needed for a music
     # player; the four little A55s handle decoding with headroom.
     write /sys/devices/system/cpu/cpu4/online 0
@@ -170,6 +240,9 @@ on property:sys.abyss.request=enter && property:sys.abyss.state=off && property:
     write /sys/devices/system/cpu/cpu7/online 0
     # Bluetooth is off at the start of every session (owner, DECISIONS "Added 21:00").
     setprop sys.abyss.bt off
+    # Mobile data off and rild in charge (abyssd takes the modem only for a mobile lease).
+    setprop sys.abyss.mobile off
+    setprop sys.abyss.modem rild
     # Wi-Fi too: also stops a supplicant Android left running ("Wi-Fi stays on in airplane
     # mode"; the entry app switches Wi-Fi off and waits, this is the backstop).
     setprop sys.abyss.wifi off
@@ -193,6 +266,9 @@ on property:sys.abyss.request=leave && property:sys.abyss.state=active
     # Wi-Fi off BEFORE the framework: stops wpa_supplicant (Android's Wi-Fi starts its own) and
     # abyss-net, which removes the Abyss network from netd and takes wlan0 down on SIGTERM.
     setprop sys.abyss.wifi off
+    # Mobile data off too (abyssd already ended its call and put the modem back to low power in
+    # its own exit path; abyss-net's SIGTERM below takes network 43 and rmnet_dataN down).
+    setprop sys.abyss.mobile off
     # netd outlives the framework stop/start, so it kept Android's old networks (a VPN that no
     # longer existed kept every app's DNS: "unknown host" in all apps after the return, and the
     # next network the new ConnectivityService made clashed on its netId). Stock Android avoids
@@ -203,6 +279,38 @@ on property:sys.abyss.request=leave && property:sys.abyss.state=active
     stop abyss-net
     stop netd
     start netd
+    # Android's RIL back BEFORE the framework: the phone process connects to rild's radio HAL
+    # when it starts, and syncs radio power with the airplane-mode setting GoDark restores.
+    # `start` on a running service is a no-op, so a session without mobile data changes nothing.
+    # sehradiomanager waits in ISehRadio::getService until rild serves, then re-sends FW_READY.
+    setprop sys.abyss.modem rild
+    start ril-daemon
+    start vendor.sehradiomanager
+    # The daemons the enter path stopped, while zygote is still down (see ENTER).
+    start vendor.sensors
+    start factory_ssc
+    start vendor.sensors-hal-multihal
+    start vendor.power-hal-aidl
+    start perf-hal-2-2
+    start vendor.sec_nfc_hal_service
+    start vendor.fingerprint-default
+    start vendor.camera.provider
+    start gnss_service
+    start loc_launcher
+    start statsd
+    start traced
+    start traced_probes
+    start incidentd
+    start storaged
+    start vendor.drm-clearkey-service
+    start vendor.drm-widevine-hal-1-3
+    start vendor.cas-hal-1-2
+    start credstore
+    start gpu
+    start vendor.livedisplay-hal-samsung-qcom
+    start display-color-hal-1-0
+    start vendor-qti-media-c2-hal-1-0
+    copy /data/misc/abyss/volkey_wakeup.saved /sys/power/volkey_wakeup
     # Put Android's level back before the composer starts (it also re-applies its own level once
     # system_server is up; this covers the boot animation and a framework that never comes up).
     # The file is init's own (root, 0600), so `copy` accepts it. Missing file = logged, no-op.
