@@ -95,7 +95,7 @@ const VOLUME_SAFE: u32 = 140;
 /// Taps closer than this count as one fast streak for the adaptive step.
 const VOLUME_SPAM_MS: u64 = 350;
 /// The adaptive step never goes above 5 steps per tap.
-const VOLUME_STEP_MAX: u32 = 5;
+const VOLUME_STEP_MAX: u32 = 10;
 /// Low-battery shutdown: at the 3 % reserve, after a 60 s warning.
 const LOW_BATTERY_PCT: u32 = 3;
 const LOW_BATTERY_WARN_MS: u64 = 60_000;
@@ -514,7 +514,7 @@ impl App {
                 }
                 self.vol_last_at = now;
                 self.vol_last_up = up;
-                let step = (VOLUME_STEP + self.vol_streak / 3).min(VOLUME_STEP_MAX);
+                let step = (VOLUME_STEP + self.vol_streak / 2).min(VOLUME_STEP_MAX);
                 self.volume = if up {
                     let mut v = (self.volume + step).min(VOLUME_MAX);
                     // A fast streak never jumps past the safe mark without the confirm.
