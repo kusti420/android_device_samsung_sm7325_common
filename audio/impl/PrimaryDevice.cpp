@@ -21,6 +21,7 @@
 
 #include <cutils/properties.h>
 #include <string.h>
+#include <unistd.h>
 
 #if MAJOR_VERSION >= 4
 #include <cmath>
@@ -216,18 +217,34 @@ Return<Result> PrimaryDevice::setMode(AudioMode mode) {
      * For the g_call_sim_slot parameter 0x01 describes SIM1 and 0x02 SIM2.
      */
 
-    char simSlot1[92], simSlot2[92];
+    char simSlot1[PROPERTY_VALUE_MAX], simSlot2[PROPERTY_VALUE_MAX];
 
     // These props return either 0 (not calling),
     // or 1 (SIM is calling)
     property_get("vendor.calls.slot_id0", simSlot1, "");
     property_get("vendor.calls.slot_id1", simSlot2, "");
 
-    // Wait until one sim slot reports a call
+    // Wait until one sim slot reports a call. The props come from the libsec-ril fixup
+    // (ril.dds.call.ongoing -> vendor.calls.slot_id) and only flip for a call the modem knows
+    // about. An IMS call carried by the AP (ImsStack, no CS session) may never flip them, so the
+    // wait is bounded: an unbounded spin here pegged a core and held the HAL thread until the
+    // audioserver TimeCheck (3 s + 2 s) aborted it. CS calls set the prop well inside the bound
+    // and behave exactly as before.
     if (mode == AudioMode::IN_CALL) {
-        while (strcmp(simSlot1, "0") == 0 && strcmp(simSlot2, "0") == 0) {
+        constexpr int kSlotWaitStepUs = 10 * 1000;
+        constexpr int kSlotWaitMaxSteps = 250;  // 2.5 s, below the TimeCheck first chance
+        int steps = 0;
+        while (strcmp(simSlot1, "0") == 0 && strcmp(simSlot2, "0") == 0 &&
+               steps < kSlotWaitMaxSteps) {
+            usleep(kSlotWaitStepUs);
+            steps++;
             property_get("vendor.calls.slot_id0", simSlot1, "");
             property_get("vendor.calls.slot_id1", simSlot2, "");
+        }
+        if (steps >= kSlotWaitMaxSteps) {
+            ALOGW("setMode(IN_CALL): no SIM slot reported a call after %d ms, "
+                  "leaving g_call_sim_slot unchanged",
+                  kSlotWaitMaxSteps * kSlotWaitStepUs / 1000);
         }
     }
 

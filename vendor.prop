@@ -51,7 +51,12 @@ vendor.audio.spkr_prot.tx.sampling_rate=48000
 persist.vendor.audio.ha_proxy.enabled=true
 vendor.audio.feature.a2dp_offload.enable=true
 vendor.audio.feature.compress_meta_data.enable=true
-vendor.audio.feature.compr_voip.enable=true
+# IchthysOS (VoLTE): off. With compr_voip on and vendor.voice.path.for.pcm.voip=true, the HAL
+# sends PCM VOIP_RX/VOIP_TX direct streams (ImsMedia, VoIP apps) through the compress-VoIP CVD
+# session (USECASE_COMPRESS_VOIP_CALL), which audio_platform_info.xml gives no PCM device and the
+# stock policy never uses. Off, they take USECASE_AUDIO_PLAYBACK_VOIP / RECORD_VOIP (PCM id 12,
+# "audio-playback-voip <device>" mixer paths). CS calls use the voicemmode usecases and are unaffected.
+vendor.audio.feature.compr_voip.enable=false
 vendor.audio.feature.deepbuffer_as_primary.enable=true
 vendor.audio.feature.display_port.enable=true
 vendor.audio.feature.fm.enable=true
