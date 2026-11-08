@@ -21,7 +21,6 @@ import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.text.TextUtils;
@@ -39,11 +38,14 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
- * The Captures section: what abyssd saved on Volume Down + Power ({@link Captures}). Tap a
- * line to copy it, touch and hold to share or delete it; Share all, Save to file (Storage
- * Access Framework) and Clear all below the list.
+ * The captures of one Abyss app, on that app's page: what abyssd saved on Volume Down + Power
+ * while it played ({@link Captures}, attributed by {@link Captures#owner}). Tap a line to copy
+ * it, touch and hold to share or delete it; Share all, Save to file (Storage Access Framework)
+ * and Clear all (this app's only) below the list. Deleting rewrites the whole file and keeps
+ * every other app's lines.
  */
 final class CapturesRows {
     private static final String TAG = "AbyssEntry";
@@ -53,24 +55,56 @@ final class CapturesRows {
     private TextView mInfo;
     private LinearLayout mList;
     private View mActions;
+    private final Predicate<Captures.Item> mFilter;
+    private final boolean mHideWhenEmpty;
+    private TextView mHeader;
+    private View mCard;
+    /** Everything in the file (for rewrites) and the part this page shows. */
+    private List<Captures.Item> mAll = new ArrayList<>();
     private List<Captures.Item> mCaptures = new ArrayList<>();
 
-    CapturesRows(Page p) {
+    /**
+     * {@code filter}: which captures this page lists. {@code hideWhenEmpty}: the whole group
+     * disappears while there are none (Advanced › captures of removed apps).
+     */
+    CapturesRows(Page p, Predicate<Captures.Item> filter, boolean hideWhenEmpty) {
         mPage = p;
         mA = p.a;
+        mFilter = filter;
+        mHideWhenEmpty = hideWhenEmpty;
     }
 
-    static CharSequence summary(Context c) {
-        Captures.Loaded l = Captures.load();
-        if (l.error) {
-            return c.getString(R.string.captures_unreadable);
+    /** Captures of {@code owner} (a module id or {@link Captures#OWNER_MUSIC}). */
+    static Predicate<Captures.Item> of(String owner) {
+        return it -> owner.equals(it.owner);
+    }
+
+    /** How many captures {@code owner} has: for the app rows on the top page. */
+    static int count(String owner) {
+        int n = 0;
+        for (Captures.Item it : Captures.load().items) {
+            if (owner.equals(it.owner)) {
+                n++;
+            }
         }
-        return l.items.isEmpty() ? c.getString(R.string.captures_none_short)
-                : c.getString(R.string.captures_count, l.items.size());
+        return n;
     }
 
-    void build() {
-        Page.Group g = mPage.group(0);
+    private List<Captures.Item> filter(List<Captures.Item> all) {
+        List<Captures.Item> out = new ArrayList<>();
+        for (Captures.Item it : all) {
+            if (mFilter.test(it)) {
+                out.add(it);
+            }
+        }
+        return out;
+    }
+
+    /** Adds the group, titled {@code title}, to the page. */
+    void build(CharSequence title) {
+        Page.Group g = mPage.group(title);
+        mHeader = mPage.lastGroupTitle();
+        mCard = g.card;
         LinearLayout col = new LinearLayout(mA);
         col.setOrientation(LinearLayout.VERTICAL);
         mInfo = mPage.summary(null);
@@ -111,9 +145,15 @@ final class CapturesRows {
 
     private void refresh() {
         Captures.Loaded loaded = Captures.load();
-        mCaptures = loaded.items;
+        mAll = loaded.items;
+        mCaptures = filter(mAll);
         mList.removeAllViews();
         int n = mCaptures.size();
+        boolean hide = mHideWhenEmpty && n == 0 && !loaded.error;
+        mCard.setVisibility(hide ? View.GONE : View.VISIBLE);
+        if (mHeader != null) {
+            mHeader.setVisibility(hide ? View.GONE : View.VISIBLE);
+        }
         if (loaded.error) {
             mInfo.setText(R.string.captures_unreadable);
             mInfo.setTextColor(mA.getColor(R.color.abyss_warn));
@@ -206,7 +246,7 @@ final class CapturesRows {
     }
 
     private void delete(Captures.Item it) {
-        List<Captures.Item> keep = new ArrayList<>(mCaptures);
+        List<Captures.Item> keep = new ArrayList<>(mAll);
         // Remove exactly this row (identity), not every line with the same text.
         for (int i = 0; i < keep.size(); i++) {
             if (keep.get(i) == it) {
@@ -217,12 +257,23 @@ final class CapturesRows {
         rewrite(keep, R.string.captures_deleted);
     }
 
+    /** Every line of the file except this page's. */
+    private List<Captures.Item> allButShown() {
+        List<Captures.Item> keep = new ArrayList<>();
+        for (Captures.Item it : mAll) {
+            if (!mFilter.test(it)) {
+                keep.add(it);
+            }
+        }
+        return keep;
+    }
+
     private void confirmClearAll() {
         new AlertDialog.Builder(mA)
                 .setTitle(R.string.captures_clear_title)
                 .setMessage(mA.getString(R.string.captures_clear_body, mCaptures.size()))
                 .setPositiveButton(R.string.captures_clear_ok,
-                        (d, w) -> rewrite(new ArrayList<>(), 0))
+                        (d, w) -> rewrite(allButShown(), 0))
                 .setNegativeButton(R.string.cancel, null)
                 .show();
     }
@@ -231,7 +282,7 @@ final class CapturesRows {
         // Re-read first: the list on screen is what we change, but never drop lines that are
         // in the file and not on screen (there are none while Android runs; belt and braces).
         Captures.Loaded now = Captures.load();
-        if (now.error || now.items.size() != mCaptures.size()) {
+        if (now.error || now.items.size() != mAll.size()) {
             refresh();
             Toast.makeText(mA, R.string.captures_write_failed, Toast.LENGTH_SHORT).show();
             return;
@@ -265,7 +316,7 @@ final class CapturesRows {
             return;
         }
         Uri uri = data.getData();
-        List<Captures.Item> items = Captures.load().items;
+        List<Captures.Item> items = filter(Captures.load().items);
         try (OutputStream out = mA.getContentResolver().openOutputStream(uri, "wt")) {
             if (out == null) {
                 throw new IOException("no stream for " + uri);

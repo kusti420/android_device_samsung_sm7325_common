@@ -35,7 +35,8 @@ import java.util.List;
 /**
  * /data/misc/abyss/out/captures.jsonl: what abyssd saved on Volume Down + Power in Abyss.
  * One JSON object per line: {"kind": "music", "line": "Artist - Title (Mix) (LABEL CATNO)",
- * "fields": {...}, "ts": ...}.
+ * "fields": {...}, "time_ms": ...} (abyssd capture.rs). Each capture is listed on the page of
+ * the Abyss app it was made in ({@link #owner}).
  *
  * <p>Writers. abyssd appends while Abyss is active; this app rewrites the file (delete one,
  * clear all) only while Android runs. The framework, and with it this process, is stopped for
@@ -61,15 +62,40 @@ final class Captures {
         final String raw;
         final String kind;
         final String line;
-        /** Milliseconds since the epoch, or 0 when the line has no usable ts. */
+        /** Milliseconds since the epoch, or 0 when the line has no usable time. */
         final long tsMs;
+        /** {@link #owner}: whose page lists it. */
+        final String owner;
 
-        Item(String raw, String kind, String line, long tsMs) {
+        Item(String raw, String kind, String line, long tsMs, String owner) {
             this.raw = raw;
             this.kind = kind;
             this.line = line;
             this.tsMs = tsMs;
+            this.owner = owner;
         }
+    }
+
+    /** {@link #owner} of a capture made while the built-in music player played. */
+    static final String OWNER_MUSIC = "music";
+
+    /**
+     * Which Abyss app a capture belongs to (each app's page lists its own): fields.module (the
+     * module id, if abyssd ever stamps it), else fields.source (both radio modules put their
+     * module id there: gabb.ee's server sends source = "gabbee-radio", WeAreOne.FM's manifest
+     * capture mapping sets source = "weareone-fm"), else {@link #OWNER_MUSIC} for kind "music"
+     * (capture.rs MusicSource, the library player), else "".
+     */
+    static String owner(String kind, JSONObject fields) {
+        if (fields != null) {
+            for (String k : new String[] {"module", "source"}) {
+                String v = fields.optString(k, "").trim();
+                if (!v.isEmpty()) {
+                    return v;
+                }
+            }
+        }
+        return "music".equals(kind) ? OWNER_MUSIC : "";
     }
 
     /** Result of {@link #load}: items newest first, or {@code error} when the file is unreadable. */
@@ -123,7 +149,10 @@ final class Captures {
             if (line.isEmpty()) {
                 return null;
             }
-            return new Item(t, o.optString("kind", ""), line, tsMillis(o.opt("ts")));
+            // abyssd writes time_ms (capture.rs); "ts" is the older name.
+            Object ts = o.has("time_ms") ? o.opt("time_ms") : o.opt("ts");
+            String kind = o.optString("kind", "");
+            return new Item(t, kind, line, tsMillis(ts), owner(kind, o.optJSONObject("fields")));
         } catch (JSONException e) {
             Log.w(TAG, "skipping a broken captures line");
             return null;

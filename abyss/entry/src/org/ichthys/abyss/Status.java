@@ -69,6 +69,23 @@ final class Status {
         return c.getString(R.string.state_plays_nothing);
     }
 
+    /** Music › Continues: the library song abyssd resumes, where, and shuffle. */
+    static String musicNow(Context c) {
+        JSONObject st = readJson(STATE);
+        String track = st == null ? "" : st.optString("track", "").trim();
+        if (track.isEmpty()) {
+            return c.getString(R.string.state_plays_nothing);
+        }
+        long s = st.optLong("position_ms", 0) / 1000;
+        String at = String.format(Locale.ROOT, "%d:%02d", s / 60, s % 60);
+        String line = c.getString(st.optBoolean("shuffle", false) ? R.string.music_now_shuffle
+                : R.string.music_now, songName(track), at);
+        if ("stream".equals(st.optString("source"))) {
+            line += "\n" + c.getString(R.string.music_now_radio_last);
+        }
+        return line;
+    }
+
     /** "4782. Artist - Title.flac" -> "Artist - Title". */
     static String songName(String path) {
         String n = new File(path).getName();

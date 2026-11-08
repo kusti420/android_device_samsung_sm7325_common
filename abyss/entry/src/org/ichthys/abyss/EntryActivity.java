@@ -41,11 +41,13 @@ import android.widget.TextView;
  * <ul>
  * <li><b>State + Enter</b>: what the first ● plays, where the sound goes, the battery
  *     ({@link Status}); "Enter Abyss": {@link GoDark}, then sys.abyss.request=enter; init
- *     (abyss.rc) stops the framework, which ends this process. One line of what stops; the
- *     full pre-flight text is the "Before you enter" section.</li>
+ *     (abyss.rc) stops the framework, which ends this process. One line of what stops and a
+ *     link to the full pre-flight text ("Before you enter").</li>
  * <li><b>Quick</b>: the settings people change between sessions ({@link Sections#quick}).</li>
- * <li><b>Sections</b>: one row per section with its current values ({@link Sections#ALL}),
- *     each opening {@link SectionActivity} (or ModulesActivity).</li>
+ * <li><b>Apps</b>: Music and each installed module, each with its own page (settings,
+ *     captures, permissions, update/remove), and Install apps ({@link Sections#apps}).</li>
+ * <li><b>System</b>: Bluetooth &amp; audio, Internet, Navigation &amp; keys, Screen &amp;
+ *     power, Advanced ({@link Sections#SYSTEM}), each opening {@link SectionActivity}.</li>
  * </ul>
  * Rows are added in {@link Sections} only (see the comment at its top); this class owns the
  * Enter flow. Property protocol: device/samsung/sm7325-common/abyss/INTEGRATION.md. SELinux:
@@ -101,7 +103,8 @@ public final class EntryActivity extends Activity {
         mPage.intro(getString(R.string.intro));
         buildEnter(mPage.group(0));
         Sections.quick(mPage);
-        Sections.list(mPage);
+        Sections.apps(mPage);
+        Sections.system(mPage);
     }
 
     @Override
@@ -158,6 +161,18 @@ public final class EntryActivity extends Activity {
         TextView note = mPage.summary(getString(R.string.enter_note));
         note.setGravity(Gravity.CENTER_HORIZONTAL);
         col.addView(note, mPage.lp(10));
+        // The full pre-flight text: what stops, what keeps going, coming back.
+        TextView more = mPage.text(getString(R.string.enter_more), 14, R.color.abyss_accent,
+                mPage.bodyFace(true));
+        more.setGravity(Gravity.CENTER);
+        more.setMinHeight(mPage.dp(44));
+        more.setClickable(true);
+        more.setFocusable(true);
+        TypedValue tv = new TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
+        more.setBackgroundResource(tv.resourceId);
+        more.setOnClickListener(v -> mPage.start(SectionActivity.intent(this, "before")));
+        col.addView(more, mPage.lp(2));
         g.view(col);
         mPage.onRefresh(this::refreshState);
     }

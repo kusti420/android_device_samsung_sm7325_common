@@ -19,25 +19,43 @@
     <string name="state_battery">%1$d %%</string>
     <string name="state_battery_hours">%1$d %% · about %2$s h of music</string>
     <string name="state_battery_unknown">Unknown</string>
+    <string name="enter_more">What stops and what keeps going ›</string>
     <string name="enter_note">Calls, texts and alarms wait until you are back. To come back, hold the power key for 3 seconds.</string>
 
     <!-- Top page: groups -->
     <string name="sec_quick">Quick settings</string>
-    <string name="sec_all">Settings</string>
+    <string name="sec_apps_list">Apps in Abyss</string>
+    <string name="sec_system">System</string>
+    <string name="apps_install">Install apps</string>
+    <string name="apps_install_sum">From a signed .abyssapp file, or a source</string>
     <string name="next_entry_note">Used the next time you enter Abyss.</string>
 
     <!-- Sections (titles on the top page and as page titles) -->
-    <string name="sec_playback">Playback &amp; Bluetooth</string>
+    <string name="sec_audio">Bluetooth &amp; audio</string>
     <string name="sec_internet">Internet</string>
     <string name="sec_navigation">Navigation &amp; keys</string>
     <string name="sec_screen">Screen &amp; power</string>
-    <string name="sec_captures_title">Captures</string>
     <string name="sec_before">Before you enter</string>
     <string name="sec_before_sum">What stops, what keeps going, how to come back</string>
     <string name="sec_advanced">Advanced</string>
     <string name="sec_advanced_sum">State, shell tuning, coming next</string>
 
-    <!-- Playback & Bluetooth -->
+    <!-- Every app's page (Music and each module) -->
+    <string name="app_captures">Captures</string>
+    <string name="app_update">Update from file…</string>
+    <string name="app_update_sum">A newer signed .abyssapp of this app; the install sheet shows what changes.</string>
+
+    <!-- Music (the built-in player) -->
+    <string name="app_music">Music</string>
+    <string name="music_sum">Your library on the microSD card and phone storage</string>
+    <string name="music_now_title">Continues with</string>
+    <string name="music_now">%1$s, at %2$s</string>
+    <string name="music_now_shuffle">%1$s, at %2$s · shuffle on</string>
+    <string name="music_now_radio_last">The radio played last, so Now playing opens on it; this song waits in Music.</string>
+    <string name="music_where_title">Where the music comes from</string>
+    <string name="music_where_body">Every audio file on the microSD card and in phone storage, by artist, album and folder. Songs added in Android show the next time you enter Abyss.</string>
+
+    <!-- Bluetooth & audio -->
     <string name="sec_bt_quality">Sound over Bluetooth</string>
     <string name="sec_volume">Volume</string>
     <string name="bt_codec_title">Best codec</string>
@@ -66,8 +84,6 @@
     <string name="suspend_short_on">on</string>
     <string name="suspend_short_off">off</string>
 
-    <!-- Captures -->
-    <string name="captures_none_short">Nothing saved yet</string>
 
     <!-- Advanced -->
     <string name="sec_diag">Diagnostics</string>
@@ -76,6 +92,7 @@
     <string name="adv_tuning_count">%1$d tuning values set from a shell</string>
     <string name="adv_tuning_none">Nothing set from a shell: everything not on these pages is at its default.</string>
     <string name="adv_tuning_hint">Set from a shell with setprop (persist.abyss.…); Abyss reads them when you enter.</string>
+    <string name="adv_orphan_captures">Captures of apps no longer installed</string>
     <string name="sec_coming_next">Coming next</string>
     <string name="sec_scripts_title">Scripts</string>
     <string name="sec_apps_title">Apps &amp; containers</string>

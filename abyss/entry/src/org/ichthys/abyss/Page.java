@@ -60,7 +60,8 @@ import java.util.function.Supplier;
  * one primary button. Dark mode stays OLED-friendly: the page ground is ichthys_ink (black with
  * theme.pitchBlack) and nothing large is filled.
  *
- * <p>Rows ({@link Group}): {@code nav} (drill-in, live summary), {@code choice} (one tap = one
+ * <p>Rows ({@link Group}): {@code nav} (drill-in, live summary; {@code link} for rows rebuilt
+ * on refresh), {@code choice} (one tap = one
  * value written to a property, {@link Choice}), {@code toggle} (0/1 property), {@code slider},
  * {@code info} (title + text), {@code paragraph}, {@code view} (anything else). Each row
  * that shows a value registers a refresher; {@link #refresh()} (called from onResume) re-reads
@@ -85,6 +86,7 @@ final class Page {
     private final List<Runnable> mRefreshers = new ArrayList<>();
     private final SparseArray<Result> mResults = new SparseArray<>();
     private int mNextRequest = FIRST_REQUEST;
+    private TextView mLastTitle;
     private final Typeface mDisplay;
     private final Typeface mText;
     private final Typeface mTextMedium;
@@ -157,7 +159,13 @@ final class Page {
         return group(title == 0 ? null : a.getString(title));
     }
 
+    /** The title view of the last {@link #group} (null when it had none). */
+    TextView lastGroupTitle() {
+        return mLastTitle;
+    }
+
     Group group(CharSequence title) {
+        mLastTitle = null;
         if (title != null) {
             TextView h = text(title.toString().toUpperCase(), 12, R.color.abyss_dim, face(a,
                     KEY_FONT_TEXT, com.android.internal.R.string.ichthys_font_text, 600));
@@ -167,6 +175,7 @@ final class Page {
             LinearLayout.LayoutParams l = lp(28);
             l.bottomMargin = dp(8);
             mCol.addView(h, l);
+            mLastTitle = h;
         }
         LinearLayout card = new LinearLayout(a);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -277,6 +286,24 @@ final class Page {
          * refresh) and a chevron. {@code click} runs on tap.
          */
         LinearLayout nav(CharSequence title, Supplier<CharSequence> summary, Runnable click) {
+            return navRow(title, summary, null, click);
+        }
+
+        /**
+         * A drill-in row with a fixed summary: for rows that are rebuilt on refresh ({@link
+         * #clear} first), like the list of installed apps.
+         */
+        LinearLayout link(CharSequence title, CharSequence summary, Runnable click) {
+            return navRow(title, null, summary, click);
+        }
+
+        /** Removes every row (for a group whose rows are rebuilt with {@link #link}). */
+        void clear() {
+            card.removeAllViews();
+        }
+
+        private LinearLayout navRow(CharSequence title, Supplier<CharSequence> summary,
+                CharSequence fixed, Runnable click) {
             LinearLayout r = new LinearLayout(a);
             r.setOrientation(LinearLayout.HORIZONTAL);
             r.setGravity(Gravity.CENTER_VERTICAL);
@@ -297,7 +324,7 @@ final class Page {
             if (summary != null) {
                 onRefresh(() -> setOrHide(sum, summary.get()));
             } else {
-                sum.setVisibility(View.GONE);
+                setOrHide(sum, fixed);
             }
             return add(r);
         }

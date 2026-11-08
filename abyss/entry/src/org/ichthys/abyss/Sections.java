@@ -28,9 +28,22 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * WHERE EVERY ROW OF SETTINGS › ABYSS LIVES. The top page ({@link EntryActivity}) shows Enter,
- * the state lines, {@link #quick} and the list of {@link #ALL} sections; each section opens in
- * {@link SectionActivity} and is built by its method below. Rows are drawn by {@link Page}.
+ * WHERE EVERY ROW OF SETTINGS › ABYSS LIVES. The top page ({@link EntryActivity}) shows Enter
+ * and the state lines, {@link #quick}, the {@link #apps} and the {@link #SYSTEM} sections.
+ *
+ * <p>The rule: a thing lives on the page of whatever it belongs to.
+ * <ul>
+ * <li><b>An Abyss app</b> (a module like gabb.ee radio, or the built-in Music player) has its
+ *     own page with everything about it: its settings, its captures (songs saved while it
+ *     played), what it may do and which addresses it may reach, version and signer, update and
+ *     remove. Modules: {@link ModuleSettingsActivity} (one per installed module, id extra);
+ *     Music: {@link #music}. Captures are attributed by {@link Captures#owner}.</li>
+ * <li><b>System sections</b> ({@link #SYSTEM}, each built by its method below and shown by
+ *     {@link SectionActivity}) hold what Abyss itself does for every app: Bluetooth &amp; audio,
+ *     Internet (including the radio format on mobile data: an uplink policy abyssd applies to
+ *     every radio stream, with no per-module key), Navigation &amp; keys, Screen &amp; power,
+ *     Advanced.</li>
+ * </ul>
  *
  * <p>To add a setting:
  * <ol>
@@ -45,9 +58,10 @@ import java.util.function.Function;
  *     {@code *Summary} method.</li>
  * <li>Strings go in res/values/strings_sections.xml (new) or strings.xml (older rows).</li>
  * </ol>
- * A new section: a method {@code static void foo(Page p)}, a summary, and one {@link Section}
- * line in {@link #ALL} (SectionActivity finds it by id). A section that is its own activity
- * (Modules) passes the activity class instead of a builder.
+ * A module's own setting is not added here: it is declared in the module's manifest
+ * ("settings") and shows on its page by itself. A new system section: a method
+ * {@code static void foo(Page p)}, a summary, and one {@link Section} line in {@link #SYSTEM}
+ * (SectionActivity finds it by id); a page that is not listed goes in {@link #OTHER}.
  *
  * <p>Every property is persist.abyss.* (abyss_config_prop, abyss_entry.te); abyssd and
  * abyss-btd read them on entry / when Bluetooth starts in Abyss. Protocol:
@@ -137,48 +151,51 @@ final class Sections {
 
     // ---- Sections --------------------------------------------------------------------------
 
-    /** One entry of the top page's list. */
+    /** A page: a system section listed on the top page, or a page reached another way. */
     static final class Section {
         final String id;
         final int title;
         final Function<Context, CharSequence> summary;
         final Consumer<Page> build;
-        final Class<?> activity;
 
         Section(String id, int title, Function<Context, CharSequence> summary,
-                Consumer<Page> build, Class<?> activity) {
+                Consumer<Page> build) {
             this.id = id;
             this.title = title;
             this.summary = summary;
             this.build = build;
-            this.activity = activity;
         }
     }
 
-    /** The sections, in the order the top page lists them. */
-    static final Section[] ALL = {
-            new Section("playback", R.string.sec_playback, Sections::playbackSummary,
-                    Sections::playback, null),
+    /** The system sections, in the order the top page lists them (under the apps). */
+    static final Section[] SYSTEM = {
+            new Section("audio", R.string.sec_audio, Sections::audioSummary, Sections::audio),
             new Section("internet", R.string.sec_internet, Sections::internetSummary,
-                    Sections::internet, null),
+                    Sections::internet),
             new Section("navigation", R.string.sec_navigation, Sections::navigationSummary,
-                    Sections::navigation, null),
+                    Sections::navigation),
             new Section("screen", R.string.sec_screen, Sections::screenSummary,
-                    Sections::screen, null),
-            new Section("modules", R.string.mod_title, Sections::modulesSummary, null,
-                    ModulesActivity.class),
-            new Section("captures", R.string.sec_captures_title, CapturesRows::summary,
-                    p -> new CapturesRows(p).build(), null),
-            new Section("before", R.string.sec_before, c -> c.getString(R.string.sec_before_sum),
-                    Sections::before, null),
+                    Sections::screen),
             new Section("advanced", R.string.sec_advanced, Sections::advancedSummary,
-                    Sections::advanced, null),
+                    Sections::advanced),
+    };
+
+    /**
+     * Pages that are not in the system list: the built-in Music app (listed with the apps) and
+     * Before you enter (the link under Enter Abyss). Module pages are ModuleSettingsActivity.
+     */
+    static final Section[] OTHER = {
+            new Section("music", R.string.app_music, Sections::musicSummary, Sections::music),
+            new Section("before", R.string.sec_before, c -> c.getString(R.string.sec_before_sum),
+                    Sections::before),
     };
 
     static Section find(String id) {
-        for (Section s : ALL) {
-            if (s.id.equals(id)) {
-                return s;
+        for (Section[] list : new Section[][] {SYSTEM, OTHER}) {
+            for (Section s : list) {
+                if (s.id.equals(id)) {
+                    return s;
+                }
             }
         }
         return null;
@@ -191,19 +208,83 @@ final class Sections {
         brightness(g);
     }
 
-    /** The top page's list of sections. */
-    static void list(Page p) {
-        Page.Group g = p.group(R.string.sec_all);
-        for (Section s : ALL) {
-            g.nav(s.title, () -> s.summary.apply(p.a), () -> p.start(s.activity != null
-                    ? new Intent(p.a, s.activity)
-                    : SectionActivity.intent(p.a, s.id)));
+    /**
+     * The top page's apps: Music (built in), one row per installed module (its own page, {@link
+     * ModuleSettingsActivity}: settings, captures, what it may do, update, remove) and Install
+     * apps ({@link ModulesActivity}). Rebuilt on every resume, so an install or a removal shows.
+     */
+    static void apps(Page p) {
+        Page.Group g = p.group(R.string.sec_apps_list);
+        p.onRefresh(() -> {
+            g.clear();
+            Section music = find("music");
+            g.link(p.a.getString(music.title), music.summary.apply(p.a),
+                    () -> p.start(SectionActivity.intent(p.a, music.id)));
+            ModuleStore store = new ModuleStore(new File(ModuleStore.ROOT));
+            List<ModuleStore.Installed> mods;
+            try {
+                mods = store.list();
+            } catch (RuntimeException e) {
+                mods = new ArrayList<>();
+            }
+            for (ModuleStore.Installed m : mods) {
+                g.link(m.name(), moduleSummary(p.a, store, m), () -> p.start(
+                        new Intent(p.a, ModuleSettingsActivity.class)
+                                .putExtra(ModuleSettingsActivity.EXTRA_ID, m.id)));
+            }
+            g.link(p.a.getString(R.string.apps_install), p.a.getString(R.string.apps_install_sum),
+                    () -> p.start(new Intent(p.a, ModulesActivity.class)));
+        });
+    }
+
+    private static CharSequence moduleSummary(Context c, ModuleStore store,
+            ModuleStore.Installed m) {
+        List<String> parts = new ArrayList<>();
+        parts.add(m.version());
+        if (ModulesActivity.needsSetup(store, m) != null) {
+            parts.add(c.getString(R.string.mod_needs_setup));
+        }
+        int n = CapturesRows.count(m.id);
+        if (n > 0) {
+            parts.add(c.getString(R.string.captures_count, n));
+        }
+        return TextUtils.join(" · ", parts);
+    }
+
+    /** The top page's system sections. */
+    static void system(Page p) {
+        Page.Group g = p.group(R.string.sec_system);
+        for (Section s : SYSTEM) {
+            g.nav(s.title, () -> s.summary.apply(p.a),
+                    () -> p.start(SectionActivity.intent(p.a, s.id)));
         }
     }
 
-    // Playback & Bluetooth ...................................................................
+    // Music (the built-in player) ............................................................
 
-    static void playback(Page p) {
+    /**
+     * The library player as an app of its own: what it continues with, where the music comes
+     * from, and the captures made while library music played. Its playback settings that are
+     * not only the library's (where Abyss opens, volume, Bluetooth) stay in the system sections.
+     */
+    static void music(Page p) {
+        Page.Group g = p.group(0);
+        android.widget.TextView now = g.paragraph(R.string.music_now_title, "");
+        p.onRefresh(() -> now.setText(Status.musicNow(p.a)));
+        g.paragraph(R.string.music_where_title, p.a.getString(R.string.music_where_body));
+        new CapturesRows(p, CapturesRows.of(Captures.OWNER_MUSIC), false)
+                .build(p.a.getString(R.string.app_captures));
+    }
+
+    private static CharSequence musicSummary(Context c) {
+        int n = CapturesRows.count(Captures.OWNER_MUSIC);
+        return n == 0 ? c.getString(R.string.music_sum)
+                : c.getString(R.string.music_sum) + " · " + c.getString(R.string.captures_count, n);
+    }
+
+    // Bluetooth & audio ......................................................................
+
+    static void audio(Page p) {
         p.intro(p.a.getString(R.string.next_entry_note));
         new BluetoothRows(p).build(p.group(R.string.bt_title));
 
@@ -217,7 +298,7 @@ final class Sections {
         v.info(R.string.volume_title, R.string.volume_summary);
     }
 
-    private static CharSequence playbackSummary(Context c) {
+    private static CharSequence audioSummary(Context c) {
         List<String> parts = new ArrayList<>();
         String last = BluetoothRows.lastName();
         if (last != null) {
@@ -300,20 +381,6 @@ final class Sections {
         return Math.max(BRIGHTNESS_MIN, Math.min(BRIGHTNESS_MAX, v));
     }
 
-    // Modules ................................................................................
-
-    private static CharSequence modulesSummary(Context c) {
-        try {
-            List<String> names = new ArrayList<>();
-            for (ModuleStore.Installed m : new ModuleStore(new File(ModuleStore.ROOT)).list()) {
-                names.add(m.name());
-            }
-            return names.isEmpty() ? c.getString(R.string.mod_none) : TextUtils.join(", ", names);
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
-
     // Before you enter .......................................................................
 
     static void before(Page p) {
@@ -337,11 +404,28 @@ final class Sections {
         android.widget.TextView tuning = g.paragraph(R.string.adv_tuning_title, "");
         p.onRefresh(() -> tuning.setText(tuningText(p.a)));
 
+        // Captures whose app is no longer installed (or that name no app): only while any exist.
+        new CapturesRows(p, it -> !Captures.OWNER_MUSIC.equals(it.owner)
+                && !installedIds().contains(it.owner), true)
+                .build(p.a.getString(R.string.adv_orphan_captures));
+
         Page.Group next = p.group(R.string.sec_coming_next);
         ComingNext.add(p, next, R.string.sec_scripts_title, "v1.1", R.string.scripts_body,
                 R.string.docs_scripts, R.string.docs_path_scripts);
         ComingNext.add(p, next, R.string.sec_apps_title, "v1.2", R.string.apps_body,
                 R.string.docs_apps, R.string.docs_path_apps);
+    }
+
+    private static java.util.Set<String> installedIds() {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        try {
+            for (ModuleStore.Installed m : new ModuleStore(new File(ModuleStore.ROOT)).list()) {
+                ids.add(m.id);
+            }
+        } catch (RuntimeException e) {
+            // Unreadable store: nothing counts as installed, so no capture is hidden.
+        }
+        return ids;
     }
 
     private static CharSequence advancedSummary(Context c) {

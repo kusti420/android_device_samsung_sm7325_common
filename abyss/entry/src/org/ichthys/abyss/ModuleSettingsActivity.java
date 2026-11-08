@@ -18,9 +18,12 @@ package org.ichthys.abyss;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
@@ -32,8 +35,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Settings › Abyss › Modules › ‹name›: the module's own settings (text, number, bool, enum;
- * secrets masked and write-only), what it can do, details, and Remove. Values are written to
+ * Settings › Abyss › ‹app›: everything about one installed module, on one page (the owner's
+ * rule: each Abyss app's things on its own page). Its own settings (text, number, bool, enum;
+ * secrets masked and write-only), the captures made while it played ({@link CapturesRows},
+ * attributed by {@link Captures#owner}), what it can do and the addresses it may reach, its
+ * version and signer, Update from file and Remove. Values are written to
  * /data/misc/abyss/conf/settings/app-&lt;id&gt;.env and used from the next entry into Abyss.
  *
  * <p>A setting that changes where the module may connect (a server address) needs the same
@@ -45,6 +51,7 @@ public final class ModuleSettingsActivity extends Activity {
     static final String EXTRA_ID = "org.ichthys.abyss.extra.MODULE_ID";
     private static final String TAG = "AbyssModules";
 
+    private Page mPage;
     private ModuleStore mStore;
     private ModuleStore.Installed mMod;
     private ModuleSpec mSpec;
@@ -56,33 +63,34 @@ public final class ModuleSettingsActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        LinearLayout col = ModuleUi.page(this, true);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         mStore = new ModuleStore(new File(ModuleStore.ROOT));
         String id = getIntent().getStringExtra(EXTRA_ID);
         mMod = id == null ? null : mStore.get(id);
         if (mMod == null) {
-            ModuleUi.title(col, getString(R.string.mod_gone));
-            ModuleUi.button(col, getString(R.string.mod_close), v -> finish(), 28);
+            mPage = new Page(this, getString(R.string.mod_gone), true);
             return;
         }
-        ModuleUi.title(col, mMod.name());
+        mPage = new Page(this, mMod.name(), true);
         String fp = mMod.fingerprint();
-        ModuleUi.dim(col, getString(R.string.mod_row_sub, mMod.version(),
-                String.valueOf(mMod.manifest.get("category")), fp == null ? "?" : fp));
+        mPage.intro(getString(R.string.mod_row_sub, mMod.version(),
+                String.valueOf(mMod.manifest.get("category")),
+                fp == null ? "?" : fp.substring(0, Math.min(fp.length(), 15)) + "…"));
         try {
             mSpec = mMod.spec();
         } catch (ModuleSpec.Invalid | RuntimeException e) {
-            ModuleUi.warn(col, getString(R.string.mod_broken, e.getMessage()));
-            removeButton(col);
+            mPage.group(0).paragraph(0, getString(R.string.mod_broken, e.getMessage()))
+                    .setTextColor(getColor(R.color.abyss_warn));
+            actions();
             return;
         }
         String about = ModJson.str(mMod.manifest, "about");
         if (about != null) {
-            ModuleUi.body(col, about);
+            mPage.intro(about);
         }
 
-        ModuleUi.section(col, getString(R.string.mod_sec_settings));
-        LinearLayout set = ModuleUi.card(col);
+        // Its settings: the manifest's schema (ModuleUi.SettingsForm), saved with Save.
+        LinearLayout set = column();
         mForm = new ModuleUi.SettingsForm(set, mSpec, mStore.readSettings(mSpec));
         mForm.setOnChange(this::refreshPermissions);
         ModuleUi.dim(set, getString(R.string.mod_settings_when));
@@ -90,13 +98,18 @@ public final class ModuleSettingsActivity extends Activity {
         mApprove.setOrientation(LinearLayout.VERTICAL);
         set.addView(mApprove, ModuleUi.lp(this, 0));
         mSave = ModuleUi.button(set, getString(R.string.mod_save), v -> save(false), 16);
+        mPage.group(R.string.mod_sec_settings).view(set);
 
-        ModuleUi.section(col, getString(R.string.mod_sec_can_do));
-        mPerms = ModuleUi.card(col);
+        // Songs saved while it played.
+        new CapturesRows(mPage, CapturesRows.of(mMod.id), false)
+                .build(getString(R.string.app_captures));
+
+        // What it can do, with the addresses it may reach.
+        mPerms = column();
+        mPage.group(R.string.mod_sec_can_do).view(mPerms);
         refreshPermissions();
 
-        ModuleUi.section(col, getString(R.string.mod_sec_details));
-        LinearLayout det = ModuleUi.card(col);
+        LinearLayout det = column();
         Map<String, Object> src = ModJson.map(mMod.install.get("source"));
         ModuleUi.dim(det, getString(R.string.mod_details,
                 mMod.id,
@@ -105,16 +118,68 @@ public final class ModuleSettingsActivity extends Activity {
                         : "file",
                 String.valueOf(mMod.install.get("tree_sha256")).substring(0, 16),
                 fp == null ? "?" : fp)).setTextIsSelectable(true);
-        removeButton(col);
+        mPage.group(R.string.mod_sec_details).view(det);
+        actions();
     }
 
-    private void removeButton(LinearLayout col) {
-        ModuleUi.button(col, getString(R.string.mod_remove), v -> new AlertDialog.Builder(this)
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mPage != null) {
+            mPage.refresh();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (mPage != null) {
+            mPage.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+
+    private LinearLayout column() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        return l;
+    }
+
+    /** Update from file (the same install sheet; it shows the version change) and Remove. */
+    private void actions() {
+        Page.Group g = mPage.group(0);
+        g.link(getString(R.string.app_update), getString(R.string.app_update_sum),
+                this::pickUpdate);
+        LinearLayout remove = g.link(getString(R.string.mod_remove), null,
+                () -> new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.mod_remove_title, mMod.name()))
                 .setMessage(R.string.mod_remove_body)
                 .setPositiveButton(R.string.mod_remove, (d, w) -> remove())
                 .setNegativeButton(R.string.cancel, null)
-                .show(), 28);
+                .show());
+        ((android.widget.TextView) ((LinearLayout) remove.getChildAt(0)).getChildAt(0))
+                .setTextColor(getColor(R.color.abyss_warn));
+    }
+
+    private void pickUpdate() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("*/*")
+                .putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"application/zip",
+                        "application/octet-stream", "application/x-abyss-app"});
+        try {
+            mPage.startForResult(i, (code, data) -> {
+                if (code == RESULT_OK && data != null && data.getData() != null) {
+                    // Back from the install sheet: rebuild, the version or settings may differ.
+                    mPage.startForResult(new Intent(this, ModuleInstallActivity.class)
+                            .setData(data.getData())
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                            (c2, d2) -> recreate());
+                }
+            });
+        } catch (ActivityNotFoundException e) {
+            Log.w(TAG, "no document picker", e);
+            Toast.makeText(this, R.string.mod_no_picker, Toast.LENGTH_SHORT).show();
+        }
     }
 
     private Set<String> newOrigins(Map<String, Object> vals) {

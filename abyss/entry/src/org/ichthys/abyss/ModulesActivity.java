@@ -98,7 +98,7 @@ public final class ModulesActivity extends Activity {
     }
 
     /** The first required setting without a value, or null. */
-    private static String needsSetup(ModuleStore store, ModuleStore.Installed m) {
+    static String needsSetup(ModuleStore store, ModuleStore.Installed m) {
         try {
             ModuleSpec spec = m.spec();
             Map<String, Object> vals = store.readSettings(spec);
