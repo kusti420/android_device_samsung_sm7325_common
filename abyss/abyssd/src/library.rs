@@ -437,6 +437,8 @@ pub struct ResumeState {
     pub position_ms: u64,
     pub volume: u32,
     pub shuffle: bool,
+    /// What played last: "library" or "stream" (a module stream, modules.rs last_stream.json).
+    pub source: Option<String>,
 }
 
 impl ResumeState {
@@ -450,6 +452,7 @@ impl ResumeState {
             position_ms: v["position_ms"].as_u64().unwrap_or(0),
             volume: v["volume"].as_u64().map(|x| x.min(160) as u32).unwrap_or(40),
             shuffle: v["shuffle"].as_bool().unwrap_or(false),
+            source: v["source"].as_str().map(str::to_string),
         }
     }
 
@@ -462,6 +465,7 @@ impl ResumeState {
             "position_ms": self.position_ms,
             "volume": self.volume,
             "shuffle": self.shuffle,
+            "source": self.source,
         });
         let tmp = format!("{STATE_FILE}.tmp");
         {

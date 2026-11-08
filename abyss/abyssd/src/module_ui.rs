@@ -127,7 +127,7 @@ fn header_lines(cv: &mut Canvas, lines: &[Line], mut y: i32, limit: i32, max_w: 
     y
 }
 
-const LIST_GUIDE: &[(&str, &str)] = &[("▲ ▼", "move"), ("●", "select"), ("Back", "last row")];
+const LIST_GUIDE: &[(&str, &str)] = &[("▲ ▼", "move"), ("●", "select"), ("▲+▼", "back")];
 
 /// A module screen. `msg`: the daemon's feedback line, if any.
 pub fn draw(cv: &mut Canvas, v: &ScreenView, msg: Option<(&str, u32)>) {

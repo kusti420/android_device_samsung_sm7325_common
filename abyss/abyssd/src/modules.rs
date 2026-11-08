@@ -37,7 +37,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use log::{info, warn};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use crate::capture::Capture;
 use crate::http::{Cancel, Client, Timeouts, Url};
@@ -46,6 +46,9 @@ use crate::stream::{Feed, START_S};
 
 pub const STORE: &str = "/data/misc/abyss/store";
 pub const SETTINGS_DIR: &str = "/data/misc/abyss/conf/settings";
+/// The last module stream (what Continue plays when radio was the last source): written by
+/// abyssd only, next to state.json.
+pub const LAST_STREAM: &str = "/data/misc/abyss/out/last_stream.json";
 
 /// The features this module host implements (shipped as /system_ext/etc/abyss/features).
 pub const FEATURES: &[&str] = &[
@@ -675,8 +678,26 @@ struct Done {
     append: bool,
 }
 
+/// Where a stream was picked: that screen (its data, its context) and the row, so hold ▲ / ▼
+/// can step to the station next to it and Continue can start it again after a restart.
+#[derive(Clone, Debug)]
+struct Origin {
+    frame: Frame,
+    act: ItemAct,
+}
+
+/// The last stream, as saved in [`LAST_STREAM`].
+#[derive(Clone, Debug)]
+struct LastStream {
+    module: usize,
+    origin: Origin,
+    title: String,
+}
+
 struct StreamSession {
     module: usize,
+    /// Where it was picked (None for a stream started some other way).
+    origin: Option<Origin>,
     /// Which station and format plays (`$stream.tag`, `$stream.format`): picking the same one
     /// again must not restart it.
     key: (String, String),
@@ -709,6 +730,17 @@ pub struct Host {
     pub battery: Value,
     /// `$stream` as last built, and when (one value per draw; see STREAM_CACHE_MS).
     stream_cache: RefCell<Option<(Instant, Rc<Value>)>>,
+    /// The selected row per module screen, kept when the screen closes (this session).
+    memo: BTreeMap<(usize, String), usize>,
+    /// While stepping stations: refresh an open `show` screen instead of opening one.
+    stepping: bool,
+    /// The last stream (for Continue), where it is saved (None: not saved, tests).
+    last: Option<LastStream>,
+    last_path: Option<PathBuf>,
+    /// Radio was the last source: Home's Continue and the entry start resume it.
+    last_is_source: bool,
+    /// Shown ready at entry (Now playing, ● starts it; Wi-Fi only then).
+    armed: bool,
 }
 
 impl Host {
@@ -728,13 +760,147 @@ impl Host {
             stream: None,
             battery: Value::Null,
             stream_cache: RefCell::new(None),
+            memo: BTreeMap::new(),
+            stepping: false,
+            last: None,
+            last_path: None,
+            last_is_source: false,
+            armed: false,
         })
     }
 
-    /// Loads the store and settings at their ROM paths.
+    /// Loads the store and settings at their ROM paths, and the last stream.
     pub fn from_device(net: Arc<dyn Network>) -> io::Result<Host> {
         let (m, e) = load(Path::new(STORE), Path::new(SETTINGS_DIR));
-        Host::new(m, e, net)
+        let mut h = Host::new(m, e, net)?;
+        h.use_last_file(Path::new(LAST_STREAM));
+        Ok(h)
+    }
+
+    /// Reads the last stream from `path` and saves it there from now on.
+    pub fn use_last_file(&mut self, path: &Path) {
+        self.last = fs::read(path).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).and_then(|v| self.last_from_json(&v));
+        if let Some(l) = &self.last {
+            info!("last stream: {} ({})", l.title, self.modules[l.module].id);
+        }
+        self.last_path = Some(path.to_path_buf());
+    }
+
+    fn last_from_json(&self, v: &Value) -> Option<LastStream> {
+        if v.get("v").and_then(Value::as_i64) != Some(1) {
+            return None;
+        }
+        let id = v.get("module")?.as_str()?;
+        let module = self.modules.iter().position(|m| m.id == id)?;
+        let screen = v.get("screen")?.as_str()?.to_string();
+        self.screen_def(module, &screen)?;
+        let act = match (v.get("item").and_then(Value::as_u64), v.get("row").and_then(Value::as_array)) {
+            (Some(i), _) => ItemAct::Static(i as usize),
+            (None, Some(r)) => ItemAct::Row(r.first()?.as_u64()? as usize, r.get(1)?.as_u64()? as usize),
+            _ => return None,
+        };
+        let binds = v
+            .get("binds")?
+            .as_object()?
+            .iter()
+            .filter(|(k, _)| !RESERVED_NS.contains(&k.as_str()))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let mut frame = Frame::new(Place::Screen { module, screen }, binds);
+        frame.pages = v.get("pages").and_then(Value::as_array).cloned().unwrap_or_default();
+        frame.load = Load::Ready;
+        let title = v.get("title").and_then(Value::as_str).unwrap_or("").to_string();
+        Some(LastStream { module, origin: Origin { frame, act }, title })
+    }
+
+    /// Remembers the stream that just started (memory and file).
+    fn remember_last(&mut self, origin: Origin) {
+        let Some(s) = self.stream.as_ref() else { return };
+        let module = s.module;
+        let title = s.radio.status().title;
+        let Place::Screen { screen, .. } = &origin.frame.place else { return };
+        let mut binds = Map::new();
+        for (k, v) in &origin.frame.binds {
+            binds.insert(k.clone(), v.clone());
+        }
+        let mut v = json!({"v": 1, "module": self.modules[module].id, "screen": screen, "binds": binds,
+            "pages": origin.frame.pages, "title": title});
+        match origin.act {
+            ItemAct::Static(i) => v["item"] = json!(i),
+            ItemAct::Row(p, i) => v["row"] = json!([p, i]),
+        }
+        if let Some(p) = &self.last_path {
+            let tmp = p.with_extension("json.tmp");
+            let r = fs::write(&tmp, v.to_string()).and_then(|_| fs::rename(&tmp, p));
+            if let Err(e) = r {
+                warn!("save {}: {e}", p.display());
+            }
+        }
+        self.last = Some(LastStream { module, origin, title });
+    }
+
+    /// The player's last source was this module stream (true) or the library (false).
+    pub fn set_last_source(&mut self, stream: bool) {
+        self.last_is_source = stream;
+        if !stream {
+            self.armed = false;
+        }
+    }
+
+    /// Home's Continue: the last stream's title while radio was the last source and no stream
+    /// runs.
+    pub fn continue_title(&self) -> Option<String> {
+        let l = self.last.as_ref().filter(|_| self.last_is_source && self.stream.is_none())?;
+        Some(if l.title.is_empty() { self.modules[l.module].name.clone() } else { l.title.clone() })
+    }
+
+    /// At entry: show the last stream ready on Now playing (nothing is fetched until ●).
+    /// False when there is none.
+    pub fn arm(&mut self) -> bool {
+        self.armed = self.continue_title().is_some();
+        self.armed
+    }
+
+    /// The last stream is shown ready (● starts it).
+    pub fn armed(&self) -> bool {
+        self.armed && self.stream.is_none()
+    }
+
+    /// Starts the last stream again (Continue, ● on the ready Now playing).
+    pub fn continue_last(&mut self) -> Effect {
+        self.armed = false;
+        let Some(l) = self.last.clone() else { return Effect::Unsupported("Nothing to continue yet.".into()) };
+        let Place::Screen { screen, .. } = &l.origin.frame.place else { return Effect::None };
+        let Some(def) = self.screen_def(l.module, screen).cloned() else { return Effect::None };
+        self.stepping = true; // no screen of its own opens: the caller shows Now playing
+        let eff = self.act(&l.origin.frame, l.module, &def, l.origin.act);
+        self.stepping = false;
+        eff
+    }
+
+    /// Hold ▲ / ▼ while a module stream plays: the next / previous station of the list it was
+    /// picked from (wrapping). The person stays where they are; an open station screen follows.
+    pub fn step_station(&mut self, dir: i32) -> Effect {
+        let Some(o) = self.stream.as_ref().and_then(|s| s.origin.clone()) else { return Effect::None };
+        let Place::Screen { module, screen } = &o.frame.place else { return Effect::None };
+        let module = *module;
+        let Some(def) = self.screen_def(module, screen).cloned() else { return Effect::None };
+        let acts: Vec<ItemAct> = self
+            .items_of(&o.frame, &def)
+            .into_iter()
+            .map(|(_, a)| a)
+            .filter(|a| match a {
+                ItemAct::Static(i) => def.get("items").and_then(|x| x.get(*i)).and_then(|x| x.get("stream")).is_some(),
+                ItemAct::Row(..) => def.get("items").and_then(|x| x.get("row")).and_then(|x| x.get("stream")).is_some(),
+            })
+            .collect();
+        let Some(k) = acts.iter().position(|a| *a == o.act) else { return Effect::None };
+        let n = acts.len() as i32;
+        let next = acts[(k as i32 + dir).rem_euclid(n) as usize];
+        self.stepping = true;
+        let eff = self.act(&o.frame, module, &def, next);
+        self.stepping = false;
+        eff
     }
 
     pub fn poll_fd(&self) -> BorrowedFd<'_> {
@@ -786,7 +952,7 @@ impl Host {
 
     /// Opens one module's start screen from Home; Back from it returns to Home.
     pub fn open_direct(&mut self, module: usize) {
-        self.stack.clear();
+        self.close_all();
         if module < self.modules.len() {
             self.open_module(module);
         }
@@ -794,7 +960,7 @@ impl Host {
 
     /// Opens Main › Apps (or straight into the category when only one has modules).
     pub fn open_apps(&mut self) {
-        self.stack.clear();
+        self.close_all();
         let cats = self.categories();
         let place = match cats.as_slice() {
             [(only, _, _)] => Place::Category(only.to_string()),
@@ -827,8 +993,27 @@ impl Host {
     }
 
     fn push_screen(&mut self, module: usize, screen: &str, binds: Vec<(String, Value)>) {
-        self.stack.push(Frame::new(Place::Screen { module, screen: screen.to_string() }, binds));
+        let mut f = Frame::new(Place::Screen { module, screen: screen.to_string() }, binds);
+        f.sel = self.memo.get(&(module, screen.to_string())).copied().unwrap_or(0);
+        self.stack.push(f);
         self.start_get(false, false);
+    }
+
+    /// Keeps a closing screen's selected row for its next opening (not a stream's live list,
+    /// whose rows move by themselves).
+    fn keep_sel(&mut self, f: &Frame) {
+        if let Place::Screen { module, screen } = &f.place {
+            let live = self.screen_def(*module, screen).and_then(|d| d.get("header")).is_some();
+            if !live {
+                self.memo.insert((*module, screen.clone()), f.sel);
+            }
+        }
+    }
+
+    fn close_all(&mut self) {
+        for f in std::mem::take(&mut self.stack) {
+            self.keep_sel(&f);
+        }
     }
 
     /// Fills the scope for a frame (settings, data, binds, stream, battery).
@@ -982,7 +1167,7 @@ impl Host {
 
     /// Now Playing for the module stream: its `show` screen, else a plain stream view.
     pub fn now_playing_view(&self) -> Option<ScreenView> {
-        let s = self.stream.as_ref()?;
+        let Some(s) = self.stream.as_ref() else { return self.ready_view() };
         if let Some(f) = &s.frame {
             let mut v = self.view_of(f);
             v.body = match v.body {
@@ -1014,6 +1199,21 @@ impl Host {
             sub: None,
             header: Vec::new(),
             body: Body::Text(lines, Vec::new()),
+            guide: Vec::new(),
+            note: None,
+            sel: 0,
+        })
+    }
+
+    /// The last stream shown ready at entry: its name, and that ● plays it.
+    fn ready_view(&self) -> Option<ScreenView> {
+        let title = self.continue_title().filter(|_| self.armed)?;
+        let line = |text: &str, style| Line { text: text.into(), style };
+        Some(ScreenView {
+            title: self.modules[self.last.as_ref()?.module].name.clone(),
+            sub: None,
+            header: vec![line(&title, Style::Big), line("● plays it.", Style::Dim)],
+            body: Body::Text(Vec::new(), Vec::new()),
             guide: Vec::new(),
             note: None,
             sel: 0,
@@ -1236,7 +1436,9 @@ impl Host {
 
     /// Back (the Back row, or ● ● from a module screen). Exit = leave the module screens.
     pub fn back(&mut self) -> Effect {
-        self.stack.pop();
+        if let Some(f) = self.stack.pop() {
+            self.keep_sel(&f);
+        }
         if self.stack.is_empty() {
             Effect::Exit
         } else {
@@ -1316,7 +1518,18 @@ impl Host {
                     sf.binds.push((name.to_string(), el));
                 }
             }
-            return self.start_stream(&sf, module, st);
+            let eff = self.start_stream(&sf, module, st);
+            if matches!(eff, Effect::Play { .. } | Effect::Continue { .. }) {
+                let origin = Origin { frame: f.clone(), act };
+                if let Some(s) = self.stream.as_mut() {
+                    s.origin = Some(origin.clone());
+                }
+                if matches!(eff, Effect::Play { .. }) {
+                    self.remember_last(origin);
+                }
+                self.last_is_source = true;
+            }
+            return eff;
         }
         if let Some(m) = s("media") {
             return Effect::Media(m.to_string());
@@ -1354,7 +1567,7 @@ impl Host {
         let show_list = show
             .filter(|sh| self.screen_def(module, sh).and_then(|d| d.get("kind")).and_then(Value::as_str).unwrap_or("list") == "list");
         if self.stream.as_ref().is_some_and(|s| s.module == module && s.key == key) {
-            if let Some(sh) = show_list {
+            if let Some(sh) = show_list.filter(|_| !self.stepping) {
                 self.open_show(module, sh, f.binds.clone());
             }
             return Effect::Continue { player: show_list.is_none() };
@@ -1364,9 +1577,18 @@ impl Host {
         match Radio::start(cfg, self.net.clone()) {
             Ok(radio) => {
                 let feed = radio.feed();
-                self.stream = Some(StreamSession { module, key, radio, frame, paused: false });
+                self.stream = Some(StreamSession { module, origin: None, key, radio, frame, paused: false });
+                self.armed = false;
                 self.start_get(true, false); // the show screen's own data ("Coming up")
-                if let Some(sh) = show_list {
+                if let Some(sh) = show {
+                    // An open screen of the old station shows the new one.
+                    for fr in self.stack.iter_mut() {
+                        if matches!(&fr.place, Place::Screen { module: m, screen: s } if *m == module && s == sh) {
+                            fr.binds = f.binds.clone();
+                        }
+                    }
+                }
+                if let Some(sh) = show_list.filter(|_| !self.stepping) {
                     self.open_show(module, sh, f.binds.clone());
                 }
                 Effect::Play { feed, player: show_list.is_none() }
@@ -1447,7 +1669,7 @@ impl Host {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ItemAct {
     Static(usize),
     Row(usize, usize),
@@ -1884,6 +2106,65 @@ mod tests {
         assert!(!h.live());
         let v = h.view().unwrap();
         assert_eq!(v.header.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), vec!["Not playing.", "PLAYED BEFORE"]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn station_steps_continue_and_row_memory() {
+        let root = std::env::temp_dir().join(format!("abyss-mod-step-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let store = root.join("store");
+        store_with(&store, "radio", "ready", &["apps", "menu:get", "media:stream", "media:stream:http", "media:stream:screen", "menu:header"]);
+        let st = |t: &str| json!({"label": t.to_uppercase(), "stream": {"url": format!("http://127.0.0.1:9/{t}"), "tag": t, "title": t.to_uppercase(), "show": "np"}});
+        fs::write(store.join("radio/menu.json"), json!({"menu": 1, "start": "main", "screens": {
+            "main": {"title": "T", "items": [st("a"), {"label": "Info", "goto": "np"}, st("b"), st("c")]},
+            "np": {"title": "$stream.title", "header": ["$stream.tag"], "items": {"from": "$stream.played", "row": {"label": "$row.artist", "goto": "main"}}}}}).to_string()).unwrap();
+        let (mods, errs) = load(&store, &root.join("settings"));
+        let net: Arc<dyn Network> = Arc::new(radio_source::OpenNetwork(Arc::new(crate::http::TcpTransport::default())));
+        let last = root.join("last_stream.json");
+        let mut h = Host::new(mods.clone(), errs.clone(), net.clone()).unwrap();
+        h.use_last_file(&last);
+        assert!(h.continue_title().is_none() && !h.arm(), "nothing played yet");
+        let tag = |h: &Host| h.stream_status().map(|s| s.tag).unwrap_or_default();
+        h.open_direct(0);
+        assert!(matches!(h.select(), Effect::Play { .. }));
+        assert_eq!(tag(&h), "a");
+        let depth = h.stack.len();
+        // Hold ▼ / ▲: the next / previous station of that list (rows without a stream skipped).
+        assert!(matches!(h.step_station(1), Effect::Play { .. }));
+        assert_eq!(tag(&h), "b");
+        assert_eq!(h.stack.len(), depth, "no screen opens while stepping");
+        assert_eq!(h.view().unwrap().header[0].text, "b", "the open station screen follows");
+        h.step_station(-1);
+        h.step_station(-1);
+        assert_eq!(tag(&h), "c", "wraps around");
+        assert!(last.is_file(), "the last stream is saved");
+        h.stop_stream();
+        // After a restart: radio was the last source, so Continue / the entry start offer it.
+        let mut h = Host::new(mods, errs, net).unwrap();
+        h.use_last_file(&last);
+        assert!(h.continue_title().is_none(), "only while radio was the last source");
+        h.set_last_source(true);
+        assert_eq!(h.continue_title().as_deref(), Some("C"));
+        assert!(h.arm() && h.armed());
+        let np = h.now_playing_view().unwrap();
+        assert_eq!(np.header.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), vec!["C", "● plays it."]);
+        assert!(h.stream_status().is_none(), "nothing fetched while it is only shown");
+        assert!(matches!(h.continue_last(), Effect::Play { .. }));
+        assert_eq!(tag(&h), "c");
+        assert!(!h.armed() && h.stack.is_empty(), "no module screen opens for Continue");
+        assert!(matches!(h.step_station(1), Effect::Play { .. }), "stepping works from a continued stream");
+        assert_eq!(tag(&h), "a");
+        h.stop_stream();
+        h.set_last_source(false);
+        assert!(h.continue_title().is_none());
+        // The selected row is kept per screen when it closes (Back, or Home).
+        h.open_direct(0);
+        h.down();
+        h.down();
+        assert_eq!(h.view().unwrap().sel, 2);
+        h.open_direct(0);
+        assert_eq!(h.view().unwrap().sel, 2, "the list opens where it was left");
         let _ = fs::remove_dir_all(&root);
     }
 

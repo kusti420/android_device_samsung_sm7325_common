@@ -257,6 +257,8 @@ impl App {
             PlayState::Paused => self.status.queue_len > 0,
             PlayState::Stopped => false,
         };
+        // The last radio station shown ready at entry counts as loaded: ● starts it.
+        let loaded = loaded || (self.modules.armed() && self.status.track.is_none());
         Ctx {
             screen_on: self.screen_on,
             player: self.ui.screen == Screen::NowPlaying,
@@ -548,8 +550,18 @@ impl App {
                     self.dirty = true;
                 }
             }
+            // Hold ▲ / ▼ while a module stream plays: the next / previous station.
+            Action::Next | Action::Prev if self.status.stream && self.modules.streaming() => {
+                let eff = self.modules.step_station(if a == Action::Next { 1 } else { -1 });
+                self.on_station_step(eff, now);
+            }
             Action::Next => self.player.send(Cmd::Next),
             Action::Prev => self.player.send(Cmd::Prev),
+            // ● on the radio shown ready at entry: start it (Wi-Fi only now).
+            Action::PlayPause if self.modules.armed() && self.status.track.is_none() && !self.status.stream => {
+                let eff = self.modules.continue_last();
+                self.on_station_step(eff, now);
+            }
             Action::PlayPause => {
                 self.player.send(Cmd::Toggle);
                 if self.output.is_none() && self.screen_on {
@@ -597,6 +609,15 @@ impl App {
     /// it), so the first ● plays it, screen on or off. Settings › Abyss › Navigation "Open
     /// on: Home" keeps the old start. Paused costs nothing: the player closes the output.
     fn open_ready(&mut self) {
+        // Radio was the last source: its station shown ready (nothing fetched until ●).
+        if self.ui.nav.start_player && self.resume.source.as_deref() == Some("stream") {
+            self.modules.set_last_source(true);
+            if self.modules.arm() {
+                info!("start: last radio station ready");
+                self.ui.go(Screen::NowPlaying);
+                return;
+            }
+        }
         let Some(track) = self.resume.track.clone().filter(|_| self.ui.nav.start_player) else { return };
         if let Some((queue, index)) = self.resume_queue(&track) {
             info!("start: {} ready (paused)", track.display());
@@ -613,6 +634,14 @@ impl App {
                 if self.status.stream && self.status.state == PlayState::Paused {
                     self.player.send(Cmd::Play);
                     self.modules.set_paused(false);
+                    self.ui.go(Screen::NowPlaying);
+                    self.screen_on_for(now, self.screen_timeout_ms);
+                    return;
+                }
+                // Radio was the last source: start that station again.
+                if self.modules.continue_title().is_some() {
+                    let eff = self.modules.continue_last();
+                    self.on_station_step(eff, now);
                     self.ui.go(Screen::NowPlaying);
                     self.screen_on_for(now, self.screen_timeout_ms);
                     return;
@@ -703,6 +732,31 @@ impl App {
                 self.ui.go(Screen::Module);
                 self.screen_on_for(now, self.screen_timeout_ms);
             }
+        }
+    }
+
+    /// A stream started without opening a screen (station step, Continue, ● on the ready
+    /// radio): hand it to the player; with the screen on, name the station.
+    fn on_station_step(&mut self, eff: modules::Effect, now: u64) {
+        match eff {
+            modules::Effect::Play { feed, .. } => {
+                self.stream_sent = true;
+                self.player.send(Cmd::Stream(feed));
+                if self.output.is_none() && self.screen_on {
+                    self.say(now, "No headphones: plug in wired or USB ones, or connect Bluetooth ›.", WARN);
+                } else if self.screen_on {
+                    let t = self.modules.stream_status().map(|s| s.title).unwrap_or_default();
+                    self.say(now, t, ACCENT);
+                }
+            }
+            modules::Effect::Continue { .. } => {
+                if self.status.state != PlayState::Playing {
+                    self.player.send(Cmd::Play);
+                    self.modules.set_paused(false);
+                }
+            }
+            modules::Effect::Unsupported(t) if self.screen_on => self.say(now, t, WARN),
+            _ => {}
         }
     }
 
@@ -801,6 +855,14 @@ impl App {
         }
         self.modules.set_paused(self.status.stream && self.status.state != PlayState::Playing);
         if old.track != self.status.track || old.state != self.status.state {
+            // What played last (Continue / the entry start pick it up).
+            if self.status.stream && self.status.state == PlayState::Playing {
+                self.resume.source = Some("stream".into());
+                self.modules.set_last_source(true);
+            } else if self.status.track.is_some() && self.status.state == PlayState::Playing {
+                self.resume.source = Some("library".into());
+                self.modules.set_last_source(false);
+            }
             self.save_resume();
             self.send_bt_playstate();
         }

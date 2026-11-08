@@ -482,6 +482,9 @@ impl Ui {
                     (PlayState::Paused, Some(meta), _) => {
                         Row::new("Continue", RowAct::Do(Request::Resume)).meta(meta)
                     }
+                    // Radio was the last source: Continue starts that station again.
+                    _ if v.modules.continue_title().is_some() => Row::new("Continue", RowAct::Do(Request::Resume))
+                        .meta(v.modules.continue_title().unwrap_or_default()),
                     (_, _, Some(t)) => Row::new("Continue", RowAct::Do(Request::Resume))
                         .meta(format!("{} · {}", lib.title_of(t), mmss(v.resume_pos_ms))),
                     _ => Row::new("Now playing", RowAct::Go(Screen::NowPlaying)).meta("nothing"),
@@ -808,13 +811,15 @@ impl Ui {
                 }
                 return;
             }
-            Screen::NowPlaying if v.status.stream => {
+            // A module stream, or the last radio station shown ready at entry (● starts it).
+            Screen::NowPlaying if v.status.stream || (v.modules.armed() && v.status.track.is_none()) => {
                 if let Some(np) = v.modules.now_playing_view() {
                     let state = if v.output.is_none() {
                         ("NO HEADPHONES", WARN)
                     } else {
                         match v.status.state {
                             PlayState::Playing => ("RADIO · PLAYING", ACCENT),
+                            _ if !v.status.stream => ("RADIO · READY", DIM),
                             _ => ("RADIO · PAUSED", DIM),
                         }
                     };
