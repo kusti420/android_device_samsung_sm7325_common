@@ -447,10 +447,23 @@ impl App {
             }
             Action::Wake => self.screen_on_for(now, self.screen_timeout_ms),
             Action::Menu => {
-                // ● ● with the screen off is a "look": wake on the screen you left
-                // (usually Now Playing). Only with the screen on does it go to the menu.
+                // ● ● with the screen off is a "look": it shows Now playing (Settings › Abyss
+                // › Navigation can make it wake on the screen you left instead). Only with the
+                // screen on does it go to the menu.
                 if self.screen_on && self.ui.screen == Screen::NowPlaying {
                     self.ui.back();
+                } else if !self.screen_on && self.ui.nav.wake_player && self.ui.screen != Screen::NowPlaying {
+                    self.ui.show_player();
+                }
+                self.screen_on_for(now, self.screen_timeout_ms);
+            }
+            // ▲ + ▼ in a menu: one level back (module screens: their own Back).
+            Action::Back => {
+                if self.ui.screen == Screen::Module {
+                    let eff = self.modules.back();
+                    self.on_module_effect(eff, now);
+                } else {
+                    self.ui.back_level();
                 }
                 self.screen_on_for(now, self.screen_timeout_ms);
             }
@@ -569,10 +582,41 @@ impl App {
         self.screen_on_for(now, self.screen_timeout_ms);
     }
 
+    /// The queue Resume plays: the last song's folder from that song, or the song alone.
+    fn resume_queue(&self, track: &std::path::Path) -> Option<(Vec<PathBuf>, usize)> {
+        match self.lib.locate(track) {
+            Some((folder, index)) => {
+                Some((self.lib.folders[folder].tracks.iter().map(|t| t.path.clone()).collect(), index))
+            }
+            None if track.exists() => Some((vec![track.to_path_buf()], 0)),
+            None => None,
+        }
+    }
+
+    /// At entry: the last song loaded paused at its place, Now playing in front (Home under
+    /// it), so the first ● plays it, screen on or off. Settings › Abyss › Navigation "Open
+    /// on: Home" keeps the old start. Paused costs nothing: the player closes the output.
+    fn open_ready(&mut self) {
+        let Some(track) = self.resume.track.clone().filter(|_| self.ui.nav.start_player) else { return };
+        if let Some((queue, index)) = self.resume_queue(&track) {
+            info!("start: {} ready (paused)", track.display());
+            self.player.send(Cmd::Load { queue, index, start_ms: self.resume.position_ms, play: false });
+            self.ui.go(Screen::NowPlaying);
+        }
+    }
+
     fn request(&mut self, req: Request, now: u64) {
         match req {
             Request::None => {}
             Request::Resume => {
+                // Home › Continue on a paused radio stream: play it on (no reload).
+                if self.status.stream && self.status.state == PlayState::Paused {
+                    self.player.send(Cmd::Play);
+                    self.modules.set_paused(false);
+                    self.ui.go(Screen::NowPlaying);
+                    self.screen_on_for(now, self.screen_timeout_ms);
+                    return;
+                }
                 let Some(track) = self.resume.track.clone() else {
                     self.say(now, "Nothing to resume yet.", DIM);
                     return;
@@ -590,16 +634,8 @@ impl App {
                     return;
                 }
                 let start = self.resume.position_ms;
-                match self.lib.locate(&track) {
-                    Some((folder, index)) => {
-                        let q = self.lib.folders[folder]
-                            .tracks
-                            .iter()
-                            .map(|t| t.path.clone())
-                            .collect();
-                        self.load(q, index, start, now);
-                    }
-                    None if track.exists() => self.load(vec![track], 0, start, now),
+                match self.resume_queue(&track) {
+                    Some((q, index)) => self.load(q, index, start, now),
                     None => {
                         warn!("resume track gone: {}", track.display());
                         self.say(now, "The last song is gone from the card.", WARN);
@@ -1233,6 +1269,7 @@ fn run() -> Result<Exit> {
         warn!("no music found under /data/media/0/Music or /mnt/media_rw/*");
     }
     app.check_low_battery(now);
+    app.open_ready();
 
     let mut events = Vec::new();
     loop {

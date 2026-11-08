@@ -10,6 +10,8 @@
 //!   ▲ + ▼ (short)        play / pause (as on the Music board)
 //! Menus (screen on, any other screen):
 //!   ▲ ▼ move (on press), ● select (on release, so a long ● hold never selects)
+//!   hold ▲ / ▼           keeps moving (after 600 ms, one row every 150 ms, up to 5 s)
+//!   ▲ + ▼ (short)        Back one level (the cursor does not move first)
 //! Screen off, nothing loaded: the first press of any key only wakes the screen.
 //! Always:
 //!   hold ▲ + ▼ 2 s       Help
@@ -36,6 +38,8 @@ pub const HELP_HOLD_MS: u64 = 2000;
 pub const CAPTURE_GAP_MS: u64 = 300;
 /// ... and the first of them must come up within this time of the first press.
 pub const CAPTURE_RELEASE_MS: u64 = 1500;
+/// Menus: a held ▲ / ▼ moves again every this often (the first repeat comes at HOLD_MS).
+pub const REPEAT_MS: u64 = 150;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -51,6 +55,8 @@ pub enum Action {
     PlayPause,
     /// ● ● on Now playing or with the screen off: open the menu.
     Menu,
+    /// ▲ + ▼ short in a menu: one level back (the Back row without going to it).
+    Back,
     /// ▲ + ▼ held 2 s.
     Help,
     /// ● held 3 s: show the cancel banner (screen on).
@@ -98,6 +104,10 @@ struct KeyState {
     hold_fired: bool,
     /// This press cancelled "back to Android": it can't start a capture chord.
     no_chord: bool,
+    /// This press moved the menu cursor (MenuUp/MenuDown on press).
+    moved: bool,
+    /// Menus: the next auto-repeat move of this held key (0 = none).
+    repeat_at: u64,
 }
 
 /// A ▼ + ● press pair in progress.
@@ -116,6 +126,9 @@ pub struct KeyMachine {
     combo_ud: bool,
     combo_since: u64,
     combo_done: bool,
+    /// The ▲ + ▼ press began in a menu (its first key moved the cursor, which was undone):
+    /// a short one is Back.
+    combo_menu: bool,
     /// Time ● was released after a short music-mode press (waiting for a 2nd).
     power_tap: Option<u64>,
     /// While Some, the "back to Android" cancel window ends at this time.
@@ -185,6 +198,8 @@ impl KeyMachine {
         if dn && pw {
             self.st[Key::Down.idx()].consumed = true;
             self.st[Key::Power.idx()].consumed = true;
+            self.st[Key::Up.idx()].repeat_at = 0;
+            self.st[Key::Down.idx()].repeat_at = 0;
             self.skip_power_release = true;
             self.power_tap = None;
             if key == Key::Up {
@@ -212,10 +227,21 @@ impl KeyMachine {
         if up && dn {
             self.st[Key::Up.idx()].consumed = true;
             self.st[Key::Down.idx()].consumed = true;
+            self.st[Key::Up.idx()].repeat_at = 0;
+            self.st[Key::Down.idx()].repeat_at = 0;
             if !self.combo_ud {
                 self.combo_ud = true;
                 self.combo_since = t;
                 self.combo_done = false;
+                // In a menu the first key already moved the cursor: move it back, so ▲ + ▼
+                // (Back, or Help when held) leaves the list where it was. Not when that key
+                // was held long enough to scroll: then it is no Back either.
+                let first = if key == Key::Up { Key::Down } else { Key::Up };
+                let f = self.st[first.idx()];
+                self.combo_menu = f.moved && t.saturating_sub(f.since) < HOLD_MS;
+                if self.combo_menu {
+                    out.push(if first == Key::Up { Action::MenuDown } else { Action::MenuUp });
+                }
             }
             return;
         }
@@ -247,15 +273,14 @@ impl KeyMachine {
             return;
         }
 
-        // Menu keys.
+        // Menu keys: move on press, keep moving while held (tick()).
         match key {
-            Key::Up => {
-                out.push(Action::MenuUp);
-                self.st[i].consumed = true;
-            }
-            Key::Down => {
-                out.push(Action::MenuDown);
-                self.st[i].consumed = true;
+            Key::Up | Key::Down => {
+                out.push(if key == Key::Up { Action::MenuUp } else { Action::MenuDown });
+                let s = &mut self.st[i];
+                s.consumed = true;
+                s.moved = true;
+                s.repeat_at = t + HOLD_MS;
             }
             Key::Power => {} // select on release
         }
@@ -287,6 +312,7 @@ impl KeyMachine {
                 }
                 if self.combo_ud && !self.st[Key::Up.idx()].down && !self.st[Key::Down.idx()].down {
                     self.combo_ud = false;
+                    self.combo_menu = false;
                 }
                 return;
             }
@@ -299,6 +325,8 @@ impl KeyMachine {
                 if t.saturating_sub(self.combo_since) < HELP_HOLD_MS {
                     if ctx.music() {
                         out.push(Action::PlayPause);
+                    } else if self.combo_menu {
+                        out.push(Action::Back);
                     } else if !ctx.screen_on {
                         out.push(Action::Wake);
                     }
@@ -306,6 +334,7 @@ impl KeyMachine {
             }
             if !self.st[Key::Up.idx()].down && !self.st[Key::Down.idx()].down {
                 self.combo_ud = false;
+                self.combo_menu = false;
             }
             return;
         }
@@ -373,6 +402,21 @@ impl KeyMachine {
                     }
                 }
             }
+        } else if ctx.screen_on {
+            // A held ▲ / ▼ in a menu keeps moving. It stops for good once ● joins in or
+            // the key is held past IGNORE_HELD_MS (a key stuck in a pocket).
+            let pw = self.st[Key::Power.idx()].down;
+            for key in [Key::Up, Key::Down] {
+                let s = &mut self.st[key.idx()];
+                if s.down && s.repeat_at != 0 && now >= s.repeat_at {
+                    if pw || now.saturating_sub(s.since) > IGNORE_HELD_MS {
+                        s.repeat_at = 0;
+                        continue;
+                    }
+                    s.repeat_at = now + REPEAT_MS;
+                    out.push(if key == Key::Up { Action::MenuUp } else { Action::MenuDown });
+                }
+            }
         }
         let p = &mut self.st[Key::Power.idx()];
         if p.down && !p.consumed && !p.hold_fired && now.saturating_sub(p.since) >= LEAVE_HOLD_MS {
@@ -403,6 +447,14 @@ impl KeyMachine {
                 let s = &self.st[key.idx()];
                 if s.down && !s.consumed && !s.hold_fired {
                     min(s.since + HOLD_MS);
+                }
+            }
+        } else if ctx.screen_on {
+            // tick() either moves (the next repeat lies ahead again) or stops the repeat.
+            for key in [Key::Up, Key::Down] {
+                let s = &self.st[key.idx()];
+                if s.down && s.repeat_at != 0 {
+                    min(s.repeat_at);
                 }
             }
         }
@@ -633,6 +685,138 @@ mod tests {
         assert_eq!(acts(m.on_key(Key::Power, false, 3100, MENU)), vec![Action::Select]);
         m.on_key(Key::Power, true, 4000, MENU);
         assert_eq!(m.tick(7000, MENU), vec![Action::LeaveArm]);
+    }
+
+    #[test]
+    fn held_menu_key_keeps_moving() {
+        let mut m = KeyMachine::new();
+        assert_eq!(acts(m.on_key(Key::Down, true, 0, MENU)), vec![Action::MenuDown]);
+        assert_eq!(m.next_deadline(MENU), Some(HOLD_MS));
+        assert!(m.tick(599, MENU).is_empty());
+        assert_eq!(m.tick(600, MENU), vec![Action::MenuDown]);
+        assert_eq!(m.next_deadline(MENU), Some(600 + REPEAT_MS));
+        assert!(m.tick(700, MENU).is_empty());
+        assert_eq!(m.tick(750, MENU), vec![Action::MenuDown]);
+        assert_eq!(m.tick(900, MENU), vec![Action::MenuDown]);
+        // Release: no volume step, no select, no more moves.
+        assert!(acts(m.on_key(Key::Down, false, 950, MENU)).is_empty());
+        assert_eq!(m.next_deadline(MENU), None);
+        assert!(m.tick(2000, MENU).is_empty());
+        // ▲ too.
+        m.on_key(Key::Up, true, 3000, MENU);
+        assert_eq!(m.tick(3600, MENU), vec![Action::MenuUp]);
+    }
+
+    #[test]
+    fn menu_repeat_stops_after_the_stuck_key_limit() {
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Up, true, 0, MENU);
+        let mut t = HOLD_MS;
+        let mut moves = 0;
+        while t <= IGNORE_HELD_MS + 1000 {
+            moves += m.tick(t, MENU).len();
+            t += REPEAT_MS;
+        }
+        assert!(moves > 20 && moves < 40, "{moves}");
+        assert_eq!(m.next_deadline(MENU), None);
+        assert!(m.tick(IGNORE_HELD_MS + 2000, MENU).is_empty());
+    }
+
+    #[test]
+    fn no_menu_repeat_on_the_player_or_screen_off() {
+        // Now playing: hold ▲ = next once, never a menu move.
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Up, true, 0, PLAYER);
+        assert_eq!(m.tick(600, PLAYER), vec![Action::Next]);
+        assert!(m.tick(900, PLAYER).is_empty());
+        assert!(m.tick(1200, PLAYER).is_empty());
+        // The screen went off while ▲ was held in a menu: no moves in the dark.
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Up, true, 0, MENU);
+        assert!(m.tick(700, OFF_IDLE).is_empty());
+        assert_eq!(m.next_deadline(OFF_IDLE), None);
+    }
+
+    #[test]
+    fn up_down_short_in_a_menu_is_back_without_moving() {
+        for first in [Key::Up, Key::Down] {
+            let second = if first == Key::Up { Key::Down } else { Key::Up };
+            let mut m = KeyMachine::new();
+            let moved = acts(m.on_key(first, true, 0, MENU));
+            let undo = acts(m.on_key(second, true, 80, MENU));
+            // The first key's move is undone at once.
+            let expect_undo = if first == Key::Up { Action::MenuDown } else { Action::MenuUp };
+            assert_eq!(moved.len(), 1);
+            assert_eq!(undo, vec![expect_undo]);
+            assert!(m.tick(700, MENU).is_empty(), "no repeat while both are down");
+            assert_eq!(acts(m.on_key(first, false, 300, MENU)), vec![Action::Back]);
+            assert!(acts(m.on_key(second, false, 320, MENU)).is_empty());
+            assert!(m.tick(3000, MENU).is_empty());
+        }
+    }
+
+    #[test]
+    fn up_down_held_in_a_menu_is_help_not_back() {
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Down, true, 0, MENU);
+        assert_eq!(acts(m.on_key(Key::Up, true, 50, MENU)), vec![Action::MenuUp]);
+        assert_eq!(m.tick(2050, MENU), vec![Action::Help]);
+        assert!(acts(m.on_key(Key::Up, false, 2500, MENU)).is_empty());
+        assert!(acts(m.on_key(Key::Down, false, 2520, MENU)).is_empty());
+    }
+
+    #[test]
+    fn up_down_after_scrolling_is_not_back() {
+        // ▼ held long enough to scroll, then ▲: neither an undo nor Back.
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Down, true, 0, MENU);
+        assert_eq!(m.tick(600, MENU), vec![Action::MenuDown]);
+        assert!(acts(m.on_key(Key::Up, true, 700, MENU)).is_empty());
+        assert!(acts(m.on_key(Key::Up, false, 900, MENU)).is_empty());
+        assert!(acts(m.on_key(Key::Down, false, 950, MENU)).is_empty());
+    }
+
+    #[test]
+    fn up_down_that_woke_the_screen_is_not_back() {
+        // Screen off, nothing loaded: ▲ wakes; the ▲ + ▼ that follows must not go Back.
+        let mut m = KeyMachine::new();
+        assert_eq!(acts(m.on_key(Key::Up, true, 0, OFF_IDLE)), vec![Action::Wake]);
+        assert!(acts(m.on_key(Key::Down, true, 60, MENU)).is_empty());
+        assert!(acts(m.on_key(Key::Up, false, 200, MENU)).is_empty());
+        assert!(acts(m.on_key(Key::Down, false, 220, MENU)).is_empty());
+    }
+
+    #[test]
+    fn up_down_keeps_its_old_meaning_on_the_player_and_screen_off() {
+        for ctx in [PLAYER, OFF_MUSIC] {
+            let mut m = KeyMachine::new();
+            m.on_key(Key::Down, true, 0, ctx);
+            m.on_key(Key::Up, true, 40, ctx);
+            assert_eq!(acts(m.on_key(Key::Down, false, 300, ctx)), vec![Action::PlayPause]);
+        }
+    }
+
+    #[test]
+    fn capture_chord_stops_a_menu_repeat() {
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Down, true, 0, MENU);
+        m.on_key(Key::Power, true, 100, MENU);
+        assert_eq!(m.next_deadline(MENU), None, "no repeat, no leave hold");
+        for t in [600, 750, 900, 1200] {
+            assert!(m.tick(t, MENU).is_empty(), "tick {t}");
+        }
+        assert_eq!(acts(m.on_key(Key::Power, false, 1300, MENU)), vec![Action::Capture]);
+        assert!(acts(m.on_key(Key::Down, false, 1350, MENU)).is_empty());
+    }
+
+    #[test]
+    fn select_after_a_held_move_still_works() {
+        let mut m = KeyMachine::new();
+        m.on_key(Key::Down, true, 0, MENU);
+        m.tick(600, MENU);
+        m.on_key(Key::Down, false, 700, MENU);
+        m.on_key(Key::Power, true, 800, MENU);
+        assert_eq!(acts(m.on_key(Key::Power, false, 900, MENU)), vec![Action::Select]);
     }
 
     #[test]

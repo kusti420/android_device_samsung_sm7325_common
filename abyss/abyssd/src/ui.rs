@@ -4,7 +4,11 @@
 //! screen, adapted to what the keys do there.
 //!
 //! The selection is "▸ " plus the accent colour (bold); there are no filled
-//! bars. Every list has a Back row at the top and the bottom.
+//! bars. Every list has a Back row at the top and the bottom, and ▲ + ▼ goes
+//! back one level from anywhere in it (keys.rs). Lists remember where you were
+//! (per screen, for the session), and a level with only one thing in it is
+//! skipped (an artist with one album opens the album; a letter with one name
+//! opens that name).
 
 use std::path::PathBuf;
 
@@ -38,6 +42,30 @@ const LETTER_ROW_MIN: usize = 24;
 
 pub const NO_OUTPUT_TEXT: &str =
     "No headphones. Plug in wired or USB headphones, or connect Bluetooth headphones: menu › Bluetooth.";
+
+/// Where Abyss opens and what a "look" shows. Set in the main OS (Settings › Abyss ›
+/// Navigation, entry app), read once at start.
+const PROP_NAV_START: &str = "persist.abyss.nav.start";
+const PROP_NAV_WAKE: &str = "persist.abyss.nav.wake";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NavPrefs {
+    /// `persist.abyss.nav.start` = `player` (default) | `home`: open on Now playing with the
+    /// last song ready (paused at its place), so the first ● plays it.
+    pub start_player: bool,
+    /// `persist.abyss.nav.wake` = `player` (default) | `last`: ● ● with the screen off (the
+    /// "look") shows Now playing; ● ● again returns to where you were.
+    pub wake_player: bool,
+}
+
+impl NavPrefs {
+    pub fn read() -> NavPrefs {
+        let not = |prop: &str, off: &str| {
+            crate::control::prop_str(prop).is_none_or(|v| !v.trim().eq_ignore_ascii_case(off))
+        };
+        NavPrefs { start_player: not(PROP_NAV_START, "home"), wake_player: not(PROP_NAV_WAKE, "last") }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ListKind {
@@ -155,7 +183,23 @@ pub struct Ui {
     sel: usize,
     top: usize,
     stack: Vec<(Screen, usize, usize)>,
+    /// Where each library list was left (selection, scroll), so going back into it lands on
+    /// the same row. Session only; the library does not change while Abyss runs.
+    memo: Vec<(Screen, usize, usize)>,
+    pub nav: NavPrefs,
 }
+
+/// Library screens whose place is remembered. Never PowerOff (it must open on "Keep it
+/// on"), nor screens whose rows change by themselves (Bluetooth, Battery).
+fn remembers(s: Screen) -> bool {
+    matches!(
+        s,
+        Screen::Music | Screen::Letters(_) | Screen::List(..) | Screen::Artist(_) | Screen::Album(_) | Screen::Folder(_)
+    )
+}
+
+/// How many places `memo` keeps.
+const MEMO_MAX: usize = 64;
 
 /// "FLAC 44.1 kHz · 16 bit · DSP" / "MP3 44.1 kHz · CPU decode".
 fn format_tag(st: &Status) -> Option<String> {
@@ -233,9 +277,9 @@ fn guide(screen: Screen) -> &'static [(&'static str, &'static str)] {
             ("hold ● 3 s", "back to Android"),
         ],
         Screen::Letters(_) => &[
-            ("▲ ▼", "move between letters"),
+            ("▲ ▼", "move · hold: keep moving"),
             ("●", "open the letter"),
-            ("Back", "last cell, returns"),
+            ("▲ + ▼", "back"),
             ("hold ● 3 s", "back to Android"),
         ],
         Screen::PowerOff => &[
@@ -247,25 +291,25 @@ fn guide(screen: Screen) -> &'static [(&'static str, &'static str)] {
         Screen::Bluetooth => &[
             ("▲ ▼", "move"),
             ("●", "select"),
-            ("Back", "first and last row"),
+            ("▲ + ▼", "back"),
             ("hold ● 3 s", "back to Android"),
         ],
         Screen::Battery => &[
             ("▲ ▼", "move"),
             ("●", "select"),
             ("Wi-Fi test", "connect, fetch, off again"),
+            ("▲ + ▼", "back"),
             ("hold ● 3 s", "back to Android"),
         ],
         Screen::Help => &[
-            ("▲ ▼", "move"),
-            ("●", "select (Back returns)"),
+            ("● or ▲ + ▼", "back"),
             ("screen off", "keys play music"),
             ("hold ● 3 s", "back to Android"),
         ],
         _ => &[
-            ("▲ ▼", "move"),
+            ("▲ ▼", "move · hold: keep moving"),
             ("● select", "a song plays at once"),
-            ("Back", "first and last row"),
+            ("▲ + ▼", "back"),
             ("hold ● 3 s", "back to Android"),
         ],
     }
@@ -348,11 +392,18 @@ fn list_len(lib: &Library, kind: ListKind) -> usize {
 /// (name, value-on-the-right, screen to open) for every entry of a list.
 fn list_items(lib: &Library, kind: ListKind) -> Vec<(String, String, Screen)> {
     match kind {
+        // An artist with one album opens that album (its Play all is the artist's).
         ListKind::Artists => lib
             .artists
             .iter()
             .enumerate()
-            .map(|(i, a)| (a.name.clone(), format!("{}", a.n_tracks), Screen::Artist(i)))
+            .map(|(i, a)| {
+                let to = match a.albums.as_slice() {
+                    [only] => Screen::Album(*only),
+                    _ => Screen::Artist(i),
+                };
+                (a.name.clone(), format!("{}", a.n_tracks), to)
+            })
             .collect(),
         ListKind::Albums => lib
             .albums
@@ -379,12 +430,21 @@ fn kind_name(kind: ListKind) -> &'static str {
     }
 }
 
-/// Letters that have entries, in row order ('#' first).
-fn letters(lib: &Library, kind: ListKind) -> Vec<char> {
-    let mut v: Vec<char> = list_items(lib, kind).iter().map(|x| letter_of(&x.0)).collect();
-    v.sort_by_key(|&c| if c == '#' { 0 } else { c as u32 });
-    v.dedup();
-    v
+/// Letters that have entries, in row order ('#' first), each with where it opens: the
+/// names under it, or straight the only one.
+fn letters(lib: &Library, kind: ListKind) -> Vec<(char, Screen)> {
+    let mut v: Vec<(char, usize, Screen)> = Vec::new();
+    for (name, _, to) in list_items(lib, kind) {
+        let c = letter_of(&name);
+        match v.iter_mut().find(|x| x.0 == c) {
+            Some(x) => x.1 += 1,
+            None => v.push((c, 1, to)),
+        }
+    }
+    v.sort_by_key(|x| if x.0 == '#' { 0 } else { x.0 as u32 });
+    v.into_iter()
+        .map(|(c, n, only)| (c, if n == 1 { only } else { Screen::List(kind, Some(c)) }))
+        .collect()
 }
 
 /// How many installed modules Home lists by name (the rest are under Apps ›).
@@ -392,7 +452,7 @@ const HOME_MODULES: usize = 3;
 
 impl Ui {
     pub fn new() -> Ui {
-        Ui { screen: Screen::Home, sel: 0, top: 0, stack: Vec::new() }
+        Ui { screen: Screen::Home, sel: 0, top: 0, stack: Vec::new(), memo: Vec::new(), nav: NavPrefs::read() }
     }
 
     fn rows(&self, v: &View) -> Vec<Row> {
@@ -409,13 +469,24 @@ impl Ui {
                     _ => "",
                 };
                 let np_meta = match (st.stream, v.modules.stream_status()) {
-                    (true, Some(r)) => r.title,
-                    _ => st.track.as_ref().map(|t| lib.title_of(t)).unwrap_or_else(|| "nothing".into()),
+                    (true, Some(r)) => Some(r.title),
+                    _ => st.track.as_ref().map(|t| lib.title_of(t)),
                 };
-                let mut rows = vec![
-                    Row::new("Music ›", RowAct::Go(Screen::Music)).meta(music_meta),
-                    Row::new("Now playing", RowAct::Go(Screen::NowPlaying)).meta(np_meta),
-                ];
+                // One row for "what plays": it opens Now playing while something plays, and
+                // is "Continue" (plays + opens it) when it is paused or only remembered, so
+                // Home › Continue is one ● instead of Music › Resume.
+                let np = match (st.state, np_meta, v.resume_track) {
+                    (PlayState::Playing, meta, _) => {
+                        Row::new("Now playing", RowAct::Go(Screen::NowPlaying)).meta(meta.unwrap_or_default())
+                    }
+                    (PlayState::Paused, Some(meta), _) => {
+                        Row::new("Continue", RowAct::Do(Request::Resume)).meta(meta)
+                    }
+                    (_, _, Some(t)) => Row::new("Continue", RowAct::Do(Request::Resume))
+                        .meta(format!("{} · {}", lib.title_of(t), mmss(v.resume_pos_ms))),
+                    _ => Row::new("Now playing", RowAct::Go(Screen::NowPlaying)).meta("nothing"),
+                };
+                let mut rows = vec![Row::new("Music ›", RowAct::Go(Screen::Music)).meta(music_meta), np];
                 // Installed modules show on Home under their own names (a few of them), so a new
                 // one is found where the person looks first; all of them stay under Apps ›.
                 let names = v.modules.names();
@@ -428,9 +499,10 @@ impl Ui {
                         n => n.to_string(),
                     }));
                 }
+                // Bluetooth above Battery: it is the one you change (headphones).
                 rows.extend([
-                    Row::new("Battery", RowAct::Go(Screen::Battery)).meta(pct(v.battery)),
                     Row::new("Bluetooth ›", RowAct::Go(Screen::Bluetooth)).meta(v.bt.summary()),
+                    Row::new("Battery", RowAct::Go(Screen::Battery)).meta(pct(v.battery)),
                     Row::new("Help", RowAct::Go(Screen::Help)).meta("hold ▲+▼"),
                     Row::new("Back to Android", RowAct::Do(Request::Leave)).meta("about 30 s"),
                     Row::new("Power off", RowAct::Go(Screen::PowerOff)),
@@ -478,15 +550,14 @@ impl Ui {
                     Some(o) => format!("auto · {}", o.short()),
                     None => "auto · none plugged in".into(),
                 };
-                r.push(Row::new("Output", RowAct::Do(Request::None)).meta(out));
+                // Where "switch to Bluetooth headphones" is looked for: opens Bluetooth.
+                r.push(Row::new("Output ›", RowAct::Go(Screen::Bluetooth)).meta(out));
                 r.push(back());
                 r
             }
             Screen::Letters(kind) => {
-                let mut r: Vec<Row> = letters(lib, kind)
-                    .into_iter()
-                    .map(|c| Row::new(c.to_string(), RowAct::Go(Screen::List(kind, Some(c)))))
-                    .collect();
+                let mut r: Vec<Row> =
+                    letters(lib, kind).into_iter().map(|(c, to)| Row::new(c.to_string(), RowAct::Go(to))).collect();
                 r.push(back());
                 r
             }
@@ -641,9 +712,16 @@ impl Ui {
         // Never stack two players: going to Now playing from inside it is a no-op,
         // and leaving it returns to where the song was picked.
         self.stack.retain(|(x, _, _)| *x != s);
+        self.remember();
         self.stack.push((self.screen, self.sel, self.top));
         self.screen = s;
-        // Lists start on the first real row, not on Back.
+        // A library list opens where it was left this session ...
+        if let Some(&(_, sel, top)) = self.memo.iter().find(|m| m.0 == s) {
+            self.sel = sel;
+            self.top = top;
+            return;
+        }
+        // ... else on the first real row, not on Back.
         self.sel = match s {
             Screen::Music
             | Screen::List(..)
@@ -657,7 +735,36 @@ impl Ui {
         self.top = 0;
     }
 
+    /// Keeps the current library list's place (see `memo`).
+    fn remember(&mut self) {
+        if remembers(self.screen) {
+            let s = self.screen;
+            self.memo.retain(|m| m.0 != s);
+            if self.memo.len() >= MEMO_MAX {
+                self.memo.remove(0);
+            }
+            self.memo.push((s, self.sel, self.top));
+        }
+    }
+
+    /// ▲ + ▼ in a menu: one level up, like the Back row. Nothing on Home itself.
+    pub fn back_level(&mut self) {
+        if self.screen != Screen::Home || !self.stack.is_empty() {
+            self.back();
+        }
+    }
+
+    /// The "look" (● ● with the screen off while music is loaded): show Now playing; ● ●
+    /// from it returns to where you were. Help is not kept under it.
+    pub fn show_player(&mut self) {
+        if self.screen == Screen::Help {
+            self.back();
+        }
+        self.go(Screen::NowPlaying);
+    }
+
     pub fn back(&mut self) {
+        self.remember();
         if let Some((s, sel, top)) = self.stack.pop() {
             self.screen = s;
             self.sel = sel;
@@ -1194,7 +1301,7 @@ impl Ui {
             ("tap ▲ / ▼", "louder / quieter"),
             ("hold ▲ / ▼", "next / previous song"),
             ("●", "play / pause"),
-            ("● ●", "the menu"),
+            ("● ●", "menu · dark: what plays"),
             ("▲ + ▼", "play / pause"),
             ("▼ + ● short", "save this song"),
             ("headset 1×", "play / pause"),
@@ -1212,7 +1319,9 @@ impl Ui {
         y += SMALL_LH;
         for (k, m) in [
             ("▲ ▼", "move"),
+            ("hold ▲ / ▼", "keep moving"),
             ("●", "select · lists have Back"),
+            ("▲ + ▼", "back one level"),
             ("▼ + ● short", "save the song that plays"),
             ("hold ▼ + ●", "nothing (Samsung force restart)"),
         ] {
