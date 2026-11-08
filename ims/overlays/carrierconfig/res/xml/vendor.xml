@@ -40,6 +40,15 @@
              8 s dedicated-bearer wait expires and ImsStack releases every call. -->
         <boolean name="imsvoice.voice_on_default_bearer_supported_bool" value="true" />
         <boolean name="imsvoice.audio_evs_support_bool" value="false" />
+        <!-- Stock Samsung IMS User-Agent format ("[PRODUCT_MODEL]-[BUILD_VERSION] Samsung IMS
+             6.0", the imsprofile.json default): Telia answered ImsStack's default
+             "samsung_SM-A528B_Android17_<build id>" with a bare 403 to the first REGISTER and
+             challenged (401) the stock format (verified 2026-11-08 on 248-01). -->
+        <string name="ims.ims_user_agent_string">#MODEL#-A528BXXSAGYA2 Samsung IMS 6.0</string>
+        <!-- TCP MSS 1300 (1440 - ESP/TCP/IPv6 overhead), as stock's mss_size=1300: with the
+             PDN's 1500 the IPsec-protected REGISTER (2.2 kB, two segments) never arrived and the
+             P-CSCF reset the connection; with 1440 it got 200 OK (verified on 248-01). -->
+        <int name="ims.max_allowed_network_mtu_int" value="1440" />
     </carrier_config>
 
     <!-- Elisa Eesti -->
@@ -48,6 +57,15 @@
         <boolean name="imsvoice.carrier_volte_roaming_available_bool" value="false" />
         <boolean name="imsvoice.voice_on_default_bearer_supported_bool" value="true" />
         <boolean name="imsvoice.audio_evs_support_bool" value="false" />
+        <!-- Stock Samsung IMS User-Agent format ("[PRODUCT_MODEL]-[BUILD_VERSION] Samsung IMS
+             6.0", the imsprofile.json default): Telia answered ImsStack's default
+             "samsung_SM-A528B_Android17_<build id>" with a bare 403 to the first REGISTER and
+             challenged (401) the stock format (verified 2026-11-08 on 248-01). -->
+        <string name="ims.ims_user_agent_string">#MODEL#-A528BXXSAGYA2 Samsung IMS 6.0</string>
+        <!-- TCP MSS 1300 (1440 - ESP/TCP/IPv6 overhead), as stock's mss_size=1300: with the
+             PDN's 1500 the IPsec-protected REGISTER (2.2 kB, two segments) never arrived and the
+             P-CSCF reset the connection; with 1440 it got 200 OK (verified on 248-01). -->
+        <int name="ims.max_allowed_network_mtu_int" value="1440" />
     </carrier_config>
 
     <!-- Tele2 Eesti -->
@@ -56,5 +74,14 @@
         <boolean name="imsvoice.carrier_volte_roaming_available_bool" value="false" />
         <boolean name="imsvoice.voice_on_default_bearer_supported_bool" value="true" />
         <boolean name="imsvoice.audio_evs_support_bool" value="false" />
+        <!-- Stock Samsung IMS User-Agent format ("[PRODUCT_MODEL]-[BUILD_VERSION] Samsung IMS
+             6.0", the imsprofile.json default): Telia answered ImsStack's default
+             "samsung_SM-A528B_Android17_<build id>" with a bare 403 to the first REGISTER and
+             challenged (401) the stock format (verified 2026-11-08 on 248-01). -->
+        <string name="ims.ims_user_agent_string">#MODEL#-A528BXXSAGYA2 Samsung IMS 6.0</string>
+        <!-- TCP MSS 1300 (1440 - ESP/TCP/IPv6 overhead), as stock's mss_size=1300: with the
+             PDN's 1500 the IPsec-protected REGISTER (2.2 kB, two segments) never arrived and the
+             P-CSCF reset the connection; with 1440 it got 200 OK (verified on 248-01). -->
+        <int name="ims.max_allowed_network_mtu_int" value="1440" />
     </carrier_config>
 </carrier_config_list>
