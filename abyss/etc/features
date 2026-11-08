@@ -7,6 +7,8 @@ menu:get
 media:stream
 media:stream:radio-v1
 media:stream:http
+media:stream:screen
+menu:header
 capture:fields
 post:capture
 needs:media

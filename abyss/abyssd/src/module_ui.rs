@@ -1,10 +1,12 @@
 //! Drawing module screens (modules.rs `ScreenView`) in the recovery look of ui.rs: a
 //! letter-spaced accent title, an optional dim subline, text lines or rows with "▸" + accent on
 //! the selected one, a dim value right, and the key-guide footer. Same measures as ui.rs.
+//! A list screen's `header` (menu:header) is drawn between the title and the rows, each line in
+//! its `style`: big (the song), plain, dim (details), head (a small spaced accent heading).
 
 use crate::display::Canvas;
 use crate::font::{FontData, BIG, BODY, BODY_BOLD, SMALL};
-use crate::modules::{Body, ScreenView};
+use crate::modules::{Body, Line, ScreenView, Style};
 use crate::ui::{ACCENT, BG, DIM, LINE, TEXT, WARN};
 
 const MARGIN: i32 = 64;
@@ -29,6 +31,16 @@ fn wrap(f: &FontData, text: &str, max_w: u32) -> Vec<String> {
         lines.push(cur);
     }
     lines.into_iter().map(|l| f.ellipsize(&l, max_w)).collect()
+}
+
+/// At most `n` wrapped lines; what does not fit ends the last one with "…".
+fn wrap_n(f: &FontData, text: &str, max_w: u32, n: usize) -> Vec<String> {
+    let mut l = wrap(f, text, max_w);
+    if l.len() > n {
+        let rest = l.split_off(n - 1).join(" ");
+        l.push(f.ellipsize(&rest, max_w));
+    }
+    l
 }
 
 fn footer(cv: &mut Canvas, lines: &[(String, String)]) -> i32 {
@@ -75,6 +87,46 @@ fn guide_lines(v: &ScreenView, default: &[(&str, &str)]) -> Vec<(String, String)
     g
 }
 
+/// Letter-spaced text (titles and headings), returns the width drawn.
+fn spaced(cv: &mut Canvas, f: &FontData, x0: i32, y: i32, t: &str, c: u32, gap: i32) -> i32 {
+    let mut x = x0;
+    for ch in t.chars() {
+        x += f.draw(cv, x, y, &ch.to_string(), c) as i32 + gap;
+    }
+    x - x0
+}
+
+/// Header lines from `y`, never below `limit`; returns the y after them.
+fn header_lines(cv: &mut Canvas, lines: &[Line], mut y: i32, limit: i32, max_w: u32) -> i32 {
+    for (i, l) in lines.iter().enumerate() {
+        let (font, c, lh, max_lines) = match l.style {
+            Style::Big => (&BIG, TEXT, 96, 2),
+            Style::Plain => (&BODY, TEXT, 64, 1),
+            Style::Dim => (&BODY, DIM, 64, 2),
+            Style::Head => (&SMALL, ACCENT, SMALL_LH + 6, 1),
+        };
+        if l.style == Style::Head && i > 0 {
+            y += 28;
+        }
+        if y + lh > limit {
+            break;
+        }
+        if l.style == Style::Head {
+            spaced(cv, font, MARGIN, y, &font.ellipsize(&l.text, max_w), c, 3);
+            y += lh;
+            continue;
+        }
+        for wl in wrap_n(font, &l.text, max_w, max_lines) {
+            if y + lh > limit {
+                break;
+            }
+            font.draw(cv, MARGIN, y, &wl, c);
+            y += lh;
+        }
+    }
+    y
+}
+
 const LIST_GUIDE: &[(&str, &str)] = &[("▲ ▼", "move"), ("●", "select"), ("Back", "last row")];
 
 /// A module screen. `msg`: the daemon's feedback line, if any.
@@ -83,6 +135,10 @@ pub fn draw(cv: &mut Canvas, v: &ScreenView, msg: Option<(&str, u32)>) {
     let max_w = (cv.w as i32 - 2 * MARGIN) as u32;
     let mut y = title(cv, &v.title, v.sub.as_deref());
     let foot = footer(cv, &guide_lines(v, LIST_GUIDE));
+    if !v.header.is_empty() {
+        // Leave room for three rows under the header.
+        y = header_lines(cv, &v.header, y - 12, foot - 30 - SMALL_LH - 3 * ROW_H, max_w) + 24;
+    }
     if let Some((n, warn)) = &v.note {
         for l in wrap(&BODY, n, max_w).into_iter().take(3) {
             BODY.draw(cv, MARGIN, y, &l, if *warn { WARN } else { DIM });
@@ -166,7 +222,9 @@ pub fn draw_now_playing(
         y += 80;
     }
     let foot = footer(cv, &guide_lines(v, default_guide));
-    if let Body::Text(lines, _) = &v.body {
+    if !v.header.is_empty() {
+        y = header_lines(cv, &v.header, y, foot - 2 * SMALL_LH, max_w);
+    } else if let Body::Text(lines, _) = &v.body {
         for (i, l) in lines.iter().enumerate() {
             let (font, c, lh, max_lines) = match i {
                 0 => (&BIG, TEXT, 96, 2),

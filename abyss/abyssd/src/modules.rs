@@ -15,20 +15,26 @@
 //!   `error`, `guide`, `when`/`unless` lines, the hole grammar with `:time :clock :dur`, the
 //!   `stream` built-in (radio-v1 / http, radio_source.rs) with `$stream.*` and `show`, and
 //!   the manifest's `capture = { line; kind; fields; }`.
+//! - `menu:header`: a list screen's `header` lines (with `style`) above its rows.
+//!   `media:stream:screen`: a stream item may pass its row on (`as`), name the station's `now`
+//!   link (`$stream.next`), and `show` a list screen with a header: that screen opens instead of
+//!   Now Playing, lists may come `from = "$stream.…"`, and Now Playing draws the header.
 //! - **Features** (§6): [`FEATURES`] is exactly what this host implements; the ROM ships the
 //!   same list as /system_ext/etc/abyss/features for the installer.
 //!
 //! Everything here runs on the main thread except fetches, which run on short-lived threads
 //! holding a Wi-Fi lease and report back through a poke socket (the bt.rs pattern).
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::os::fd::{AsFd, BorrowedFd};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use log::{info, warn};
 use serde_json::{Map, Value};
@@ -49,6 +55,8 @@ pub const FEATURES: &[&str] = &[
     "media:stream",
     "media:stream:radio-v1",
     "media:stream:http",
+    "media:stream:screen",
+    "menu:header",
     "capture:fields",
     "post:capture",
     "needs:media",
@@ -60,6 +68,8 @@ pub const API_LEVELS: &[i64] = &[1];
 const GET_MAX: usize = 256 * 1024;
 /// Shortest `every`.
 const EVERY_MIN_MS: u64 = 5_000;
+/// One `$stream` value serves every hole of a draw (status() copies the song lists).
+const STREAM_CACHE_MS: u128 = 250;
 /// Names an `as` may not take.
 const RESERVED_NS: &[&str] =
     &["state", "settings", "battery", "time", "value", "data", "row", "stream", "abyss", "pub"];
@@ -567,6 +577,53 @@ pub struct RowView {
     pub dim: bool,
 }
 
+/// How a header line is drawn (`style`, menu:header).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Style {
+    /// Body text (the default).
+    Plain,
+    /// Large: the song's artist and title.
+    Big,
+    /// Body text, dim: details.
+    Dim,
+    /// A small accent heading over what follows ("UP NEXT"); left out when nothing follows.
+    Head,
+}
+
+impl Style {
+    fn parse(s: Option<&str>) -> Style {
+        match s {
+            Some("big") => Style::Big,
+            Some("dim") => Style::Dim,
+            Some("head") => Style::Head,
+            _ => Style::Plain,
+        }
+    }
+}
+
+/// One header line as the UI draws it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Line {
+    pub text: String,
+    pub style: Style,
+}
+
+/// Drops headings that nothing follows: one right before another heading, and (`at_end`, Now
+/// Playing, where no rows follow the header) one at the end.
+pub fn drop_bare_heads(lines: &mut Vec<Line>, at_end: bool) {
+    let mut out: Vec<Line> = Vec::with_capacity(lines.len());
+    for l in lines.drain(..) {
+        if l.style == Style::Head && out.last().is_some_and(|p| p.style == Style::Head) {
+            out.pop();
+        }
+        out.push(l);
+    }
+    while at_end && out.last().is_some_and(|l| l.style == Style::Head) {
+        out.pop();
+    }
+    *lines = out;
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Body {
     /// Rows (the Back row included, last).
@@ -579,6 +636,8 @@ pub enum Body {
 pub struct ScreenView {
     pub title: String,
     pub sub: Option<String>,
+    /// A list screen's `header` lines (menu:header), drawn above the rows; empty otherwise.
+    pub header: Vec<Line>,
     pub body: Body,
     /// From the screen's `guide`; empty = abyssd's own.
     pub guide: Vec<(String, String)>,
@@ -593,11 +652,12 @@ pub enum Effect {
     None,
     /// Leave the module screens (Back on the first one).
     Exit,
-    /// A stream started: hand this feed to the player; open Now Playing.
-    Play(Arc<Feed>),
+    /// A stream started: hand this feed to the player; open Now Playing (`player`), or stay on
+    /// the module screens, where the stream's `show` list screen was just opened.
+    Play { feed: Arc<Feed>, player: bool },
     /// The picked stream is the one already playing: keep it, unpause if paused, open Now
-    /// Playing.
-    Continue,
+    /// Playing (`player`) or stay on the module screens (its `show` list screen is open).
+    Continue { player: bool },
     /// `media = "play|pause|toggle|next|prev"`.
     Media(String),
     /// `say`, `buzz`, `show` built-ins: the text (the daemon has no voice yet: shown).
@@ -647,6 +707,8 @@ pub struct Host {
     stream: Option<StreamSession>,
     /// Facts for `$battery.*` (set by the daemon).
     pub battery: Value,
+    /// `$stream` as last built, and when (one value per draw; see STREAM_CACHE_MS).
+    stream_cache: RefCell<Option<(Instant, Rc<Value>)>>,
 }
 
 impl Host {
@@ -665,6 +727,7 @@ impl Host {
             poke_w: Arc::new(Mutex::new(poke_w)),
             stream: None,
             battery: Value::Null,
+            stream_cache: RefCell::new(None),
         })
     }
 
@@ -781,7 +844,7 @@ impl Host {
         let mut sc = Scope::new();
         sc.push("settings", &settings);
         sc.push("battery", &self.battery);
-        if let Some(s) = stream.as_ref() {
+        if let Some(s) = stream.as_deref() {
             sc.push("stream", s);
         }
         for (n, v) in &f.binds {
@@ -795,12 +858,32 @@ impl Host {
     }
 
     /// `$stream.*` while this module's stream is the player's source.
-    fn stream_value(&self, module: Option<usize>) -> Option<Value> {
+    fn stream_value(&self, module: Option<usize>) -> Option<Rc<Value>> {
         let s = self.stream.as_ref()?;
         if module.is_some_and(|m| m != s.module) {
             return None;
         }
-        Some(stream_json(&s.radio.status(), s.paused))
+        let mut c = self.stream_cache.borrow_mut();
+        if let Some((at, v)) = c.as_ref() {
+            if at.elapsed().as_millis() < STREAM_CACHE_MS {
+                return Some(v.clone());
+            }
+        }
+        let v = Rc::new(stream_json(&s.radio.status(), s.paused));
+        *c = Some((Instant::now(), v.clone()));
+        Some(v)
+    }
+
+    /// Whether the module screen in front changes by itself (it shows `$stream` in a header
+    /// while the stream plays): the daemon redraws it once a second while the screen is on.
+    pub fn live(&self) -> bool {
+        let Some(s) = self.stream.as_ref().filter(|s| !s.paused) else { return false };
+        match self.stack.last().map(|f| &f.place) {
+            Some(Place::Screen { module, screen }) if *module == s.module => {
+                self.screen_def(*module, screen).and_then(|d| d.get("header")).is_some()
+            }
+            _ => false,
+        }
     }
 
     /// The URL a frame's `get` fetches now (None = the screen has no `get`).
@@ -904,8 +987,14 @@ impl Host {
             let mut v = self.view_of(f);
             v.body = match v.body {
                 Body::Text(l, _) => Body::Text(l, Vec::new()),
-                b => b,
+                // A list `show` screen (media:stream:screen): Now Playing draws its header only,
+                // with the player's own keys (its guide is for the list).
+                Body::Rows(_) => {
+                    v.guide.clear();
+                    Body::Text(Vec::new(), Vec::new())
+                }
             };
+            drop_bare_heads(&mut v.header, true);
             return Some(v);
         }
         let st = s.radio.status();
@@ -920,7 +1009,15 @@ impl Host {
             None => {}
         }
         lines.extend(st.next.first().map(|n| format!("Coming up: {}", n.line())));
-        Some(ScreenView { title: st.title.clone(), sub: None, body: Body::Text(lines, Vec::new()), guide: Vec::new(), note: None, sel: 0 })
+        Some(ScreenView {
+            title: st.title.clone(),
+            sub: None,
+            header: Vec::new(),
+            body: Body::Text(lines, Vec::new()),
+            guide: Vec::new(),
+            note: None,
+            sel: 0,
+        })
     }
 
     fn view_of(&self, f: &Frame) -> ScreenView {
@@ -938,7 +1035,7 @@ impl Host {
                     (_, n) => Some((format!("{n} module(s) could not be opened in this build (Settings › Abyss › Modules)."), true)),
                 };
                 rows.push(back);
-                ScreenView { title: "APPS".into(), sub: None, body: Body::Rows(rows), guide: Vec::new(), note, sel: f.sel }
+                ScreenView { title: "APPS".into(), sub: None, header: Vec::new(), body: Body::Rows(rows), guide: Vec::new(), note, sel: f.sel }
             }
             Place::Category(c) => {
                 let mut rows: Vec<RowView> = self
@@ -948,7 +1045,7 @@ impl Host {
                     .collect();
                 rows.push(back);
                 let title = CATEGORIES.iter().find(|x| x.0 == c).map(|x| x.1).unwrap_or("APPS").to_uppercase();
-                ScreenView { title, sub: None, body: Body::Rows(rows), guide: Vec::new(), note: None, sel: f.sel }
+                ScreenView { title, sub: None, header: Vec::new(), body: Body::Rows(rows), guide: Vec::new(), note: None, sel: f.sel }
             }
             Place::Screen { module, screen } => self.module_view(f, *module, screen),
         }
@@ -974,9 +1071,12 @@ impl Host {
                 let reverse = spec.get("order").and_then(Value::as_str) == Some("reverse");
                 let label_t = row.get("label").and_then(Value::as_str).unwrap_or("?");
                 let sub_t = row.get("sub").and_then(Value::as_str);
-                for (pi, page) in f.pages.iter().enumerate() {
+                // `$data.…` lists come page by page; any other (`$stream.…`) once, from the scope.
+                let pages: Vec<Option<&Value>> =
+                    if from.starts_with("$data") { f.pages.iter().map(Some).collect() } else { vec![None] };
+                for (pi, page) in pages.into_iter().enumerate() {
                     let mut pf = f.clone();
-                    pf.pages = vec![page.clone()];
+                    pf.pages = page.cloned().into_iter().collect();
                     let arr = self.with_scope(&pf, None, |sc| single(from, sc).and_then(Value::as_array).cloned());
                     let Some(arr) = arr else { continue };
                     let mut idx: Vec<usize> = (0..arr.len()).collect();
@@ -1016,12 +1116,43 @@ impl Host {
         })
     }
 
+    /// `lines` / `header` entries: a string, or `{ text; when?; unless?; style?; }`; a line whose
+    /// holes are not all present, or whose `when` / `unless` says so, is left out.
+    fn lines_of(&self, f: &Frame, lines: Option<&Value>) -> Vec<Line> {
+        let mut out = Vec::new();
+        for l in lines.and_then(Value::as_array).into_iter().flatten() {
+            let (t, when, unless, style) = match l {
+                Value::String(s) => (s.as_str(), None, None, None),
+                Value::Object(o) => (
+                    o.get("text").and_then(Value::as_str).unwrap_or(""),
+                    o.get("when").and_then(Value::as_str),
+                    o.get("unless").and_then(Value::as_str),
+                    o.get("style").and_then(Value::as_str),
+                ),
+                _ => continue,
+            };
+            let text = self.with_scope(f, None, |sc| {
+                let show = when.is_none_or(|w| truthy(single(w, sc))) && unless.is_none_or(|u| !truthy(single(u, sc)));
+                if show {
+                    fill(t, sc)
+                } else {
+                    None
+                }
+            });
+            if let Some(text) = text {
+                out.push(Line { text, style: Style::parse(style) });
+            }
+        }
+        out
+    }
+
     fn module_view(&self, f: &Frame, module: usize, screen: &str) -> ScreenView {
         let back = RowView { label: "Back".into(), meta: String::new(), dim: true };
         let Some(def) = self.screen_def(module, screen) else {
             return ScreenView {
                 title: self.modules[module].name.to_uppercase(),
                 sub: None,
+                header: Vec::new(),
                 body: Body::Rows(vec![back]),
                 guide: Vec::new(),
                 note: Some((format!("This module has no screen '{screen}'."), true)),
@@ -1042,45 +1173,32 @@ impl Host {
         let kind = text("kind").unwrap_or("list");
         let body = match kind {
             "text" => {
-                let mut lines = Vec::new();
-                if !(has_get && f.pages.is_empty()) {
-                    for l in def.get("lines").and_then(Value::as_array).into_iter().flatten() {
-                        let (t, when, unless) = match l {
-                            Value::String(s) => (s.as_str(), None, None),
-                            Value::Object(o) => (
-                                o.get("text").and_then(Value::as_str).unwrap_or(""),
-                                o.get("when").and_then(Value::as_str),
-                                o.get("unless").and_then(Value::as_str),
-                            ),
-                            _ => continue,
-                        };
-                        let show = self.with_scope(f, None, |sc| {
-                            when.is_none_or(|w| truthy(single(w, sc))) && unless.is_none_or(|u| !truthy(single(u, sc)))
-                        });
-                        if !show {
-                            continue;
-                        }
-                        if let Some(s) = self.with_scope(f, None, |sc| fill(t, sc)) {
-                            lines.push(s);
-                        }
-                    }
-                }
+                let lines = if has_get && f.pages.is_empty() {
+                    Vec::new()
+                } else {
+                    self.lines_of(f, def.get("lines")).into_iter().map(|l| l.text).collect()
+                };
                 Body::Text(lines, vec![back])
             }
             "list" => {
                 let mut rows: Vec<RowView> = self.items_of(f, def).into_iter().map(|(r, _)| r).collect();
-                let empty = rows.is_empty() && f.load == Load::Ready;
+                // A list from `$data` is empty once loaded; one from `$stream` (no get) at once.
+                let from_scope = def.get("items").is_some_and(Value::is_object) && !has_get;
+                let empty = rows.is_empty() && (f.load == Load::Ready || from_scope);
                 if let Some(m) = self.more_row(f, def) {
                     rows.push(m);
                 }
                 rows.push(back);
+                let mut header = if has_get && f.pages.is_empty() { Vec::new() } else { self.lines_of(f, def.get("header")) };
+                drop_bare_heads(&mut header, false);
                 let note = note.or_else(|| empty.then(|| (text("empty").unwrap_or("Nothing here.").to_string(), false)));
-                return ScreenView { title, sub, body: Body::Rows(rows), guide, note, sel: f.sel };
+                return ScreenView { title, sub, header, body: Body::Rows(rows), guide, note, sel: f.sel };
             }
             _ => {
                 return ScreenView {
                     title,
                     sub,
+                    header: Vec::new(),
                     body: Body::Rows(vec![back]),
                     guide,
                     note: Some(("This screen needs a newer IchthysOS.".into(), true)),
@@ -1088,7 +1206,7 @@ impl Host {
                 }
             }
         };
-        ScreenView { title, sub, body, guide, note, sel: f.sel }
+        ScreenView { title, sub, header: Vec::new(), body, guide, note, sel: f.sel }
     }
 
     fn row_count(&self) -> usize {
@@ -1168,7 +1286,9 @@ impl Host {
                 let row = def.get("items").and_then(|s| s.get("row")).cloned().unwrap_or(Value::Null);
                 let from = def.get("items").and_then(|s| s.get("from")).and_then(Value::as_str).unwrap_or("");
                 let mut pf = f.clone();
-                pf.pages = f.pages.get(pi).cloned().into_iter().collect();
+                if from.starts_with("$data") {
+                    pf.pages = f.pages.get(pi).cloned().into_iter().collect();
+                }
                 let el = self.with_scope(&pf, None, |sc| single(from, sc).and_then(|a| a.get(i)).cloned());
                 (row, el)
             }
@@ -1188,7 +1308,15 @@ impl Host {
             return self.back();
         }
         if let Some(st) = item.get("stream") {
-            return self.start_stream(f, module, st);
+            // media:stream:screen: `as` passes the picked row on to the stream's holes and its
+            // `show` screen, as for goto.
+            let mut sf = f.clone();
+            if let (Some(name), Some(el)) = (s("as"), el.clone()) {
+                if !RESERVED_NS.contains(&name) {
+                    sf.binds.push((name.to_string(), el));
+                }
+            }
+            return self.start_stream(&sf, module, st);
         }
         if let Some(m) = s("media") {
             return Effect::Media(m.to_string());
@@ -1220,21 +1348,40 @@ impl Host {
         // The same station in the same format is already the stream: keep it (no new prebuffer,
         // no gap), just show it, like Resume does for a library track.
         let key = (cfg.tag.clone(), cfg.format.clone());
+        let show = st.get("show").and_then(Value::as_str).filter(|sh| self.screen_def(module, sh).is_some());
+        // A list screen as `show` (media:stream:screen) opens on the module screens instead of
+        // Now Playing; Now Playing draws its header.
+        let show_list = show
+            .filter(|sh| self.screen_def(module, sh).and_then(|d| d.get("kind")).and_then(Value::as_str).unwrap_or("list") == "list");
         if self.stream.as_ref().is_some_and(|s| s.module == module && s.key == key) {
-            return Effect::Continue;
+            if let Some(sh) = show_list {
+                self.open_show(module, sh, f.binds.clone());
+            }
+            return Effect::Continue { player: show_list.is_none() };
         }
         self.stop_stream();
-        let show = st.get("show").and_then(Value::as_str).filter(|sh| self.screen_def(module, sh).is_some());
         let frame = show.map(|sh| Frame::new(Place::Screen { module, screen: sh.to_string() }, f.binds.clone()));
         match Radio::start(cfg, self.net.clone()) {
             Ok(radio) => {
                 let feed = radio.feed();
                 self.stream = Some(StreamSession { module, key, radio, frame, paused: false });
                 self.start_get(true, false); // the show screen's own data ("Coming up")
-                Effect::Play(feed)
+                if let Some(sh) = show_list {
+                    self.open_show(module, sh, f.binds.clone());
+                }
+                Effect::Play { feed, player: show_list.is_none() }
             }
             Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Effect::Unsupported(NEW_ADDRESS_TEXT.into()),
             Err(e) => Effect::Unsupported(format!("Can't play this: {e}")),
+        }
+    }
+
+    /// Opens the stream's list `show` screen on top of the module screens (not twice).
+    fn open_show(&mut self, module: usize, screen: &str, binds: Vec<(String, Value)>) {
+        let on_top = matches!(self.stack.last().map(|f| &f.place),
+            Some(Place::Screen { module: m, screen: s }) if *m == module && s == screen);
+        if !on_top {
+            self.push_screen(module, screen, binds);
         }
     }
 
@@ -1243,6 +1390,7 @@ impl Host {
         if let Some(s) = self.stream.as_mut() {
             s.paused = paused;
         }
+        self.stream_cache.replace(None);
     }
 
     pub fn stream_status(&self) -> Option<RadioStatus> {
@@ -1255,6 +1403,7 @@ impl Host {
 
     /// Ends the stream (another source took the player, or the person stopped it).
     pub fn stop_stream(&mut self) {
+        self.stream_cache.replace(None);
         if let Some(mut s) = self.stream.take() {
             let st = s.radio.status();
             info!(
@@ -1384,6 +1533,19 @@ pub fn stream_json(st: &RadioStatus, paused: bool) -> Value {
     }
     if let Some(s) = &st.song {
         o.insert("song".into(), Value::Object(s.fields.clone()));
+        // media:stream:screen: how long the song you hear still plays (its end - what you hear).
+        if let (Some(end), Some(t)) = (s.ends_at_ms, st.heard_ms) {
+            o.insert("left_ms".into(), Value::from((end - t).max(0)));
+        }
+    } else if st.other_on {
+        o.insert("jingle".into(), Value::Bool(true));
+    }
+    let songs = |l: &[radio_source::Song]| Value::Array(l.iter().map(|s| Value::Object(s.fields.clone())).collect());
+    if !st.played.is_empty() {
+        o.insert("played".into(), songs(&st.played));
+    }
+    if !st.coming.is_empty() {
+        o.insert("next".into(), songs(&st.coming));
     }
     Value::Object(o)
 }
@@ -1431,6 +1593,8 @@ pub fn stream_config(st: &Value, sc: &Scope) -> Result<Config, String> {
     let mut cfg = Config::new(audio);
     cfg.mode = mode;
     cfg.songs = filled("songs").and_then(|u| Url::parse(&u).ok());
+    // media:stream:screen: the station's `now` link keeps `$stream.next` ("Up next") known.
+    cfg.now = filled("now").and_then(|u| Url::parse(&u).ok());
     cfg.tag = filled("tag").unwrap_or_default();
     cfg.title = filled("title").unwrap_or_default();
     cfg.format = codec_hint(&format, mime.as_deref()).map(|_| format.clone()).unwrap_or(format);
@@ -1609,6 +1773,118 @@ mod tests {
         sc.push("stream", &empty);
         assert!(capture_of(&cap, &sc).is_err(), "no song: nothing saved");
         assert_eq!(static_kind("x-acme-thing"), "x-acme-thing");
+    }
+
+    #[test]
+    fn header_lines_styles_and_bare_heads() {
+        let mk = |t: &str, style| Line { text: t.into(), style };
+        let l0 = vec![mk("A", Style::Big), mk("UP NEXT", Style::Head), mk("PLAYED", Style::Head), mk("x", Style::Plain), mk("END", Style::Head)];
+        let mut l = l0.clone();
+        drop_bare_heads(&mut l, true);
+        assert_eq!(l, vec![mk("A", Style::Big), mk("PLAYED", Style::Head), mk("x", Style::Plain)]);
+        let mut l = l0;
+        drop_bare_heads(&mut l, false);
+        assert_eq!(l, vec![mk("A", Style::Big), mk("PLAYED", Style::Head), mk("x", Style::Plain), mk("END", Style::Head)], "rows follow the last one");
+        assert_eq!(Style::parse(Some("dim")), Style::Dim);
+        assert_eq!(Style::parse(Some("nope")), Style::Plain, "an unknown style draws plain");
+        assert_eq!(Style::parse(None), Style::Plain);
+    }
+
+    #[test]
+    fn stream_now_link_and_song_lists() {
+        let station = json!({"id": "hs", "name": "HS", "audio": {"mp3": {"url": "http://radio.example:8080/a/mp3"}},
+            "now_url": "http://radio.example:8080/api/v1/now/hs"});
+        let mut sc = Scope::new();
+        sc.push("station", &station);
+        let c = stream_config(&json!({"protocol": "radio-v1", "formats": "$station.audio", "now": "$station.now_url"}), &sc).unwrap();
+        assert_eq!(c.now.as_ref().map(|u| u.path().to_string()).as_deref(), Some("/api/v1/now/hs"));
+        let song = |id: i64, on: i64, end: Option<i64>| {
+            let mut v = json!({"play_id": id, "kind": "music", "artist": format!("A{id}"), "on_air_ms": on});
+            if let Some(e) = end {
+                v["ends_at_ms"] = json!(e);
+            }
+            radio_source::Song::from_json(&v).unwrap()
+        };
+        let st = RadioStatus {
+            tag: "hs".into(),
+            title: "HS".into(),
+            format: "mp3".into(),
+            codec: Some("MP3"),
+            phase: Phase::Playing,
+            song: Some(song(3, 3000, Some(10_000))),
+            other_on: false,
+            next: Vec::new(),
+            played: vec![song(2, 2000, None), song(1, 1000, None)],
+            coming: vec![song(4, 10_000, None)],
+            heard_ms: Some(4500),
+            buffered_s: 10.0,
+            prebuffer: 1.0,
+            latency_s: Some(20.0),
+            mode: Mode::Bursts,
+            asks: 1,
+            resets: 0,
+            stalls: 0,
+            last_error: None,
+        };
+        let v = stream_json(&st, false);
+        assert_eq!(v["left_ms"], json!(5500));
+        assert_eq!(v["played"][0]["artist"], "A2", "newest first");
+        assert_eq!(v["next"][0]["artist"], "A4");
+        assert!(v.get("jingle").is_none());
+        let mut sc = Scope::new();
+        sc.push("stream", &v);
+        assert_eq!(fill("$stream.left_ms:dur left", &sc).as_deref(), Some("0:05 left"));
+        let jingle = RadioStatus { song: None, other_on: true, played: Vec::new(), coming: Vec::new(), ..st };
+        let v = stream_json(&jingle, false);
+        assert_eq!(v["jingle"], json!(true));
+        assert!(v.get("left_ms").is_none() && v.get("played").is_none() && v.get("next").is_none(), "empty lists are left out");
+    }
+
+    #[test]
+    fn stream_show_list_screen() {
+        let root = std::env::temp_dir().join(format!("abyss-mod-show-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let store = root.join("store");
+        store_with(&store, "radio", "ready", &["apps", "menu:get", "media:stream", "media:stream:http", "media:stream:screen", "menu:header"]);
+        fs::write(store.join("radio/menu.json"), json!({"menu": 1, "start": "main", "screens": {
+            "main": {"title": "T", "items": [{"label": "Play", "stream": {"url": "http://127.0.0.1:9/a", "tag": "a", "title": "A", "show": "np"}}]},
+            "np": {"title": "$stream.title", "header": [
+                    {"text": "Not playing.", "unless": "$stream"},
+                    {"text": "$stream.song.artist", "style": "big"},
+                    {"text": "Starting...", "when": "$stream", "unless": "$stream.heard_ms", "style": "dim"},
+                    {"text": "UP NEXT", "style": "head", "when": "$stream.next.0"},
+                    "$stream.next.0.line",
+                    {"text": "PLAYED BEFORE", "style": "head"}],
+                "items": {"from": "$stream.played", "row": {"label": "$row.artist", "goto": "main", "as": "song"}},
+                "empty": "Nothing played yet.", "guide": "▲▼ scroll"}}}).to_string()).unwrap();
+        let (mods, errs) = load(&store, &root.join("settings"));
+        assert!(errs.is_empty(), "{errs:?}");
+        let net: Arc<dyn Network> = Arc::new(radio_source::OpenNetwork(Arc::new(crate::http::TcpTransport::default())));
+        let mut h = Host::new(mods, errs, net).unwrap();
+        h.open_direct(0);
+        assert!(matches!(h.select(), Effect::Play { player: false, .. }), "a list show screen opens on the module screens");
+        let v = h.view().unwrap();
+        assert_eq!(v.title, "A");
+        let texts: Vec<(&str, Style)> = v.header.iter().map(|l| (l.text.as_str(), l.style)).collect();
+        assert_eq!(texts, vec![("Starting...", Style::Dim), ("PLAYED BEFORE", Style::Head)]);
+        assert_eq!(v.body, Body::Rows(vec![RowView { label: "Back".into(), meta: String::new(), dim: true }]));
+        assert_eq!(v.note, Some(("Nothing played yet.".into(), false)), "a $stream list is empty at once");
+        assert!(h.live(), "a header screen of the playing stream redraws by itself");
+        // Now Playing draws the header, without a heading that nothing follows.
+        let np = h.now_playing_view().unwrap();
+        assert_eq!(np.header.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), vec!["Starting..."]);
+        assert_eq!(np.body, Body::Text(Vec::new(), Vec::new()));
+        assert!(np.guide.is_empty(), "the player's own keys, not the list's");
+        // Back, then the same stream again: kept, and its screen opens again (once).
+        assert!(matches!(h.select(), Effect::None), "Back from np");
+        assert_eq!(h.view().unwrap().title, "T");
+        assert!(matches!(h.select(), Effect::Continue { player: false }));
+        assert_eq!(h.view().unwrap().title, "A");
+        h.stop_stream();
+        assert!(!h.live());
+        let v = h.view().unwrap();
+        assert_eq!(v.header.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), vec!["Not playing.", "PLAYED BEFORE"]);
+        let _ = fs::remove_dir_all(&root);
     }
 
     fn store_with(dir: &Path, id: &str, status: &str, features: &[&str]) {

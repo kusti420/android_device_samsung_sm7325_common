@@ -157,22 +157,45 @@ public final class ModuleInstallTest {
         bad = parseErr(man.replace("\"capture:fields\" ];", "];"), files, pkg);
         check(bad != null && bad.contains("capture:fields"), "undeclared feature: " + bad);
         String menu = pkg.text("menu.nix");
-        bad = parseMenuErr(man, menu.replace("goto = \"tracklist\";", "goto = \"tracklst\";"),
-                pkg);
-        check(bad != null && bad.matches("menu\\.nix:\\d+:\\d+: screen 'tracklst'.*"),
+        bad = parseMenuErr(man, menu.replace("goto = \"song\";", "goto = \"sng\";"), pkg);
+        check(bad != null && bad.matches("menu\\.nix:\\d+:\\d+: screen 'sng'.*"),
                 "bad goto: " + bad);
         bad = parseMenuErr(man, menu.replace("$settings.format", "$settings.formt"), pkg);
         check(bad != null && bad.contains("no setting 'formt'"), "bad hole: " + bad);
+        // menu:header / media:stream:screen (contract §5.5, §5.6), when the module uses them.
+        if (menu.contains("header = [")) {
+            String noHeader = man.replace("\"menu:header\" ", "");
+            bad = parseMenuErr(noHeader, menu, pkg);
+            check(bad != null && bad.contains("uses `menu:header`"), "header needs its feature: "
+                    + bad);
+            bad = parseMenuErr(man, menu.replace("style = \"big\";", "style = \"loud\";"), pkg);
+            check(bad != null && bad.contains("style is big, plain, dim, head"), "bad style: " + bad);
+            String noScreen = man.replace("\"media:stream:screen\" ", "");
+            bad = parseMenuErr(noScreen, menu, pkg);
+            check(bad != null && bad.contains("uses `media:stream:screen`"),
+                    "stream screen needs its feature: " + bad);
+            bad = parseMenuErr(man, menu.replace("style = \"head\";", "style = \"head\"; x = 1;"),
+                    pkg);
+            check(bad != null && bad.contains("unknown key 'x' in a line"), "unknown line key: "
+                    + bad);
+            bad = parseMenuErr(man, menu.replace("show = \"radio\";", "show = \"stations\";"), pkg);
+            check(bad != null && bad.contains("or a list screen with a header"),
+                    "show needs a text screen or a header list: " + bad);
+            bad = parseMenuErr(man, menu.replace("from = \"$stream.played\";",
+                    "from = \"$streams.played\";"), pkg);
+            check(bad != null && bad.contains("items.from is"), "bad items.from: " + bad);
+        }
 
         // Install into a temp root, list, settings, uninstall.
         File root = Files.createTempDirectory("abyss-store").toFile();
         ModuleStore st = new ModuleStore(root);
         Map<String, Object> vals = new LinkedHashMap<>();
         vals.put("format", "mp3");
-        st.install(pkg, spec, vals, "touch", "gabbee-radio-0.1.0.abyssapp", 1794100000000L);
+        st.install(pkg, spec, vals, "touch", "gabbee-radio-" + spec.version + ".abyssapp",
+                1794100000000L);
         List<ModuleStore.Installed> l = st.list();
         check(l.size() == 1 && "gabb.ee radio".equals(l.get(0).name())
-                && "0.1.0".equals(l.get(0).version()), "installed + listed");
+                && spec.version.equals(l.get(0).version()), "installed + listed " + spec.version);
         check(new File(root, "store/gabbee-radio/tree/menu.nix").isFile()
                 && new File(root, "store/gabbee-radio/menu.json").isFile(), "store layout");
         check(l.get(0).approvedNet().contains(srvOrigin), "approved net");

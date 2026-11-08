@@ -676,21 +676,26 @@ impl App {
         match eff {
             Effect::None => {}
             Effect::Exit => self.ui.back(),
-            Effect::Play(feed) => {
+            Effect::Play { feed, player } => {
                 self.stream_sent = true;
                 self.player.send(Cmd::Stream(feed));
-                self.ui.go(Screen::NowPlaying);
+                // `player` false: the module opened its own Now Playing list (its `show` screen).
+                if player {
+                    self.ui.go(Screen::NowPlaying);
+                }
                 self.screen_on_for(now, self.screen_timeout_ms);
                 if self.output.is_none() {
                     self.say(now, "No headphones: plug in wired or USB ones, or connect Bluetooth ›.", WARN);
                 }
             }
-            Effect::Continue => {
+            Effect::Continue { player } => {
                 if self.status.state != PlayState::Playing {
                     self.player.send(Cmd::Play);
                     self.modules.set_paused(false);
                 }
-                self.ui.go(Screen::NowPlaying);
+                if player {
+                    self.ui.go(Screen::NowPlaying);
+                }
                 self.screen_on_for(now, self.screen_timeout_ms);
             }
             Effect::Media(op) => match op.as_str() {
@@ -933,7 +938,8 @@ impl App {
         }
         if self.screen_on && now >= self.last_draw + 1000 {
             let v = view!(self, now);
-            if self.ui.is_live(&v) {
+            // A module screen showing the playing stream (song, time left) is live too.
+            if self.ui.is_live(&v) || (self.ui.screen == Screen::Module && self.modules.live()) {
                 self.dirty = true;
             }
         }

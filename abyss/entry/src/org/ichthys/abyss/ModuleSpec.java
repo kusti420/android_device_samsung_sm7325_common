@@ -60,7 +60,8 @@ final class ModuleSpec {
     static final List<String> FALLBACK_FEATURES = Arrays.asList(
             "state", "job", "post", "prompt", "event", "apps", "settings", "post:capture",
             "post:player", "needs:media", "radio:wifi", "menu:get", "media:stream",
-            "media:stream:radio-v1", "media:stream:http", "capture:fields");
+            "media:stream:radio-v1", "media:stream:http", "media:stream:screen", "menu:header",
+            "capture:fields");
 
     static final Set<String> CATEGORIES = new HashSet<>(Arrays.asList(
             "music", "spoken", "time", "home", "info", "tools", "games"));
@@ -92,7 +93,7 @@ final class ModuleSpec {
             "list", "text", "number", "choice", "confirm", "progress"));
     private static final Set<String> SCREEN_KEYS = new HashSet<>(Arrays.asList(
             "kind", "title", "sub", "items", "lines", "min", "max", "step", "value", "run",
-            "args", "choices", "text", "get", "empty", "error", "guide"));
+            "args", "choices", "text", "get", "empty", "error", "guide", "header"));
     private static final Set<String> ITEM_KEYS = new HashSet<>(Arrays.asList(
             "label", "sub", "run", "goto", "back", "media", "say", "buzz", "show", "timer", "pick",
             "battery", "stream", "args", "reply", "as"));
@@ -100,8 +101,10 @@ final class ModuleSpec {
             "run", "goto", "back", "media", "say", "buzz", "show", "timer", "pick", "battery",
             "stream");
     private static final Set<String> STREAM_KEYS = new HashSet<>(Arrays.asList(
-            "protocol", "url", "formats", "format", "prebuffer", "songs", "tag", "title",
+            "protocol", "url", "formats", "format", "prebuffer", "songs", "now", "tag", "title",
             "show"));
+    /** Header line styles (menu:header). */
+    private static final List<String> LINE_STYLES = Arrays.asList("big", "plain", "dim", "head");
     private static final Set<String> STREAM_PROTOCOLS = new HashSet<>(Arrays.asList(
             "radio-v1", "http"));
     private static final Set<String> GET_KEYS = new HashSet<>(Arrays.asList(
@@ -844,39 +847,22 @@ final class ModuleSpec {
                     holes(p + "." + k, c.reqStr(s, k, p + "." + k), extra);
                 }
             }
+            if (s.containsKey("header")) {
+                // menu:header: text lines (with a style) above a list screen's rows.
+                needFeature(c, required, "menu:header", p + ".header");
+                if (!"list".equals(kind)) {
+                    throw c.err(p + ".header", "header goes on a list screen (a text screen "
+                            + "has lines)");
+                }
+                List<Object> hl = c.optList(s, "header", p + ".header");
+                lines(p + ".header", hl, extra, true);
+            }
             if ("text".equals(kind)) {
                 List<Object> lines = c.optList(s, "lines", p + ".lines");
                 if (lines == null) {
                     throw c.err(p, "a text screen needs lines");
                 }
-                for (int i = 0; i < lines.size(); i++) {
-                    String lp = p + ".lines[" + i + "]";
-                    Object l = lines.get(i);
-                    if (l instanceof String) {
-                        holes(lp, (String) l, extra);
-                        continue;
-                    }
-                    Map<String, Object> lm = ModJson.map(l);
-                    if (lm == null) {
-                        throw c.err(lp, "a line is a string or { text; when?; unless?; }");
-                    }
-                    for (String k : lm.keySet()) {
-                        if (!Arrays.asList("text", "when", "unless").contains(k)) {
-                            throw c.err(lp + "." + k, "unknown key '" + k + "' in a line");
-                        }
-                    }
-                    holes(lp + ".text", c.reqStr(lm, "text", lp + ".text"), extra);
-                    for (String k : new String[] {"when", "unless"}) {
-                        if (lm.containsKey(k)) {
-                            needFeature(c, required, "menu:get", lp + "." + k);
-                            String h = c.reqStr(lm, k, lp + "." + k);
-                            if (!HOLE.matcher(h).matches()) {
-                                throw c.err(lp + "." + k, k + " is one hole, e.g. \"$data.item\"");
-                            }
-                            holes(lp + "." + k, h, extra);
-                        }
-                    }
-                }
+                lines(p + ".lines", lines, extra, false);
                 if (s.containsKey("items")) {
                     throw c.err(p + ".items", "a text screen has lines, not items");
                 }
@@ -903,10 +889,23 @@ final class ModuleSpec {
                     Set<String> rx = new HashSet<>(extra);
                     rx.add("row");
                     item(p + ".items.row", row, rx, true);
+                } else if (from.startsWith("$stream.")) {
+                    // media:stream:screen: a list of what this module's stream knows
+                    // ($stream.played, $stream.next), drawn while it plays.
+                    needFeature(c, required, "media:stream:screen", p + ".items.from");
+                    holes(p + ".items.from", from, extra);
+                    Map<String, Object> row = c.optMap(im, "row", p + ".items.row");
+                    if (row == null) {
+                        throw c.err(p + ".items", "a list from $stream needs a row template");
+                    }
+                    Set<String> rx = new HashSet<>(extra);
+                    rx.add("row");
+                    item(p + ".items.row", row, rx, true);
                 } else if (from.startsWith("$state.")) {
                     needFeature(c, required, "menu:from-state", p + ".items.from");
                 } else {
-                    throw c.err(p + ".items.from", "items.from is $data.… or $state.…");
+                    throw c.err(p + ".items.from",
+                            "items.from is $data.…, $stream.… or $state.…");
                 }
                 String order = ModJson.str(im, "order");
                 if (im.containsKey("order") && !"reverse".equals(order)
@@ -957,7 +956,11 @@ final class ModuleSpec {
                 throw c.err(p, "an item needs one of " + ITEM_ACTIONS);
             }
             if (it.containsKey("as") && !"goto".equals(action)) {
-                throw c.err(p + ".as", "as names the row passed on by goto");
+                if (!"stream".equals(action)) {
+                    throw c.err(p + ".as", "as names the row passed on by goto or stream");
+                }
+                // The picked row named in the stream's holes and its show screen.
+                needFeature(c, required, "media:stream:screen", p + ".as");
             }
             switch (action) {
                 case "run":
@@ -1019,12 +1022,16 @@ final class ModuleSpec {
             if (st.containsKey("url")) {
                 url(p + ".url", c.reqStr(st, "url", p + ".url"), ns);
             }
-            for (String k : new String[] {"formats", "format", "prebuffer", "songs", "tag",
-                    "title"}) {
+            if (st.containsKey("now")) {
+                // media:stream:screen: the station's now-playing link, for $stream.next.
+                needFeature(c, required, "media:stream:screen", p + ".now");
+            }
+            for (String k : new String[] {"formats", "format", "prebuffer", "songs", "now",
+                    "tag", "title"}) {
                 if (st.containsKey(k)) {
                     String v = c.reqStr(st, k, p + "." + k);
                     holes(p + "." + k, v, ns);
-                    if (k.equals("songs")) {
+                    if (k.equals("songs") || k.equals("now")) {
                         url(p + "." + k, v, ns);
                     }
                 }
@@ -1032,8 +1039,56 @@ final class ModuleSpec {
             if (st.containsKey("show")) {
                 String sh = c.reqStr(st, "show", p + ".show");
                 Map<String, Object> target = ModJson.map(screens.get(sh));
-                if (target == null || !"text".equals(target.get("kind"))) {
-                    throw c.err(p + ".show", "show names a text screen of this menu");
+                boolean text = target != null && "text".equals(target.get("kind"));
+                boolean list = target != null && !target.containsKey("kind")
+                        || target != null && "list".equals(target.get("kind"));
+                if (list && target.containsKey("header")) {
+                    // A list screen with a header opens while the stream plays; Now Playing
+                    // draws its header (media:stream:screen).
+                    needFeature(c, required, "media:stream:screen", p + ".show");
+                } else if (!text) {
+                    throw c.err(p + ".show", "show names a text screen of this menu, or a list "
+                            + "screen with a header");
+                }
+            }
+        }
+
+        /** `lines` of a text screen or a list screen's `header` (header lines may have style). */
+        void lines(String p, List<Object> lines, Set<String> extra, boolean header)
+                throws Invalid {
+            for (int i = 0; i < lines.size(); i++) {
+                String lp = p + "[" + i + "]";
+                Object l = lines.get(i);
+                if (l instanceof String) {
+                    holes(lp, (String) l, extra);
+                    continue;
+                }
+                Map<String, Object> lm = ModJson.map(l);
+                if (lm == null) {
+                    throw c.err(lp, "a line is a string or { text; when?; unless?; "
+                            + (header ? "style?; }" : "}"));
+                }
+                for (String k : lm.keySet()) {
+                    boolean ok = Arrays.asList("text", "when", "unless").contains(k)
+                            || header && "style".equals(k);
+                    if (!ok) {
+                        throw c.err(lp + "." + k, "unknown key '" + k + "' in a line");
+                    }
+                }
+                holes(lp + ".text", c.reqStr(lm, "text", lp + ".text"), extra);
+                for (String k : new String[] {"when", "unless"}) {
+                    if (lm.containsKey(k)) {
+                        needFeature(c, required, "menu:get", lp + "." + k);
+                        String h = c.reqStr(lm, k, lp + "." + k);
+                        if (!HOLE.matcher(h).matches()) {
+                            throw c.err(lp + "." + k, k + " is one hole, e.g. \"$data.item\"");
+                        }
+                        holes(lp + "." + k, h, extra);
+                    }
+                }
+                if (lm.containsKey("style")
+                        && !LINE_STYLES.contains(c.reqStr(lm, "style", lp + ".style"))) {
+                    throw c.err(lp + ".style", "style is " + String.join(", ", LINE_STYLES));
                 }
             }
         }

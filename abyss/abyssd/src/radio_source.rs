@@ -61,6 +61,11 @@ pub const NET_RETRY_MAX_S: f64 = 15.0;
 const BRINGUP_RETRY_MS: u64 = 500;
 const BRINGUP_TRIES: u32 = 40;
 const KEEP_SONGS: usize = 50;
+/// The first tracklist sync of a stream: this many recent plays (what played before you tuned in).
+const FIRST_SYNC_SONGS: usize = 20;
+/// `$stream.played` / `$stream.next` hold at most this many songs.
+const PLAYED_MAX: usize = 30;
+const COMING_MAX: usize = 3;
 /// The server holds an ask up to this (`wait`, max 15).
 const ASK_WAIT_S: u64 = 15;
 /// Long poll (`wait`, max 55).
@@ -326,7 +331,7 @@ impl Songs {
         for _ in 0..20 {
             let q = match since {
                 Some(ms) => vec![("since_ms", ms.to_string())],
-                None => vec![("limit", "5".to_string())],
+                None => vec![("limit", FIRST_SYNC_SONGS.to_string())],
             };
             let page = get_json(c, &url.with_query(&q), Timeouts::io_s(15))?;
             let (ch, next) = self.apply_page(&page);
@@ -338,6 +343,44 @@ impl Songs {
             }
         }
         Ok(changed)
+    }
+
+    /// Around what you hear: (the songs that played before it, newest first; the songs you hear
+    /// after it, oldest first, then the planned ones). `t` = the wall time of what you hear
+    /// (None while starting: everything but the newest play counts as before), `heard` = its
+    /// play. Songs and live sets only; planned songs already in the list are left out.
+    pub fn around(&self, t: Option<i64>, heard: Option<&Song>, planned: &[Song]) -> (Vec<Song>, Vec<Song>) {
+        let split = match (heard, t) {
+            (Some(h), _) => h.on_air_ms,
+            (None, Some(t)) => t,
+            (None, None) => self.items.last().map(|s| s.on_air_ms).unwrap_or(i64::MAX),
+        };
+        let heard_id = heard.map(|h| h.play_id.as_str());
+        let mut played = Vec::new();
+        let mut coming = Vec::new();
+        for s in &self.items {
+            if !s.is_song() || Some(s.play_id.as_str()) == heard_id {
+                continue;
+            }
+            if s.on_air_ms < split || (heard.is_none() && t.is_some() && s.on_air_ms <= split) {
+                played.push(s.clone());
+            } else {
+                coming.push(s.clone());
+            }
+        }
+        played.reverse();
+        played.truncate(PLAYED_MAX);
+        let track = |s: &Song| s.fields.get("track_id").and_then(id_text);
+        for p in planned {
+            let dup = track(p).is_some_and(|tid| {
+                coming.iter().chain(heard).any(|c| track(c).as_deref() == Some(tid.as_str()) && c.on_air_ms >= split)
+            });
+            if p.is_song() && !dup {
+                coming.push(p.clone());
+            }
+        }
+        coming.truncate(COMING_MAX);
+        (played, coming)
     }
 
     /// The play on air at `t` (reference `Songs.at`): the newest with `on_air_ms <= t`, if
@@ -449,6 +492,11 @@ pub struct RadioStatus {
     /// A non-song play is on (jingle, ad, unknown kind).
     pub other_on: bool,
     pub next: Vec<Song>,
+    /// The songs before the one you hear, newest first (`$stream.played`).
+    pub played: Vec<Song>,
+    /// The songs you hear after it: the tracklist's newer plays, then the planned ones
+    /// (`$stream.next`).
+    pub coming: Vec<Song>,
     /// Server time of what you hear, ms (for "1:23 into the song").
     pub heard_ms: Option<i64>,
     pub buffered_s: f64,
@@ -650,6 +698,12 @@ impl Radio {
         let st = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
         let fs = self.shared.feed.status();
         let (heard_ms, play) = self.heard();
+        let (played, coming) = self
+            .shared
+            .songs
+            .lock()
+            .map(|g| g.around(heard_ms, play.as_ref(), &st.next))
+            .unwrap_or_default();
         let mut phase = st.phase.clone();
         if phase == Phase::Playing || phase == Phase::Buffering || phase == Phase::Stalled {
             phase = if fs.buffering || (!fs.has_stream && phase != Phase::Playing) {
@@ -671,6 +725,8 @@ impl Radio {
             other_on: play.as_ref().is_some_and(|p| !p.is_song()),
             song: play.filter(Song::is_song),
             next: st.next.clone(),
+            played,
+            coming,
             heard_ms,
             buffered_s: fs.buffered_s,
             prebuffer: self.shared.feed.prebuffer(),
@@ -1432,6 +1488,37 @@ fn long_poll(sh: Arc<Shared>, now_url: Option<Url>) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn played_and_coming_around_what_you_hear() {
+        let mut l = Songs::new(None);
+        for (id, start, kind) in [(1, 1000, "music"), (2, 2000, "jingle"), (3, 3000, "music"), (4, 4000, "music"), (5, 5000, "live")] {
+            let mut v = song(id, start, Some(start + 1000), false, kind);
+            v["track_id"] = json!(100 + id);
+            l.merge(Song::from_json(&v).unwrap());
+        }
+        let planned = |tid: i64| {
+            let mut s = Song::from_json(&json!({"play_id": format!("planned-{tid}"), "kind": "music", "on_air_ms": 0})).unwrap();
+            s.fields.insert("track_id".into(), json!(tid));
+            s
+        };
+        let next = vec![planned(105), planned(106), planned(107)];
+        let ids = |v: &[Song]| v.iter().map(|s| s.play_id.clone()).collect::<Vec<_>>();
+        // You hear #3 (live is #5): before = #1 (the jingle is no song), after = #4, #5, then
+        // the planned ones (#105 = #5's track, already listed).
+        let heard = l.items[2].clone();
+        let (played, coming) = l.around(Some(3600), Some(&heard), &next);
+        assert_eq!(ids(&played), vec!["1"]);
+        assert_eq!(ids(&coming), vec!["4", "5", "planned-106"], "at most three, duplicates left out");
+        // A jingle (#2) is on: what aired up to now played, the rest comes.
+        let (played, coming) = l.around(Some(2600), None, &[]);
+        assert_eq!(ids(&played), vec!["1"]);
+        assert_eq!(ids(&coming), vec!["3", "4", "5"]);
+        // Starting (nothing heard yet): all but the live play are "before", newest first.
+        let (played, coming) = l.around(None, None, &[]);
+        assert_eq!(ids(&played), vec!["4", "3", "1"]);
+        assert_eq!(ids(&coming), vec!["5"]);
+    }
 
     fn song(id: i64, start: i64, end: Option<i64>, est: bool, kind: &str) -> Value {
         let mut v = json!({"play_id": id, "kind": kind, "line": format!("A - T{id}"),
