@@ -272,6 +272,9 @@ pub struct Config {
     pub tag: String,
     pub title: String,
     pub format: String,
+    /// The module that plays it (its id), recorded in captures (`fields.module`) so the
+    /// Settings app files them under that app. Empty for the PC test tool.
+    pub module: String,
     /// The module's approved origins: every request is checked against them.
     pub allow: Option<Vec<String>>,
     /// The server's long-burst limits for this format (None = classic bursts, as before).
@@ -295,6 +298,7 @@ impl Config {
             tag: String::new(),
             title: String::new(),
             format: String::new(),
+            module: String::new(),
             allow: None,
             long: None,
             icy: false,
@@ -929,6 +933,9 @@ fn capture_record(sh: &Shared, s: &Song, t: i64) -> Capture {
     }
     fields.insert("play_id".into(), s.fields.get("play_id").cloned().unwrap_or(Value::from(s.play_id.clone())));
     fields.insert("from".into(), Value::from("radio"));
+    if !sh.cfg.module.is_empty() {
+        fields.insert("module".into(), Value::from(sh.cfg.module.clone()));
+    }
     fields.insert("heard_at_ms".into(), Value::from(t));
     fields.insert("into_song_ms".into(), Value::from((t - s.on_air_ms).max(0)));
     Capture::new("radio", s.line(), fields)

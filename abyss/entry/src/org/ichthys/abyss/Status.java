@@ -20,7 +20,6 @@ import android.content.Context;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.BatteryManager;
-import android.os.SystemProperties;
 import android.util.Log;
 
 import org.json.JSONObject;
@@ -51,9 +50,6 @@ final class Status {
 
     /** What the first ● plays (persist.abyss.nav.start + abyssd's resume state). */
     static String plays(Context c) {
-        if (Sections.NAV_START.resolve(SystemProperties.get(Sections.NAV_START.prop, "")) == 1) {
-            return c.getString(R.string.state_plays_home);
-        }
         JSONObject st = readJson(STATE);
         if (st != null && "stream".equals(st.optString("source"))) {
             JSONObject ls = readJson(LAST_STREAM);

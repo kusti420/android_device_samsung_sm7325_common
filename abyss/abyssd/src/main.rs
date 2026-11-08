@@ -614,25 +614,64 @@ impl App {
         }
     }
 
-    /// At entry: the last song loaded paused at its place, Now playing in front (Home under
-    /// it), so the first ● plays it, screen on or off. Settings › Abyss › Navigation "Open
-    /// on: Home" keeps the old start. Paused costs nothing: the player closes the output.
+    /// At entry: the last song loaded paused at its place (or the last radio station shown
+    /// ready), on the main screen whose player row is selected, so the first ● plays it,
+    /// screen on or off. Paused costs nothing: the player closes the output.
     fn open_ready(&mut self) {
         // Radio was the last source: its station shown ready (nothing fetched until ●).
-        if self.ui.nav.start_player && self.resume.source.as_deref() == Some("stream") {
+        if self.resume.source.as_deref() == Some("stream") {
             self.modules.set_last_source(true);
             if self.modules.arm() {
                 info!("start: last radio station ready");
-                self.ui.go(Screen::NowPlaying);
                 return;
             }
         }
-        let Some(track) = self.resume.track.clone().filter(|_| self.ui.nav.start_player) else { return };
+        let Some(track) = self.resume.track.clone() else { return };
         if let Some((queue, index)) = self.resume_queue(&track) {
             info!("start: {} ready (paused)", track.display());
             self.player.send(Cmd::Load { queue, index, start_ms: self.resume.position_ms, play: false });
-            self.ui.go(Screen::NowPlaying);
         }
+    }
+
+    /// The main screen's player row (ui.rs player_row): pause, play, continue what played
+    /// last (radio or library), or shuffle everything. Stays on the main screen: its card
+    /// shows what plays.
+    fn continue_here(&mut self, now: u64) {
+        self.status = self.player.status();
+        let st = self.status.state;
+        if self.output.is_none() && st != PlayState::Playing {
+            self.say(now, "No headphones: plug in wired or USB ones, or connect Bluetooth ›.", WARN);
+        }
+        match st {
+            PlayState::Playing => self.player.send(Cmd::Pause),
+            PlayState::Paused if self.status.stream || self.status.queue_len > 0 => {
+                self.player.send(Cmd::Play);
+                if self.status.stream {
+                    self.modules.set_paused(false);
+                }
+            }
+            _ if self.modules.continue_title().is_some() => {
+                let eff = self.modules.continue_last();
+                self.on_station_step(eff, now);
+            }
+            _ => {
+                let (queue, index, start_ms) = match self.resume.track.clone().and_then(|t| self.resume_queue(&t)) {
+                    Some((q, i)) => (q, i, self.resume.position_ms),
+                    None => {
+                        let mut q = self.lib.all_tracks();
+                        shuffle(&mut q, now);
+                        self.resume.shuffle = true;
+                        (q, 0, 0)
+                    }
+                };
+                if !queue.is_empty() {
+                    self.modules.stop_stream();
+                    self.stream_sent = false;
+                    self.player.send(Cmd::Load { queue, index, start_ms, play: true });
+                }
+            }
+        }
+        self.screen_on_for(now, self.screen_timeout_ms);
     }
 
     /// Root-only test hook (hand tests of Bluetooth, no key presses): sys.abyss.debug, read
@@ -674,6 +713,7 @@ impl App {
     fn request(&mut self, req: Request, now: u64) {
         match req {
             Request::None => {}
+            Request::Continue => self.continue_here(now),
             Request::Resume => {
                 // Home › Continue on a paused radio stream: play it on (no reload).
                 if self.status.stream && self.status.state == PlayState::Paused {

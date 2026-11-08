@@ -308,33 +308,44 @@ fn kick_refresh() {
     }
 }
 
-/// Home status value: "off", "LTE · Telia EE · 3 bars", "finding the network…".
-pub fn summary() -> String {
-    let Some((phase, err, _)) = snapshot() else { return "off".into() };
-    match phase {
-        Phase::Off if err.is_some() => "off · last try failed".into(),
-        Phase::Off => "off".into(),
-        Phase::Starting(step) => format!("{step}…"),
-        Phase::On { radio, .. } | Phase::Lingering { radio, .. } => {
-            kick_refresh();
-            let l = radio.line_with(false);
-            if l.is_empty() {
-                "on".into()
-            } else {
-                l
-            }
-        }
-        // Registered, no call: the modem is on the network (status line: its radio tag).
-        Phase::Standby { radio, .. } => {
-            let l = radio.line_with(false);
-            if l.is_empty() {
-                "standby".into()
-            } else {
-                format!("{l} · standby")
-            }
-        }
-        Phase::Stopping => "turning off…".into(),
+/// The status line's network part while mobile data is up or ready: ("LTE·Telia 4▮",
+/// carrying data now (a lease is held), data used this session if `with_used`). None = off.
+/// Cached values only: it asks the modem nothing (the status line is drawn every redraw).
+pub fn status_tag(with_used: bool) -> Option<(String, bool, u64)> {
+    let g = GLOBAL.get()?;
+    let s = g.shared.lock().ok()?;
+    let (radio, active) = match &s.phase {
+        Phase::Off | Phase::Stopping => return None,
+        Phase::Starting(_) => return Some(("mobile…".into(), true, 0)),
+        Phase::On { radio, .. } => (radio.clone(), true),
+        Phase::Lingering { radio, .. } | Phase::Standby { radio, .. } => (radio.clone(), false),
+    };
+    let mut tag = match radio.rat {
+        Some(r) if r.starts_with("5G") => "5G".to_string(),
+        Some(r) => r.to_string(),
+        None => "mobile".to_string(),
+    };
+    if let Some(op) = radio.operator.split_whitespace().next() {
+        tag.push('·');
+        tag.push_str(op);
     }
+    if let Some(b) = radio.bars {
+        tag.push_str(&format!(" {b}▮"));
+    }
+    if radio.roaming {
+        tag.push_str(" R");
+    }
+    Some((tag, active, if with_used { s.used() } else { 0 }))
+}
+
+/// Lets the status line's bars follow the signal while the screen is on (rate-limited).
+pub fn refresh_soon() {
+    kick_refresh();
+}
+
+/// Data used this session, short ("12 MB"), for the status line.
+pub fn used_short(bytes: u64) -> String {
+    fmt_bytes(bytes)
 }
 
 /// One or two lines for the Battery screen.

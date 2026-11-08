@@ -389,6 +389,20 @@ impl Wifi {
         }
     }
 
+    /// The status line's network part: (the network's name, or "Wi-Fi…" while it comes up;
+    /// carrying data now = a lease is held). None = off.
+    pub fn status_tag(&self) -> Option<(String, bool)> {
+        let phase = self.shared.lock().map(|s| s.phase.clone()).unwrap_or(Phase::Off);
+        match phase {
+            Phase::Off | Phase::Stopping => None,
+            Phase::On { ssid, .. } => Some((ssid, true)),
+            Phase::Lingering { ssid, .. } => Some((ssid, false)),
+            Phase::Starting | Phase::Associating(_) | Phase::Dhcp(_) | Phase::Reconnecting(_) => {
+                Some(("…".into(), true))
+            }
+        }
+    }
+
     /// Home status value: "off", "on (Home)", "connecting (Home)…".
     pub fn summary(&self) -> String {
         let (phase, err) = match self.shared.lock() {

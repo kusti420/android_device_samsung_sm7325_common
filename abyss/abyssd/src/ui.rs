@@ -43,26 +43,13 @@ const LETTER_ROW_MIN: usize = 24;
 pub const NO_OUTPUT_TEXT: &str =
     "No headphones. Plug in wired or USB headphones, or connect Bluetooth headphones: menu › Bluetooth.";
 
-/// Where Abyss opens. Set in the main OS (Settings › Abyss, entry app), read once at start.
-/// (Waking always shows the screen you left; ▲ + ● is the way to Now playing, keys.rs.)
-const PROP_NAV_START: &str = "persist.abyss.nav.start";
+/// The two status lines (left and right of the punch-hole camera): their tops and margin.
+const STATUS_Y1: i32 = 14;
+const STATUS_Y2: i32 = 62;
+const STATUS_MARGIN: i32 = 36;
+/// Characters that fit on one side of the camera in SMALL (24 px each, (1080/2 - 36 - 50) px).
+const STATUS_CHARS: usize = 18;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NavPrefs {
-    /// `persist.abyss.nav.start` = `player` (default) | `home`: open on Now playing with the
-    /// last song ready (paused at its place), so the first ● plays it.
-    pub start_player: bool,
-}
-
-impl NavPrefs {
-    pub fn read() -> NavPrefs {
-        let start = crate::control::prop_str(PROP_NAV_START);
-        NavPrefs { start_player: start.is_none_or(|v| !v.trim().eq_ignore_ascii_case("home")) }
-    }
-}
-
-/// Top of the status line (left and right of the punch-hole camera).
-const STATUS_Y: i32 = 36;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ListKind {
@@ -96,6 +83,9 @@ pub enum Screen {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Request {
     None,
+    /// The main screen's player row: pause / play / continue what played last (library or
+    /// radio) / shuffle everything, staying on the main screen.
+    Continue,
     Resume,
     ShuffleAll,
     PlayFolder(usize),
@@ -183,9 +173,10 @@ pub struct Ui {
     /// Where each library list was left (selection, scroll), so going back into it lands on
     /// the same row. Session only; the library does not change while Abyss runs.
     memo: Vec<(Screen, usize, usize)>,
-    pub nav: NavPrefs,
     /// The wall-clock minute the status line last showed (its clock redraws on the minute).
     drawn_minute: i64,
+    /// The status line's values as last drawn (a meaningful change redraws, see is_live).
+    drawn_status: String,
 }
 
 /// Library screens whose place is remembered. Never PowerOff (it must open on "Keep it
@@ -263,9 +254,9 @@ fn pct(b: &Battery) -> String {
 fn guide(screen: Screen) -> &'static [(&'static str, &'static str)] {
     match screen {
         Screen::Home => &[
-            ("screen on", "▲ ▼ move   ● select"),
+            ("▲ ▼ · ●", "move · select"),
+            ("▲ + ●", "player: volume, skip"),
             ("screen off", "keys play music"),
-            ("▲ + ●", "now playing"),
             ("hold ▲+▼ 2 s", "help"),
             ("hold ● 3 s", "back to Android"),
         ],
@@ -324,6 +315,97 @@ const RADIO_GUIDE: &[(&str, &str)] = &[
     ("▼ + ● short", "save this song"),
     ("hold ● 3 s", "back to Android"),
 ];
+
+/// The main screen's row 0: what ● does to the music right now (main.rs Request::Continue
+/// decides the same way). It never leaves the main screen.
+fn player_row(v: &View) -> Row {
+    let st = v.status;
+    let go = |label: &str| Row::new(label, RowAct::Do(Request::Continue));
+    match st.state {
+        PlayState::Playing => go("Pause"),
+        PlayState::Paused if st.stream || st.queue_len > 0 => go("Play"),
+        _ => match (v.modules.continue_title(), v.resume_track) {
+            (Some(station), _) => go("Continue").meta(station),
+            (None, Some(t)) => go("Continue").meta(format!("{} · {}", v.lib.title_of(t), mmss(v.resume_pos_ms))),
+            (None, None) if v.lib.track_count() > 0 => go("Shuffle all").meta(format!("{} songs", v.lib.track_count())),
+            (None, None) => Row::new("No music found", RowAct::Do(Request::None)).color(DIM),
+        },
+    }
+}
+
+/// What the main screen's player card shows: state word and colour, title, subline, and
+/// (library) the elapsed / total time.
+fn card(v: &View) -> ((&'static str, u32), String, String, Option<(u64, Option<u64>)>) {
+    let st = v.status;
+    let lib = v.lib;
+    let playing = st.state == PlayState::Playing;
+    let (word, title, sub, time) = if st.stream {
+        let r = v.modules.stream_status();
+        let station = r.as_ref().map(|r| r.title.clone()).unwrap_or_default();
+        let song = r.as_ref().and_then(|r| r.song.clone());
+        let title = song.as_ref().and_then(|s| s.text("title").map(str::to_string)).unwrap_or_else(|| station.clone());
+        let artist = song.as_ref().and_then(|s| s.text("artist").map(str::to_string));
+        let sub = match artist {
+            Some(a) => format!("{a} · {station}"),
+            None => "radio".to_string(),
+        };
+        ((if playing { ("RADIO · PLAYING", ACCENT) } else { ("RADIO · PAUSED", DIM) }), title, sub, None)
+    } else if let Some(t) = st.track.as_ref().filter(|_| st.state != PlayState::Stopped) {
+        let word = if playing { ("PLAYING", ACCENT) } else { ("PAUSED · ● plays", DIM) };
+        (word, lib.title_of(t), lib.artist_album_of(t), Some((st.pos_ms, st.dur_ms)))
+    } else if let Some(station) = v.modules.continue_title() {
+        (("READY · ● plays", DIM), station, "radio, last played".to_string(), None)
+    } else if let Some(t) = v.resume_track {
+        (("READY · ● plays", DIM), lib.title_of(t), lib.artist_album_of(t), None)
+    } else {
+        (("NOTHING PLAYING", DIM), "Abyss".to_string(), "Pick music or a radio below.".to_string(), None)
+    };
+    let word = if v.output.is_none() { ("NO HEADPHONES", WARN) } else { word };
+    (word, title, sub, time)
+}
+
+/// The two status lines' four texts: (time · output, network, battery % · hours, current).
+/// `with_used` adds the mobile data used this session (a counter read; not in the redraw check).
+fn status_texts(v: &View, minute_hm: (i64, i64), with_used: bool) -> [String; 4] {
+    let (h, m) = minute_hm;
+    let mut time = format!("{h:02}:{m:02}");
+    if let Some(o) = v.output {
+        time.push_str(" · ");
+        time.push_str(o.short());
+    }
+    // Network: Wi-Fi first (its name), then mobile data ("LTE·Telia 4▮"), else offline.
+    // "↓" while a transfer holds the link (a radio burst, a module fetch).
+    // The arrow comes first so a long network name never pushes it out of the line.
+    let arrow = |active: bool| if active { "↓ " } else { "" };
+    let net = if let Some((ssid, active)) = v.wifi.status_tag() {
+        format!("{}Wi-Fi {ssid}", arrow(active))
+    } else if let Some((tag, active, used)) = crate::mobile::status_tag(with_used) {
+        let used = if used > 0 { format!(" · {}", crate::mobile::used_short(used)) } else { String::new() };
+        let full = format!("{}{tag}{used}", arrow(active));
+        if full.chars().count() <= STATUS_CHARS {
+            full
+        } else {
+            // Too long for one side of the camera: the data used matters more than the
+            // operator ("LTE·Telia 4▮" → "LTE 4▮").
+            let short = match tag.split_once('·') {
+                Some((rat, rest)) => format!("{rat}{}", rest.find(' ').map(|i| &rest[i..]).unwrap_or("")),
+                None => tag,
+            };
+            format!("{}{short}{used}", arrow(active))
+        }
+    } else {
+        "offline".to_string()
+    };
+    let b = v.battery;
+    let level = format!("{} · {}", pct(b), hours_short(b));
+    // The fuel gauge's own average (smoothed), read with the battery every 30 s.
+    let current = match b.current_avg_ma.or(b.current_now_ma) {
+        Some(ma) if b.charging() => format!("+{} mA", ma.unsigned_abs()),
+        Some(ma) if ma != 0 => format!("−{} mA", ma.unsigned_abs()),
+        _ => String::new(),
+    };
+    [time, net, level, current]
+}
 
 /// Rows of the Bluetooth screen. The last headphones are always offered first.
 fn bt_rows(bt: &Bt, back: impl Fn() -> Row) -> Vec<Row> {
@@ -457,64 +539,38 @@ fn letters(lib: &Library, kind: ListKind) -> Vec<(char, Screen)> {
         .collect()
 }
 
+/// (wall-clock minute number, (hour, minute) in the phone's time zone).
+fn wall_minute() -> (i64, (i64, i64)) {
+    let wall = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    let (h, m, _) = crate::modules::local_hms(wall);
+    (wall.div_euclid(60_000), (h, m))
+}
+
 /// How many installed modules Home lists by name (the rest are under Apps ›).
 const HOME_MODULES: usize = 3;
 
 impl Ui {
     pub fn new() -> Ui {
-        Ui { screen: Screen::Home, sel: 0, top: 0, stack: Vec::new(), memo: Vec::new(), nav: NavPrefs::read(), drawn_minute: 0 }
+        Ui { screen: Screen::Home, sel: 0, top: 0, stack: Vec::new(), memo: Vec::new(), drawn_minute: 0, drawn_status: String::new() }
     }
 
     fn rows(&self, v: &View) -> Vec<Row> {
         let back = || Row::new("Back", RowAct::Back).color(DIM);
         let lib = v.lib;
         match self.screen {
+            // The main screen: the player (card above the rows, row 0 its button), then
+            // everything else one level deep at most.
             Screen::Home => {
-                let st = v.status;
-                let music_meta = match (st.state, v.output.is_some()) {
-                    (PlayState::Playing, _) => "playing",
-                    (PlayState::Paused, false) => "paused, no headphones",
-                    (PlayState::Paused, true) => "paused",
-                    (PlayState::Stopped, false) => "no headphones",
-                    _ => "",
-                };
-                let np_meta = match (st.stream, v.modules.stream_status()) {
-                    (true, Some(r)) => Some(r.title),
-                    _ => st.track.as_ref().map(|t| lib.title_of(t)),
-                };
-                // One row for "what plays": it opens Now playing while something plays, and
-                // is "Continue" (plays + opens it) when it is paused or only remembered, so
-                // Home › Continue is one ● instead of Music › Resume.
-                let np = match (st.state, np_meta, v.resume_track) {
-                    (PlayState::Playing, meta, _) => {
-                        Row::new("Now playing", RowAct::Go(Screen::NowPlaying)).meta(meta.unwrap_or_default())
-                    }
-                    (PlayState::Paused, Some(meta), _) => {
-                        Row::new("Continue", RowAct::Do(Request::Resume)).meta(meta)
-                    }
-                    // Radio was the last source: Continue starts that station again.
-                    _ if v.modules.continue_title().is_some() => Row::new("Continue", RowAct::Do(Request::Resume))
-                        .meta(v.modules.continue_title().unwrap_or_default()),
-                    (_, _, Some(t)) => Row::new("Continue", RowAct::Do(Request::Resume))
-                        .meta(format!("{} · {}", lib.title_of(t), mmss(v.resume_pos_ms))),
-                    _ => Row::new("Now playing", RowAct::Go(Screen::NowPlaying)).meta("nothing"),
-                };
-                let mut rows = vec![Row::new("Music ›", RowAct::Go(Screen::Music)).meta(music_meta), np];
-                // Nothing to play on: the last Bluetooth headphones are one ● away (it turns
-                // Bluetooth on first), instead of Bluetooth › Connect.
-                if let (None, Some(d)) = (v.output, v.bt.last()) {
-                    if !matches!(v.bt.conn(), Conn::Connecting(_)) {
-                        rows.push(
-                            Row::new(format!("Connect {}", d.name), RowAct::Do(Request::BtConnect(None)))
-                                .meta("Bluetooth"),
-                        );
-                    }
-                }
-                // Installed modules show on Home under their own names (a few of them), so a new
-                // one is found where the person looks first; all of them stay under Apps ›.
+                let mut rows = vec![player_row(v)];
+                rows.push(Row::new("Music ›", RowAct::Go(Screen::Music)).meta(format!("{} songs", lib.track_count())));
+                // Installed modules (the radios) under their own names; all of them under Apps ›
+                // when there are more.
                 let names = v.modules.names();
                 for (i, name) in names.iter().enumerate().take(HOME_MODULES) {
-                    rows.push(Row::new(format!("{name} ›"), RowAct::Do(Request::OpenModule(i))).meta("app"));
+                    rows.push(Row::new(format!("{name} ›"), RowAct::Do(Request::OpenModule(i))).meta("radio"));
                 }
                 if names.is_empty() || names.len() > HOME_MODULES {
                     rows.push(Row::new("Apps ›", RowAct::Do(Request::OpenApps)).meta(match names.len() {
@@ -522,10 +578,19 @@ impl Ui {
                         n => n.to_string(),
                     }));
                 }
-                // Bluetooth above Battery: it is the one you change (headphones).
+                // The last Bluetooth headphones are one ● away while they are not connected (it
+                // turns Bluetooth on first), instead of Bluetooth › Connect.
+                if let Some(d) = v.bt.last() {
+                    if !matches!(v.bt.conn(), Conn::Connected(_) | Conn::Connecting(_)) {
+                        rows.push(
+                            Row::new(format!("Connect {}", d.name), RowAct::Do(Request::BtConnect(None)))
+                                .meta("Bluetooth"),
+                        );
+                    }
+                }
                 rows.extend([
                     Row::new("Bluetooth ›", RowAct::Go(Screen::Bluetooth)).meta(v.bt.summary()),
-                    Row::new("Battery", RowAct::Go(Screen::Battery)).meta(pct(v.battery)),
+                    Row::new("Battery & network ›", RowAct::Go(Screen::Battery)).meta("details · Wi-Fi test"),
                     Row::new("Help", RowAct::Go(Screen::Help)).meta("hold ▲+▼"),
                     Row::new("Back to Android", RowAct::Do(Request::Leave)).meta("about 30 s"),
                     Row::new("Power off", RowAct::Go(Screen::PowerOff)),
@@ -801,12 +866,12 @@ impl Ui {
 
     /// Whether the screen shows something that changes by itself every second.
     pub fn is_live(&self, v: &View) -> bool {
-        let minute = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64 / 60_000)
-            .unwrap_or(0);
-        // The status line's clock moved on.
+        let (minute, hm) = wall_minute();
+        // The status line's clock moved on, or one of its values changed.
         minute != self.drawn_minute
+            || status_texts(v, hm, false).concat() != self.drawn_status
+            // The main screen's card follows the song (elapsed time, the radio's song).
+            || (self.screen == Screen::Home && v.status.state == PlayState::Playing)
             || v.leaving_in.is_some()
             || v.low_battery_in.is_some()
             || (self.screen == Screen::NowPlaying && v.status.state == PlayState::Playing)
@@ -906,7 +971,7 @@ impl Ui {
                 self.draw_title(cv, &n, Some("folder"))
             }
             Screen::Battery => {
-                let y = self.draw_title(cv, "BATTERY", None);
+                let y = self.draw_title(cv, "BATTERY & NETWORK", None);
                 self.draw_battery(cv, v, y)
             }
             Screen::Bluetooth => {
@@ -968,40 +1033,33 @@ impl Ui {
         self.draw_status(cv, v);
     }
 
-    /// The slim status line on every screen, left and right of the camera: the time and what
-    /// plays out of where, then battery and the hours of screen-off music left
-    /// (battery.rs). Drawn with the frame, so it costs nothing extra; the clock's minute
-    /// change makes the screen live (is_live).
+    /// The two status lines on every screen, left and right of the camera:
+    ///   14:32 · 3.5 mm                      64% · ≈ 58 h
+    ///   LTE·Telia 4▮ ↓ · 12 MB                    −42 mA
+    /// From values abyssd already has (battery read every 30 s, the radios' own state); drawn
+    /// with each frame, and a frame is asked for only when the minute or one of these
+    /// values changes (is_live). Nothing is read while the screen is off.
     fn draw_status(&mut self, cv: &mut Canvas, v: &View) {
         let w = cv.w as i32;
-        let half = (w / 2 - MARGIN - 60).max(100) as u32;
-        let wall = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
-        let (h, m, _) = crate::modules::local_hms(wall);
-        self.drawn_minute = wall.div_euclid(60_000);
-        let mut left = format!("{h:02}:{m:02}");
-        if let Some(o) = v.output {
-            left.push_str(" · ");
-            left.push_str(o.short());
-        }
-        if v.wifi.summary() != "off" && !v.wifi.summary().starts_with("off ") {
-            left.push_str(" · wi-fi");
-        }
-        // Mobile data in use: its network type ("LTE", "5G"), else "mobile" while it starts.
-        let ms = crate::mobile::summary();
-        if !ms.starts_with("off") {
-            let tag = ms.split(" · ").next().filter(|t| t.len() <= 5 && !t.ends_with('…')).unwrap_or("mobile");
-            left.push_str(" · ");
-            left.push_str(tag);
-        }
-        SMALL.draw(cv, MARGIN, STATUS_Y, &SMALL.ellipsize(&left, half), DIM);
+        let half = (w / 2 - STATUS_MARGIN - 50).max(100) as u32;
+        let (minute, hm) = wall_minute();
+        self.drawn_minute = minute;
+        crate::mobile::refresh_soon();
+        self.drawn_status = status_texts(v, hm, false).concat();
+        let [time, net, level, current] = status_texts(v, hm, true);
+        let left = |cv: &mut Canvas, y: i32, t: &str, c: u32| {
+            SMALL.draw(cv, STATUS_MARGIN, y, &SMALL.ellipsize(t, half), c);
+        };
+        let right = |cv: &mut Canvas, y: i32, t: &str, c: u32| {
+            let t = SMALL.ellipsize(t, half);
+            SMALL.draw(cv, w - STATUS_MARGIN - SMALL.text_width(&t) as i32, y, &t, c);
+        };
+        left(cv, STATUS_Y1, &time, DIM);
+        left(cv, STATUS_Y2, &net, if net == "offline" { DIM } else { TEXT });
         let b = v.battery;
-        let right = format!("{} · {}", pct(b), hours_short(b));
-        let right = SMALL.ellipsize(&right, half);
         let low = b.capacity.is_some_and(|c| c <= 15) && !b.charging();
-        SMALL.draw(cv, w - MARGIN - SMALL.text_width(&right) as i32, STATUS_Y, &right, if low { WARN } else { DIM });
+        right(cv, STATUS_Y1, &level, if low { WARN } else { TEXT });
+        right(cv, STATUS_Y2, &current, if b.charging() { ACCENT } else { DIM });
     }
 
     fn footer_top(&self, lines: usize) -> i32 {
@@ -1041,45 +1099,37 @@ impl Ui {
         y + 36
     }
 
+    /// The main screen's player card: state and volume, the title, artist · album (or the
+    /// station), and the elapsed time. Row 0 below it is the player's button.
     fn draw_home_header(&self, cv: &mut Canvas, v: &View) -> i32 {
-        let max_w = (cv.w as i32 - 2 * MARGIN) as u32;
-        // Fish mark + name, as on the Main board.
-        let mut x = MARGIN;
-        x += BODY_BOLD.draw(cv, x, TOP, "≈ ", ACCENT) as i32;
-        for c in "ICHTHYS ABYSS".chars() {
-            x += BODY_BOLD.draw(cv, x, TOP, &c.to_string(), ACCENT) as i32 + 8;
-        }
-        let mut y = TOP + 76;
-        for l in wrap(&SMALL, "Android is asleep. Calls and texts wait until you are back.", max_w) {
-            SMALL.draw(cv, MARGIN, y, &l, DIM);
+        let w = cv.w as i32;
+        let max_w = (w - 2 * MARGIN) as u32;
+        let ((word, wc), title, sub, time) = card(v);
+        let mut y = TOP;
+        SMALL.draw(cv, MARGIN, y, word, wc);
+        let vol = format!("vol {} / {}", v.volume, v.volume_max);
+        SMALL.draw(cv, w - MARGIN - SMALL.text_width(&vol) as i32, y, &vol, DIM);
+        y += SMALL_LH + 12;
+        BIG.draw(cv, MARGIN, y, &BIG.ellipsize(&title, max_w), TEXT);
+        y += 96;
+        BODY.draw(cv, MARGIN, y, &BODY.ellipsize(&sub, max_w), DIM);
+        y += 70;
+        if let Some((pos, dur)) = time {
+            let el = mmss(pos);
+            let tot = dur.map(mmss).unwrap_or_else(|| "–:––".into());
+            let ew = SMALL.draw(cv, MARGIN, y, &el, DIM) as i32;
+            let tw = SMALL.text_width(&tot) as i32;
+            SMALL.draw(cv, w - MARGIN - tw, y, &tot, DIM);
+            let bx = MARGIN + ew + 24;
+            let bw = w - MARGIN - tw - 24 - bx;
+            cv.fill_rect(bx, y + 24, bw, 6, LINE);
+            if let Some(d) = dur.filter(|&d| d > 0) {
+                cv.fill_rect(bx, y + 24, (pos.min(d) as f64 / d as f64 * bw as f64) as i32, 6, TEXT);
+            }
             y += SMALL_LH;
         }
-        y += 24;
-        let col = SMALL.text_width("battery  ") as i32;
-        let b = v.battery;
-        let kv = |cv: &mut Canvas, y: i32, k: &str, val: &str, tail: &str| {
-            SMALL.draw(cv, MARGIN, y, k, DIM);
-            let x = MARGIN + col;
-            let adv = SMALL.draw(cv, x, y, val, TEXT) as i32;
-            SMALL.draw(cv, x + adv, y, tail, DIM);
-        };
-        kv(cv, y, "battery", &format!("{}   {}", pct(b), hours_short(b)), " of music");
-        y += SMALL_LH;
-        let out = v.output.map(|o| o.label()).unwrap_or_else(|| "none plugged in".into());
-        kv(cv, y, "output", &SMALL.ellipsize(&out, max_w - col as u32), "");
-        y += SMALL_LH;
-        // "Wi-Fi off" / "Wi-Fi on (Home)": Wi-Fi is on only while a lease is held (or lingers).
-        kv(cv, y, "wi-fi", &SMALL.ellipsize(&v.wifi.summary(), max_w - col as u32), "");
-        y += SMALL_LH;
-        // Mobile data: "off" / "LTE · Telia EE · 3 bars" (mobile/mod.rs; on only while needed).
-        kv(cv, y, "mobile", &SMALL.ellipsize(&crate::mobile::summary(), max_w - col as u32), "");
-        y += SMALL_LH;
-        if v.bt.phase() == Phase::Off {
-            kv(cv, y, "off", "Bluetooth", "");
-        } else {
-            kv(cv, y, "on", &SMALL.ellipsize(&format!("Bluetooth · {}", v.bt.summary()), max_w - col as u32), "");
-        }
-        y + SMALL_LH + 36
+        cv.fill_rect(MARGIN, y + 8, w - 2 * MARGIN, 2, LINE);
+        y + 40
     }
 
     fn draw_rows(&mut self, cv: &mut Canvas, rows: &[Row], y0: i32, vis: usize, max_w: u32) {
@@ -1385,7 +1435,7 @@ impl Ui {
             ("hold ▲ / ▼", "next / previous (station)"),
             ("● or ▲ + ▼", "play / pause"),
             ("● ●", "screen on, where you were"),
-            ("▲ + ●", "screen on: Now playing"),
+            ("▲ + ●", "screen on: full player"),
             ("▼ + ● short", "save this song"),
             ("headset 1×", "play / pause"),
             ("headset 2× 3×", "next · previous"),
@@ -1404,7 +1454,7 @@ impl Ui {
             ("▲ ▼", "move · hold: keep moving"),
             ("●", "select"),
             ("▲ + ▼", "back · Now playing: menu"),
-            ("▲ + ●", "Now playing"),
+            ("▲ + ●", "full player: volume"),
             ("Now playing", "▲▼ volume · ● play/pause"),
             ("hold ▼ + ●", "nothing (force restart)"),
         ] {

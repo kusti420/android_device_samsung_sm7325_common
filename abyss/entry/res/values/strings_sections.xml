@@ -9,7 +9,6 @@
     <string name="state_plays_label">Plays</string>
     <string name="state_out_label">Output</string>
     <string name="state_battery_label">Battery</string>
-    <string name="state_plays_home">Opens on Home</string>
     <string name="state_plays_radio">%1$s (radio)</string>
     <string name="state_plays_song">%1$s</string>
     <string name="state_plays_nothing">Nothing played yet</string>
@@ -72,7 +71,7 @@
 
     <!-- Navigation & keys -->
     <string name="sec_keys">Keys in Abyss</string>
-    <string name="nav_start_short">Opens on %1$s</string>
+    <string name="nav_short">One main screen · ▲ + ● player · ▲ + ▼ back</string>
 
     <!-- Screen & power -->
     <string name="sec_screen_group">Screen</string>

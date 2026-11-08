@@ -1623,6 +1623,7 @@ impl Host {
             Err(e) => return Effect::Unsupported(e),
         };
         cfg.allow = Some(self.modules[module].net.clone());
+        cfg.module = self.modules[module].id.clone();
         // The same station in the same format is already the stream: keep it (no new prebuffer,
         // no gap), just show it, like Resume does for a library track.
         let key = (cfg.tag.clone(), cfg.format.clone());
@@ -1737,7 +1738,11 @@ impl Host {
         if !matches!(&f.place, Place::Screen { module: x, .. } if *x == module) {
             f = Frame::new(Place::Screen { module, screen: String::new() }, Vec::new());
         }
-        Some(self.with_scope(&f, None, |sc| capture_of(cap, sc)))
+        // `fields.module`: which app the capture came from (Settings files it under that app).
+        Some(self.with_scope(&f, None, |sc| capture_of(cap, sc)).map(|mut c| {
+            c.fields.insert("module".into(), Value::from(m.id.clone()));
+            c
+        }))
     }
 }
 
@@ -2382,6 +2387,30 @@ mod tests {
         h.back();
         assert!(!h.station_in_front(), "the stations list is not a station screen");
         h.stop_stream();
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn module_captures_name_their_module() {
+        // Settings files captures under the app they came from: `fields.module` = the module id.
+        let root = std::env::temp_dir().join(format!("abyss-mod-capmod-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let store = root.join("store");
+        store_with(&store, "cap", "ready", &["apps"]);
+        let mf = store.join("cap/manifest.json");
+        let mut m: Value = serde_json::from_slice(&fs::read(&mf).unwrap()).unwrap();
+        m["capture"] = json!({"line": "seen on $settings.server", "fields": {"where": "$settings.server"}});
+        fs::write(&mf, m.to_string()).unwrap();
+        let (mods, errs) = load(&store, &root.join("settings"));
+        assert_eq!(mods.len(), 1, "{errs:?}");
+        let net: Arc<dyn Network> = Arc::new(radio_source::OpenNetwork(Arc::new(crate::http::TcpTransport::default())));
+        let mut h = Host::new(mods, errs, net).unwrap();
+        assert!(h.capture(true).is_none(), "nothing of the module in front");
+        h.open_direct(0);
+        let c = h.capture(true).unwrap().unwrap();
+        assert_eq!(c.line, "seen on http://127.0.0.1:9");
+        assert_eq!(c.fields.get("module"), Some(&Value::from("cap")));
+        assert_eq!(c.fields.get("where"), Some(&Value::from("http://127.0.0.1:9")));
         let _ = fs::remove_dir_all(&root);
     }
 

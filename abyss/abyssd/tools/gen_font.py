@@ -23,7 +23,7 @@ import sys
 from PIL import Image, ImageDraw, ImageFont
 
 # Symbols the UI uses beyond the Latin blocks.
-SYMBOLS = "▸▲▼●✓≈·–—…→←›‹“”‘’€°×−"
+SYMBOLS = "▸▲▼●✓≈·–—…→←›‹“”‘’€°×−↑↓⇅▮"
 
 
 def body_charset():

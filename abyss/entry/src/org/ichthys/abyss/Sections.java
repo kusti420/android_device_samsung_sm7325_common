@@ -84,11 +84,6 @@ final class Sections {
             new int[] {10, 15, 30, 60}, R.string.seconds, 15, 5, 120,
             R.string.screen_timeout_other);
 
-    /** Where Abyss opens: "player" (default: last song ready, paused) or "home" (abyssd ui.rs). */
-    static final Page.Choice NAV_START = new Page.Choice("persist.abyss.nav.start",
-            new String[] {"player", "home"},
-            new int[] {R.string.nav_start_player, R.string.nav_start_home}, "player");
-
     /** Best A2DP codec abyss-btd may use; the stack falls back to AAC, then SBC (daemon.rs). */
     static final Page.Choice BT_CODEC = new Page.Choice("persist.abyss.bt.codec",
             new String[] {"ldac", "aac", "sbc"},
@@ -333,17 +328,15 @@ final class Sections {
 
     // Navigation & keys ......................................................................
 
+    /** No choices: Abyss always opens on its main screen with the last music ready (abyssd). */
     static void navigation(Page p) {
-        p.intro(p.a.getString(R.string.next_entry_note));
-        Page.Group g = p.group(0);
-        g.choice(R.string.nav_start_title, R.string.nav_start_summary, NAV_START);
         Page.Group k = p.group(R.string.sec_keys);
         k.paragraph(0, p.a.getString(R.string.nav_keys_note));
         k.paragraph(0, p.a.getString(R.string.back_body));
     }
 
     private static CharSequence navigationSummary(Context c) {
-        return c.getString(R.string.nav_start_short, NAV_START.current(c));
+        return c.getString(R.string.nav_short);
     }
 
     // Screen & power .........................................................................
