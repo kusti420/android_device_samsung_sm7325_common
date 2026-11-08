@@ -1,0 +1,10 @@
+# Copyright (C) 2026 IchthysOS
+# SPDX-License-Identifier: Apache-2.0
+#
+# ImsMedia (com.android.telephony.imsmedia) runs as uid phone, i.e. in the radio domain.
+# ImsStack (com.android.imsstack, platform-signed app -> platform_app) opens the RTP/RTCP UDP
+# sockets on the IMS network and hands their fds to ImsMedia, which sends and receives on them.
+allow radio platform_app:udp_socket { getattr read write setopt shutdown };
+
+# ImsMedia raises its audio threads to real-time priority through SchedulingPolicyService.
+allow radio scheduling_policy_service:service_manager find;

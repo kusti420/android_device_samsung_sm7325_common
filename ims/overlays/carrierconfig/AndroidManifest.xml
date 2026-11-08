@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 IchthysOS
+     SPDX-License-Identifier: Apache-2.0
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.ichthys.overlay.ims.carrierconfig"
+    android:versionCode="1"
+    android:versionName="1.0">
+
+    <!-- Replaces CarrierConfig's res/xml/vendor.xml and vendor_no_sim.xml (both empty in AOSP),
+         which DefaultCarrierConfigService applies after the per-carrier asset files. -->
+    <overlay
+        android:isStatic="true"
+        android:priority="10"
+        android:targetPackage="com.android.carrierconfig" />
+
+    <application android:hasCode="false" />
+</manifest>

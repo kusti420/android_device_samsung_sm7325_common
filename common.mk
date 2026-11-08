@@ -373,6 +373,9 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     Stk
 
+# IMS / VoLTE: AOSP ImsStack + ImsMedia, overlays, carrier gating, IMS APNs (ims/ims.mk)
+$(call inherit-product, $(LOCAL_PATH)/ims/ims.mk)
+
 # Sensors
 # IchthysOS/AOSP-17 a52sxq bringup: DISABLED. The multihal is installed and declares
 # android.hardware.sensors.ISensors/default via its own vintf_fragment, but it never

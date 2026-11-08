@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--
+     Copyright (C) 2026 IchthysOS
+     SPDX-License-Identifier: Apache-2.0
+
+     IchthysOS IMS gating. CarrierConfig reads this after the per-carrier asset file, bundle by
+     bundle, later bundles winning. Bundle 1 (no filter) keeps every SIM on today's CS-only
+     behaviour even though an ImsService is now bound; the Estonian bundles below then turn on
+     VoLTE voice for Telia (248-01), Elisa (248-02) and Tele2 (248-03) only.
+
+     Settings for the first live VoLTE test, on purpose:
+     - Emergency calls stay CS-first everywhere (carrier_use_ims_first_for_emergency_bool=false):
+       GsmCdmaPhone dials them on CS exactly as before ImsStack; IMS emergency is untested here.
+     - SMS stays on CS/SGs (no SMS over IMS): keeps the Mobile-ID STK SEND_SMS path unchanged.
+     - Supplementary services stay on CS (no Ut/XCAP), no VT, no VoWiFi, no RCS/presence.
+     - No VoLTE while roaming: IR.92 forbids voice on the default bearer when roaming, and this
+       RIL (IRadio@1.5) reports no dedicated-bearer QoS, so roaming calls could not set up.
+     Values from the operators' own profiles in the stock A528B imsservice (imsprofile.json):
+     IMS PDN "ims", IPsec, preconditions, AMR-WB/AMR (EVS is offered by stock but ImsMedia has no
+     EVS codec on this device, so it is not offered).
+-->
+<carrier_config_list>
+    <carrier_config>
+        <boolean name="carrier_volte_available_bool" value="false" />
+        <boolean name="carrier_vt_available_bool" value="false" />
+        <boolean name="carrier_wfc_ims_available_bool" value="false" />
+        <boolean name="carrier_use_ims_first_for_emergency_bool" value="false" />
+        <boolean name="imssms.sms_over_ims_supported_bool" value="false" />
+        <boolean name="carrier_supports_ss_over_ut_bool" value="false" />
+        <boolean name="ims.enable_presence_publish_bool" value="false" />
+        <boolean name="use_rcs_sip_options_bool" value="false" />
+    </carrier_config>
+
+    <!-- Telia Eesti -->
+    <carrier_config mcc="248" mnc="01">
+        <boolean name="carrier_volte_available_bool" value="true" />
+        <boolean name="imsvoice.carrier_volte_roaming_available_bool" value="false" />
+        <!-- IRadio@1.5 carries no QoS sessions, so ImsStack never sees the QCI-1 bearer the
+             network sets up (the modem still routes RTP onto it by TFT). Without this the
+             8 s dedicated-bearer wait expires and ImsStack releases every call. -->
+        <boolean name="imsvoice.voice_on_default_bearer_supported_bool" value="true" />
+        <boolean name="imsvoice.audio_evs_support_bool" value="false" />
+    </carrier_config>
+
+    <!-- Elisa Eesti -->
+    <carrier_config mcc="248" mnc="02">
+        <boolean name="carrier_volte_available_bool" value="true" />
+        <boolean name="imsvoice.carrier_volte_roaming_available_bool" value="false" />
+        <boolean name="imsvoice.voice_on_default_bearer_supported_bool" value="true" />
+        <boolean name="imsvoice.audio_evs_support_bool" value="false" />
+    </carrier_config>
+
+    <!-- Tele2 Eesti -->
+    <carrier_config mcc="248" mnc="03">
+        <boolean name="carrier_volte_available_bool" value="true" />
+        <boolean name="imsvoice.carrier_volte_roaming_available_bool" value="false" />
+        <boolean name="imsvoice.voice_on_default_bearer_supported_bool" value="true" />
+        <boolean name="imsvoice.audio_evs_support_bool" value="false" />
+    </carrier_config>
+</carrier_config_list>

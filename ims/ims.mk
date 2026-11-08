@@ -1,0 +1,38 @@
+#
+# Copyright (C) 2026 IchthysOS
+# SPDX-License-Identifier: Apache-2.0
+#
+# VoLTE with the AOSP open IMS stack (packages/modules/ImsStack + ImsMedia, Apache-2.0).
+#
+# SIP/IMS signalling runs in ImsStack (com.android.imsstack, the MMTEL ImsService). RTP and the
+# AMR/AMR-WB codecs run on the AP in ImsMedia (com.android.telephony.imsmedia, uid phone), whose
+# audio goes through AAudio VOICE_COMMUNICATION -> voip_rx/voip_tx. Samsung's libsec-ril brings up
+# the "ims" PDN over IRadio@1.5 when telephony asks for NET_CAPABILITY_IMS; no IRadioIms, no
+# IImsMedia offload HAL and no Samsung SecIms/QTI IMS daemons are used.
+#
+# What is enabled where (each file says why):
+#   overlays/framework    config_device_volte_available, config_use_voip_mode_for_ims
+#   overlays/telephony    config_ims_mmtel_package = com.android.imsstack
+#   overlays/carrierconfig  per-carrier gating: VoLTE only on Telia/Elisa/Tele2 EE, CS-first
+#                         emergency everywhere, no SMS over IMS / Ut / VT / WFC yet
+#   apns/                 product apns-conf.xml = AOSP list + Tele2 EE IMS APN, Elisa IMS IPv4v6
+#   sepolicy/private      ImsMedia (radio) using ImsStack's RTP sockets (BoardConfigCommon.mk)
+
+# IMS stack + media service (libimsmedia, preinstall allowlist)
+PRODUCT_PACKAGES += \
+    ImsStack
+
+$(call inherit-product, packages/modules/ImsMedia/imsmedia.mk)
+
+# FEATURE_TELEPHONY_IMS: ImsResolver only binds an MMTEL ImsService when it is declared.
+PRODUCT_PACKAGES += \
+    android.hardware.telephony.ims.prebuilt.xml
+
+# Overlays + carrier data
+PRODUCT_PACKAGES += \
+    IchthysImsFrameworkOverlay \
+    IchthysImsTelephonyOverlay \
+    IchthysImsCarrierConfigOverlay \
+    ichthys_ims_apns_conf
+
+# SELinux: ims/sepolicy/private is added in BoardConfigCommon.mk (board variable).

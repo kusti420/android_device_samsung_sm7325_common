@@ -1,0 +1,23 @@
+//
+// Copyright (C) 2026 IchthysOS
+// SPDX-License-Identifier: Apache-2.0
+//
+
+// product/etc/apns-conf.xml: TelephonyProvider prefers it over system/etc/apns-conf.xml, so the
+// IMS APN fixes ride on top of the unchanged AOSP list (see apns_ims_ee.awk).
+genrule {
+    name: "ichthys_ims_apns_conf_gen",
+    srcs: [
+        ":sample_apns_conf",
+        "apns_ims_ee.awk",
+    ],
+    out: ["apns-conf.xml"],
+    cmd: "awk -f $(location apns_ims_ee.awk) $(location :sample_apns_conf) > $(out)",
+}
+
+prebuilt_etc {
+    name: "ichthys_ims_apns_conf",
+    product_specific: true,
+    src: ":ichthys_ims_apns_conf_gen",
+    filename: "apns-conf.xml",
+}

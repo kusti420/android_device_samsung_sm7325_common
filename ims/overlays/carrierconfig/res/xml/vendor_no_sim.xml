@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<!--
+     Copyright (C) 2026 IchthysOS
+     SPDX-License-Identifier: Apache-2.0
+
+     No SIM: emergency calls go CS-first, as before ImsStack was bound. No filters here: the
+     no-SIM config is read without a carrier id, so mcc/mnc filters would match everything.
+-->
+<carrier_config_list>
+    <carrier_config>
+        <boolean name="carrier_volte_available_bool" value="false" />
+        <boolean name="carrier_use_ims_first_for_emergency_bool" value="false" />
+    </carrier_config>
+</carrier_config_list>

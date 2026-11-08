@@ -229,6 +229,8 @@ include hardware/samsung-ext/interfaces/sepolicy/SEPolicy.mk
 BOARD_VENDOR_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/vendor
 PRODUCT_PRIVATE_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/private
 PRODUCT_PUBLIC_SEPOLICY_DIRS += $(COMMON_PATH)/sepolicy/public
+# IchthysOS VoLTE (ims/ims.mk): ImsMedia <-> ImsStack RTP sockets
+PRODUCT_PRIVATE_SEPOLICY_DIRS += $(COMMON_PATH)/ims/sepolicy/private
 # Abyss low-power mode (abyss/): abyssd + entry-app policy
 PRODUCT_PRIVATE_SEPOLICY_DIRS += $(COMMON_PATH)/abyss/sepolicy/private
 BOARD_VENDOR_SEPOLICY_DIRS += $(COMMON_PATH)/abyss/sepolicy/vendor

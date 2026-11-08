@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 IchthysOS
+     SPDX-License-Identifier: Apache-2.0
+-->
+<resources>
+    <!-- The device can do VoLTE (ImsStack + ImsMedia). Whether a SIM actually uses it is decided
+         per carrier by carrier_volte_available_bool (overlays/carrierconfig). -->
+    <bool name="config_device_volte_available">true</bool>
+
+    <!-- No VT (no IMS video path on this device) and no VoWiFi (no Iwlan/QNS/ePDG shipped). -->
+    <bool name="config_device_vt_available">false</bool>
+    <bool name="config_device_wfc_ims_available">false</bool>
+
+    <!-- IMS calls use MODE_IN_COMMUNICATION instead of MODE_IN_CALL. ImsMedia plays and records
+         the call itself (voip_rx/voip_tx); IN_CALL would make the Samsung HAL wait for a CS
+         session on vendor.calls.slot_id* and start the modem voice usecase that has no CS call
+         behind it. CS calls (and SRVCC'd calls, which become CS connections) still use IN_CALL. -->
+    <bool name="config_use_voip_mode_for_ims">true</bool>
+
+    <!-- ImsStack needs the unsanitized ServiceState (cell identity for P-Access-Network-Info)
+         even with location off, like the phone process. -->
+    <string-array name="config_serviceStateLocationAllowedPackages">
+        <item>com.android.phone</item>
+        <item>com.android.imsstack</item>
+    </string-array>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Copyright (C) 2026 IchthysOS
+     SPDX-License-Identifier: Apache-2.0
+-->
+<resources>
+    <!-- Device ImsService for MMTEL (voice/SMS): the AOSP open IMS stack. RCS stays unbound. -->
+    <string name="config_ims_mmtel_package" translatable="false">com.android.imsstack</string>
+</resources>
