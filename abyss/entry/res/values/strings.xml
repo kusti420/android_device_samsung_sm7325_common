@@ -6,14 +6,7 @@
 
     <!-- Settings home page tile (injected through com.android.settings.action.IA_SETTINGS). -->
     <string name="settings_tile_title">Abyss</string>
-    <string name="settings_tile_summary">Keys-only music mode, captures, brightness</string>
-
-    <!-- Section headers -->
-    <string name="sec_enter">ENTER</string>
-    <string name="sec_captures">CAPTURES</string>
-    <string name="sec_settings">SETTINGS · used the next time you enter</string>
-    <string name="sec_scripts">SCRIPTS</string>
-    <string name="sec_apps">APPS &amp; CONTAINERS</string>
+    <string name="settings_tile_summary">Keys-only music mode, Bluetooth, internet, modules</string>
 
     <!-- Enter -->
     <string name="deep_body">Android switches off. The screen stays black and the phone keys run a small music player. Longest battery.</string>
@@ -24,7 +17,6 @@
     <string name="back_heading">Coming back</string>
     <string name="back_body">Hold the power key for 3 seconds. Android takes about 30 s to come back.</string>
     <string name="lite_note">This is v1-lite: while music plays the phone does not deep-sleep yet, so the battery goes down faster than it will later.</string>
-    <string name="no_headphones">No wired or USB headphones are plugged in. Bluetooth headphones can be switched on inside Abyss: menu › Bluetooth.</string>
     <string name="enter">Enter Abyss</string>
     <string name="going">Going dark…</string>
     <string name="not_installed">Abyss is not part of this build.</string>

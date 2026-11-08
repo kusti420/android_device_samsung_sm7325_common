@@ -102,6 +102,12 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+        <!-- The control center's sections (Playback & Bluetooth, Internet, ...; Sections.java).
+             Not exported: reached only from EntryActivity. -->
+        <activity
+            android:name=".SectionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <!-- Modules (impl-radio-module): Settings › Abyss › Modules. Not exported: reached only
              from the control center; the install sheet only from ModulesActivity's own SAF
              picker result, so no other app can push an install. -->

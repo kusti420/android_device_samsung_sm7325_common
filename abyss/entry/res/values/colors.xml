@@ -1,12 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Abyss palette (pure black OLED, outlines not fills). -->
+<!-- Abyss palette = the IchthysOS "Shoal" theme tokens (frameworks/base core/res
+     values/ichthys_tokens.xml, written by the theming service from ichthys.nix). The unsuffixed
+     tokens follow light / dark, so every page (control center, sections, Modules) follows the
+     device theme. Dark: ichthys_ink is the black ground (pitch black with theme.pitchBlack), so
+     the pages stay OLED-friendly. No Shoal hex values here (ShoalPalette is the only place). -->
 <resources>
-    <color name="abyss_bg">#FF000000</color>
-    <color name="abyss_text">#FFA8A290</color>
-    <color name="abyss_dim">#FF7D7869</color>
-    <color name="abyss_accent">#FF5DB04C</color>
-    <color name="abyss_warn">#FFD08A2A</color>
-    <!-- Card outlines and row dividers (canvas boards: #615D4E cards, #2C2A22 rules). -->
-    <color name="abyss_outline">#FF615D4E</color>
-    <color name="abyss_rule">#FF2C2A22</color>
+    <color name="abyss_bg">@*android:color/ichthys_ink</color>
+    <color name="abyss_card">@*android:color/ichthys_card</color>
+    <color name="abyss_text">@*android:color/ichthys_text</color>
+    <color name="abyss_dim">@*android:color/ichthys_muted</color>
+    <color name="abyss_accent">@*android:color/ichthys_accent</color>
+    <color name="abyss_on_accent">@*android:color/ichthys_on_accent</color>
+    <color name="abyss_accent_tint">@*android:color/ichthys_accent_tint</color>
+    <color name="abyss_track">@*android:color/ichthys_track</color>
+    <!-- Strong outlines (segments, buttons) and hairlines (cards, row dividers). -->
+    <color name="abyss_outline">@*android:color/ichthys_outline</color>
+    <color name="abyss_rule">@*android:color/ichthys_hairline</color>
+    <!-- Cautions (experimental switches, "no headphones"); no theme token for it yet. Light:
+         a darker amber that keeps 4.5:1 on the light ground; dark: values-night. -->
+    <color name="abyss_warn">#FF9A5B00</color>
 </resources>

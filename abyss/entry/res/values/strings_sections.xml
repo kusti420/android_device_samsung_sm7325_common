@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings › Abyss: the top page and its sections (Sections.java, Page.java, Status.java).
+     Kept in its own file so other work on strings.xml doesn't collide with it; the older rows'
+     strings (titles and summaries of each setting) stay in strings.xml. -->
+<resources>
+    <string name="navigate_up">Back</string>
+
+    <!-- Top page: state lines -->
+    <string name="state_plays_label">Plays</string>
+    <string name="state_out_label">Output</string>
+    <string name="state_battery_label">Battery</string>
+    <string name="state_plays_home">Opens on Home</string>
+    <string name="state_plays_radio">%1$s (radio)</string>
+    <string name="state_plays_song">%1$s</string>
+    <string name="state_plays_nothing">Nothing played yet</string>
+    <string name="state_out_wired">Wired headphones</string>
+    <string name="state_out_bt">%1$s (Bluetooth: Home › Connect)</string>
+    <string name="state_out_none">Nothing plugged in. Pair Bluetooth headphones in Playback &amp; Bluetooth.</string>
+    <string name="state_battery">%1$d %%</string>
+    <string name="state_battery_hours">%1$d %% · about %2$s h of music</string>
+    <string name="state_battery_unknown">Unknown</string>
+    <string name="enter_note">Calls, texts and alarms wait until you are back. To come back, hold the power key for 3 seconds.</string>
+
+    <!-- Top page: groups -->
+    <string name="sec_quick">Quick settings</string>
+    <string name="sec_all">Settings</string>
+    <string name="next_entry_note">Used the next time you enter Abyss.</string>
+
+    <!-- Sections (titles on the top page and as page titles) -->
+    <string name="sec_playback">Playback &amp; Bluetooth</string>
+    <string name="sec_internet">Internet</string>
+    <string name="sec_navigation">Navigation &amp; keys</string>
+    <string name="sec_screen">Screen &amp; power</string>
+    <string name="sec_captures_title">Captures</string>
+    <string name="sec_before">Before you enter</string>
+    <string name="sec_before_sum">What stops, what keeps going, how to come back</string>
+    <string name="sec_advanced">Advanced</string>
+    <string name="sec_advanced_sum">State, shell tuning, coming next</string>
+
+    <!-- Playback & Bluetooth -->
+    <string name="sec_bt_quality">Sound over Bluetooth</string>
+    <string name="sec_volume">Volume</string>
+    <string name="bt_codec_title">Best codec</string>
+    <string name="bt_codec_summary">The best codec Abyss may use. Headphones without it fall back to AAC, then SBC.</string>
+    <string name="bt_codec_ldac">LDAC</string>
+    <string name="bt_codec_aac">AAC</string>
+    <string name="bt_codec_sbc">SBC</string>
+    <string name="bt_offload_title">Bluetooth through the audio DSP (experimental)</string>
+    <string name="bt_offload_summary">The audio DSP encodes the Bluetooth sound instead of the CPU, so the phone can sleep while Bluetooth music plays. Not proven on this phone yet: if Bluetooth sound fails or stutters, switch it off. Used the next time Bluetooth is switched on in Abyss.</string>
+    <string name="bt_offload_short">DSP offload</string>
+
+    <!-- Internet -->
+    <string name="net_format_short">radio on mobile: %1$s</string>
+
+    <!-- Navigation & keys -->
+    <string name="sec_keys">Keys in Abyss</string>
+    <string name="nav_start_short">Opens on %1$s</string>
+
+    <!-- Screen & power -->
+    <string name="sec_screen_group">Screen</string>
+    <string name="sec_power">Power</string>
+    <string name="battery_title">Battery</string>
+    <string name="battery_detail">%1$d %% now. Measured in Abyss: %2$d mA with the screen off and music playing, so about %3$s h of music.</string>
+    <string name="battery_detail_unlearned">%1$d %% now. The hours of music left show here once Abyss has measured its draw with the screen off and music playing (after about 10 minutes of it).</string>
+    <string name="screen_short">Screen on %1$s · brightness %2$d · deep sleep %3$s</string>
+    <string name="suspend_short_on">on</string>
+    <string name="suspend_short_off">off</string>
+
+    <!-- Captures -->
+    <string name="captures_none_short">Nothing saved yet</string>
+
+    <!-- Advanced -->
+    <string name="sec_diag">Diagnostics</string>
+    <string name="adv_state_title">Abyss state</string>
+    <string name="adv_tuning_title">Tuning</string>
+    <string name="adv_tuning_count">%1$d tuning values set from a shell</string>
+    <string name="adv_tuning_none">Nothing set from a shell: everything not on these pages is at its default.</string>
+    <string name="adv_tuning_hint">Set from a shell with setprop (persist.abyss.…); Abyss reads them when you enter.</string>
+    <string name="sec_coming_next">Coming next</string>
+    <string name="sec_scripts_title">Scripts</string>
+    <string name="sec_apps_title">Apps &amp; containers</string>
+</resources>
