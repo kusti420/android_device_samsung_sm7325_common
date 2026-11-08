@@ -989,6 +989,13 @@ impl Ui {
         if v.wifi.summary() != "off" && !v.wifi.summary().starts_with("off ") {
             left.push_str(" · wi-fi");
         }
+        // Mobile data in use: its network type ("LTE", "5G"), else "mobile" while it starts.
+        let ms = crate::mobile::summary();
+        if !ms.starts_with("off") {
+            let tag = ms.split(" · ").next().filter(|t| t.len() <= 5 && !t.ends_with('…')).unwrap_or("mobile");
+            left.push_str(" · ");
+            left.push_str(tag);
+        }
         SMALL.draw(cv, MARGIN, STATUS_Y, &SMALL.ellipsize(&left, half), DIM);
         let b = v.battery;
         let right = format!("{} · {}", pct(b), hours_short(b));

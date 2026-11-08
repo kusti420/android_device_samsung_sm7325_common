@@ -212,10 +212,13 @@ fn personal(n: &Network, on: &[Sec], out: &mut Vec<Block>) -> Result<(), String>
     }
     let mut secrets: Fields = Vec::new();
     if has(Sec::Psk) {
-        // The precomputed PMK skips 4096 rounds of PBKDF2 per connect (battery-nerd §4.3).
-        match (&n.pmk, pass) {
-            (Some(pmk), _) => secrets.push(("psk", pmk.clone())),
-            (None, Some(p)) => secrets.push(("psk", quoted("password", p)?)),
+        // The passphrase first: the supplicant derives the PMK itself (a few ms per connect).
+        // A handed-over precomputed PMK is only used when no passphrase is known (raw-PMK
+        // networks): on the owner's WPA2 router the handed-over PMK failed the 4-way handshake
+        // ("WRONG_KEY") while the passphrase works.
+        match (pass, &n.pmk) {
+            (Some(p), _) => secrets.push(("psk", quoted("password", p)?)),
+            (None, Some(pmk)) => secrets.push(("psk", pmk.clone())),
             (None, None) => unreachable!("psk_ok"),
         }
     }
@@ -507,9 +510,9 @@ pub fn event_hint(e: &str, keystore: bool) -> Option<String> {
     if e.contains("CTRL-EVENT-EAP-TLS-CERT-ERROR") {
         return Some("the network's server certificate was not accepted (check the CA certificate and domain in Android's Wi-Fi settings)".into());
     }
-    if e.contains("CTRL-EVENT-EAP-FAILURE")
-        || (e.contains("CTRL-EVENT-SSID-TEMP-DISABLED") && e.contains("reason=AUTH_FAILED"))
-    {
+    // AUTH_FAILED alone is also a WPA2/WPA3-Personal 4-way handshake failure (WRONG_KEY follows):
+    // only an EAP failure is an enterprise sign-in.
+    if e.contains("CTRL-EVENT-EAP-FAILURE") {
         return Some(if keystore {
             "enterprise sign-in failed: the certificate may not be readable in Abyss (keystore), or it was refused".into()
         } else {
