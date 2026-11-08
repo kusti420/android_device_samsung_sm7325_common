@@ -1111,11 +1111,11 @@ impl Ui {
         let (gx, gy, gw) = (x + 48, y + 150, bw - 96);
         cv.fill_rect(gx, gy, gw, 32, LINE);
         let f = (v.volume.min(v.volume_max) as f64 / v.volume_max.max(1) as f64 * gw as f64) as i32;
-        cv.fill_rect(gx, gy, f, 32, if v.volume > 140 { WARN } else { ACCENT });
-        // Safe-listening mark at 140 of 200.
-        let mark = gx + (140.0 / v.volume_max.max(1) as f64 * gw as f64) as i32;
+        cv.fill_rect(gx, gy, f, 32, if v.volume > 160 { WARN } else { ACCENT });
+        // Safe-listening mark at 160 of 200.
+        let mark = gx + (160.0 / v.volume_max.max(1) as f64 * gw as f64) as i32;
         cv.fill_rect(mark - 2, gy - 12, 4, 56, DIM);
-        let (note, c) = if v.volume > 140 { ("loud: above the safe mark", WARN) } else { ("safe up to the mark (140)", DIM) };
+        let (note, c) = if v.volume > 160 { ("loud: above the safe mark", WARN) } else { ("safe up to the mark (160)", DIM) };
         SMALL.draw(cv, x + 48, y + 216, note, c);
     }
 

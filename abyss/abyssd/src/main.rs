@@ -91,7 +91,7 @@ const OFFLOAD_SUSPEND_RETRY_MS: u64 = 500;
 const VOLUME_MAX: u32 = 200;
 const VOLUME_STEP: u32 = 1;
 /// Safe-listening limit (70 % of 200): going above needs a second ▲ within MSG_MS.
-const VOLUME_SAFE: u32 = 140;
+const VOLUME_SAFE: u32 = 160;
 /// Taps closer than this count as one fast streak for the adaptive step.
 const VOLUME_SPAM_MS: u64 = 350;
 /// The adaptive step never goes above 5 steps per tap.
@@ -500,7 +500,7 @@ impl App {
                         self.loud_ok = true;
                     } else {
                         self.loud_warned_until = now + MSG_MS;
-                        self.say(now, "Above 140 of 200 is loud. Press ▲ again to go louder.", ui::WARN);
+                        self.say(now, "Above 160 of 200 is loud. Press ▲ again to go louder.", ui::WARN);
                         return;
                     }
                 }
