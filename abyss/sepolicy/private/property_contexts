@@ -1,0 +1,19 @@
+# Abyss (device/samsung/sm7325-common/abyss). The more specific entries win over AOSP's
+# `sys.` -> system_prop and `persist.sys.`/`persist.` defaults; exact entries win over the
+# sys.abyss. / persist.abyss. prefixes below.
+sys.abyss.              u:object_r:abyss_prop:s0 prefix string
+sys.abyss.request       u:object_r:abyss_prop:s0 exact enum enter leave
+sys.abyss.state         u:object_r:abyss_state_prop:s0 exact enum off entering active leaving
+sys.abyss.hal           u:object_r:abyss_state_prop:s0 exact string
+# Bluetooth switch inside Abyss: init starts/stops abyss-btd on it (abyss.rc).
+sys.abyss.bt            u:object_r:abyss_bt_prop:s0 exact enum on off
+# Wi-Fi leases: init starts/stops wpa_supplicant + abyss-net on it (abyss.rc).
+sys.abyss.wifi          u:object_r:abyss_wifi_prop:s0 exact enum on off
+# Raw panel0-backlight level (0..max_brightness, 486 on a52sxq). "" is always allowed (reset).
+sys.abyss.brightness    u:object_r:abyss_brightness_prop:s0 exact uint
+persist.abyss.          u:object_r:abyss_config_prop:s0 prefix string
+persist.abyss.after_leave u:object_r:abyss_after_leave_prop:s0 exact string
+# Seconds the screen stays on after a key press in Abyss (control center: 10/15/30/60, abyssd
+# clamps to 5..120). Same type as the rest of persist.abyss.* (e.g. persist.abyss.brightness via
+# the prefix); the exact uint entry only makes init reject a non-number.
+persist.abyss.screen_timeout_s u:object_r:abyss_config_prop:s0 exact uint

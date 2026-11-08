@@ -1,0 +1,71 @@
+# Abyss entry app (device/samsung/sm7325-common/abyss/entry, org.ichthys.abyss): platform-signed,
+# android:sharedUserId="android.uid.system", so seapp_contexts puts it in system_app
+# (user=system seinfo=platform). There is no separate abyss_entry domain. Settings (also
+# system_app) shows the control center as the "Abyss" row on its home page (IA_SETTINGS tile,
+# no Settings code).
+#
+# Not needed here (system_app already has them in platform policy): writing Settings
+# (settings provider runs in system_server, binder), starting a foreground service,
+# battery saver via PowerManager. These are framework permission checks, not SELinux ones.
+#
+# Enter = SystemProperties.set("sys.abyss.request", "enter"); the rc does the rest.
+set_prop(system_app, abyss_prop)
+# Pre-flight shows whether Abyss is installed and idle (sys.abyss.state).
+get_prop(system_app, abyss_state_prop)
+# Settings > Abyss writes persist.abyss.* (incl. persist.abyss.brightness) and reads them back.
+set_prop(system_app, abyss_config_prop)
+# persist.abyss.after_leave: read once Android is back, then cleared (set to ""). abyssd no
+# longer writes it (Abyss Light retired); kept so a stale value can still be cleared.
+set_prop(system_app, abyss_after_leave_prop)
+# The control center's Settings section also writes persist.abyss.screen_timeout_s (exact uint,
+# property_contexts) and persist.abyss.suspend: both abyss_config_prop, covered by the rule above;
+# abyssd reads them with its get_prop(abyssd, abyss_config_prop).
+
+# Control center, Captures: /data/misc/abyss/out/captures.jsonl (abyssd appends on Volume Down +
+# Power in Abyss) and out/bt_last.json (last Bluetooth headphones) are read; captures.jsonl is
+# rewritten for "delete one" / "clear all" (temporary file in out/, chmod 0660 so abyssd can
+# still append, rename over the old file; Captures.java). abyssd and the framework never run at
+# the same time (abyss.rc), so the two writers never overlap. DAC: out/ is 02770 system:system.
+# No neverallow covers abyss_data_file for system_app (app.te limits system_data_file,
+# shell_data_file and trace_data_file, not product data types).
+#   dir: search /data/misc/abyss + out/, add/remove the temporary file and the renamed target.
+allow system_app abyss_data_file:dir { search getattr write add_name remove_name };
+#   file: read both files; create/write/chmod (setattr) the temporary file, rename it, unlink
+#   the file it replaces (SELinux checks unlink on a rename target) or a failed temporary file.
+allow system_app abyss_data_file:file { create open read write getattr setattr rename unlink };
+# sys.abyss.brightness is deliberately NOT settable by system_app: only abyssd drives the panel
+# while Abyss is active. Read access for diagnostics only.
+get_prop(system_app, abyss_brightness_prop)
+
+# Debug builds: "adb shell setprop sys.abyss.request enter|leave" without root.
+userdebug_or_eng(`
+  set_prop(shell, abyss_prop)
+  get_prop(shell, abyss_state_prop)
+  set_prop(shell, abyss_config_prop)
+  set_prop(shell, abyss_after_leave_prop)
+  set_prop(shell, abyss_brightness_prop)
+  # sys.abyss.bt on|off by hand (helper bring-up).
+  set_prop(shell, abyss_bt_prop)
+  # sys.abyss.wifi on|off by hand (starts wpa_supplicant + abyss-net while Abyss is active).
+  set_prop(shell, abyss_wifi_prop)
+')
+
+# ---- Modules (impl-radio-module): Settings › Abyss › Modules installs signed declarative
+# modules (ModuleStore.java, contract ~/abyss-design/reports/module-install-contract.md).
+# Everything stays inside /data/misc/abyss (abyss_data_file; new files and dirs inherit the
+# type, no type_transition needed):
+#   store/<id>/{install,manifest,menu}.json, SIGNATURE, tree/...   the installed module
+#   store/.staging-<id>-<n>/, .old-<id>-<n>, .trash-<id>-<n>        atomic swap / removal
+#   conf/settings/app-<id>.env (+ .tmp)                              the module's settings
+# The rules above already cover creating, writing, chmod-ing and renaming FILES. Added here
+# for DIRECTORIES:
+#   create   mkdir store/, conf/settings/, a module's staging tree and its subdirectories
+#   setattr  chmod them to 0750 (abyssd reads through group system; nothing group-writable)
+#   open read  list store/ and a module's tree (Modules list, re-checking an installed tree)
+#              and open a directory to fsync it after a rename
+#   rename   staging -> store/<id>, store/<id> -> .old-/.trash- (same parent: no reparent)
+#   rmdir    delete the old version / a removed module / a stale staging tree
+# No neverallow covers this (domain.te only fences vendor domains off core_data_file_type;
+# system_app.te fences shell_data_file and fuse). abyssd (abyssd.te) already reads
+# abyss_data_file dirs and files, so it reads the store with no new rule.
+allow system_app abyss_data_file:dir { create setattr open read rename rmdir };

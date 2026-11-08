@@ -1,0 +1,23 @@
+# Abyss (device/samsung/sm7325-common/abyss): VENDOR policy, needs
+#   BOARD_VENDOR_SEPOLICY_DIRS += $(COMMON_PATH)/abyss/sepolicy/vendor
+# in BoardConfigCommon.mk (next to the existing sepolicy/vendor line).
+#
+# init applies the Abyss backlight level from abyss.rc (/system_ext/etc/init/abyss.rc, runs in
+# the init domain, not vendor_init, because it is not a /vendor or /odm .rc):
+#   enter:  chmod 0644 + copy brightness -> /data/misc/abyss/brightness.saved + chmod 0664
+#   active: write brightness ${sys.abyss.brightness}       (abyssd sets the property)
+#   leave:  copy /data/misc/abyss/brightness.saved -> brightness
+# /sys/class/backlight/panel0-backlight/{brightness,max_brightness} is vendor_sysfs_graphics
+# (vendor_file_contexts: /sys/devices/platform/soc/ae00000.qcom,mdss_mdp/backlight(/.*)?).
+# Platform policy only gives init getattr/read on sysfs_type (no open, private/init.te:49) and
+# this device's vendor policy already gives init setattr on it (chown/chmod in
+# init.samsung.display.rc). Android's own path (composer -> sysfs) is unchanged.
+#
+# Neverallow check (system/sepolicy): the only init-vs-sysfs neverallow is
+# `neverallow init sysfs:file { open write }` (private/init.te:856), generic sysfs only;
+# sysfs_leds / sysfs_batteryinfo / sysfs_pgsize_migration / sysfs_devices_cs_etm /
+# sysfs_usermodehelper neverallows do not cover vendor_sysfs_graphics or exempt init anyway
+# (private/coredomain.te:41-52, private/domain.te:1637-1655,2339,2383,724).
+# Verified offline with secilc on the full linked policy, no -N (see the r2 report).
+allow init vendor_sysfs_graphics:dir search;
+allow init vendor_sysfs_graphics:file rw_file_perms;

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings › Abyss › Modules (ModulesActivity, ModuleInstallActivity, ModuleSettingsActivity).
+     Kept in its own file so other work on strings.xml doesn't collide with it. -->
+<resources>
+    <!-- Control center entry (center.xml, Apps card) -->
+    <string name="mod_open">Modules</string>
+    <string name="mod_open_hint">Declarative modules (like a radio) can be installed from a signed file now.</string>
+
+    <!-- Modules list -->
+    <string name="mod_title">Modules</string>
+    <string name="mod_intro">Things you add to Abyss, like a radio. They show in Abyss under Apps. Anything that needs typing, like a server address, is set here.</string>
+    <string name="mod_sec_installed">Installed</string>
+    <string name="mod_sec_add">Add</string>
+    <string name="mod_none">Nothing installed yet.</string>
+    <string name="mod_row_sub">%1$s · %2$s · signed %3$s</string>
+    <string name="mod_needs_setup">Needs setup</string>
+    <string name="mod_install_file">Install from file…</string>
+    <string name="mod_install_file_hint">A signed .abyssapp file, for example one built with a module\'s build.sh and copied to the phone.</string>
+    <string name="mod_add_source">Add source…</string>
+    <string name="mod_add_source_soon">Coming soon: adding a git repo as a source, kept up to date for you. Until then, build the module on a computer and install its .abyssapp file.</string>
+    <string name="mod_no_picker">No file picker on this phone.</string>
+
+    <!-- Install sheet -->
+    <string name="mod_checking">Checking…</string>
+    <string name="mod_cant_install">Can\'t install</string>
+    <string name="mod_invalid">The module has a problem: %1$s</string>
+    <string name="mod_unreadable">The file can\'t be read.</string>
+    <string name="mod_close">Close</string>
+    <string name="mod_sheet_sub">Version %1$s · %2$s · by %3$s</string>
+    <string name="mod_update_from">Update from %1$s to %2$s.</string>
+    <string name="mod_reinstall">Version %1$s is installed; this installs it again.</string>
+    <string name="mod_downgrade">Older version: %1$s is installed, this file is %2$s.</string>
+    <string name="mod_sec_signed">Signed by</string>
+    <string name="mod_files_checked">all %1$d files match the signature</string>
+    <string name="mod_key_changed">Signed by a different key than the installed version (%1$s). Remove the installed module first if you trust this file.</string>
+    <string name="mod_key_same">Same key as the installed version.</string>
+    <string name="mod_key_new">First install from this key. Install files only from people you trust: the signature says who made it, not that it is safe.</string>
+    <string name="mod_sec_can_do">What it can do</string>
+    <string name="mod_sec_settings">Settings</string>
+    <string name="mod_settings_when">Changes are used from the next time you enter Abyss.</string>
+    <string name="mod_honesty">Abyss checked every file against the signature. It draws this module\'s screens and plays its audio itself; the addresses above are the only places it can reach.</string>
+    <string name="mod_hold_install">Hold to install</string>
+    <string name="mod_hold_update">Hold to update</string>
+    <string name="mod_hold_allow">Hold to allow this address</string>
+    <string name="mod_hold_keep">Keep holding…</string>
+    <string name="mod_hold_hint">Hold for one second with your finger.</string>
+    <string name="mod_hold_obscured">Something is drawing over this screen. Close it, then hold again.</string>
+    <string name="mod_hold_finger">Hold it with your finger on the screen.</string>
+    <string name="mod_installed">%1$s installed. In Abyss it is under Apps.</string>
+    <string name="mod_install_failed">Couldn\'t install. Nothing was changed.</string>
+
+    <!-- Settings fields -->
+    <string name="mod_no_settings">This module has no settings.</string>
+    <string name="mod_on">On</string>
+    <string name="mod_secret_not_set">Not set</string>
+    <string name="mod_secret_later">Keys are kept by Abyss\'s own key store, which isn\'t in this build yet, so this key can\'t be set yet.</string>
+    <string name="mod_secret_honesty">Scripts and connectors you install all run as one Termux user, so any of them could read a key while it is in use. Install only scripts you trust.</string>
+
+    <!-- Module page -->
+    <string name="mod_gone">This module isn\'t installed any more.</string>
+    <string name="mod_broken">This module can\'t be read: %1$s</string>
+    <string name="mod_save">Save</string>
+    <string name="mod_saved">Saved. Used from the next time you enter Abyss.</string>
+    <string name="mod_save_failed">Couldn\'t save. Nothing was changed.</string>
+    <string name="mod_new_address_lan">New address: %1$s (on your home network). The module may only connect there after you allow it.</string>
+    <string name="mod_new_address_net">New address: %1$s, on the internet, not your home network. The module may only connect there after you allow it.</string>
+    <string name="mod_sec_details">Details</string>
+    <string name="mod_details">Id %1$s\nInstalled %2$s from %3$s\nContent %4$s…\nKey %5$s</string>
+    <string name="mod_remove">Remove module</string>
+    <string name="mod_remove_title">Remove %1$s?</string>
+    <string name="mod_remove_body">It goes from Abyss and its settings are deleted. Your captures stay.</string>
+    <string name="mod_removed">%1$s removed.</string>
+</resources>

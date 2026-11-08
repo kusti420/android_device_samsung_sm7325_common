@@ -1,0 +1,41 @@
+// IchthysOS: Abyss control center (org.ichthys.abyss). One pure-black screen with sections:
+// Enter (honest pre-flight + "Enter Abyss", which sets sys.abyss.request=enter; init, abyss.rc in
+// device/samsung/sm7325-common/abyss, then stops the framework and starts abyssd), Captures
+// (/data/misc/abyss/out/captures.jsonl), Settings (persist.abyss.*), and "coming next" cards for
+// Scripts and Apps & containers. Also injected into the Settings home page as "Abyss"
+// (com.android.settings.action.IA_SETTINGS, see AndroidManifest.xml); Settings is not edited.
+// Abyss Light (the Bluetooth app variant) is retired: Bluetooth lives inside Abyss.
+//
+// sharedUserId android.uid.system + platform certificate puts it in the system_app SELinux
+// domain; abyss/sepolicy/private/abyss_entry.te grants the properties and out/ access.
+//
+// Privileged permissions (WRITE_SECURE_SETTINGS) are allowlisted in
+// privapp-permissions-org.ichthys.abyss.xml; prebuilt_etc must set filename: "....xml", or
+// SystemConfig skips it and enforce mode crash-loops system_server (see IchthysGuard).
+// platform_apis: android.os.SystemProperties is a hidden API.
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+android_app {
+    name: "AbyssEntry",
+    srcs: ["src/**/*.java"],
+    resource_dirs: ["res"],
+    platform_apis: true,
+    certificate: "platform",
+    privileged: true,
+    system_ext_specific: true,
+    optimize: {
+        enabled: false,
+    },
+    required: ["privapp-permissions-org.ichthys.abyss"],
+}
+
+prebuilt_etc {
+    name: "privapp-permissions-org.ichthys.abyss",
+    src: "privapp-permissions-org.ichthys.abyss.xml",
+    filename: "privapp-permissions-org.ichthys.abyss.xml",
+    sub_dir: "permissions",
+    system_ext_specific: true,
+}

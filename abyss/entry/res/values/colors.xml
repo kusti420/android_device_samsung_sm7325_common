@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Abyss palette (pure black OLED, outlines not fills). -->
+<resources>
+    <color name="abyss_bg">#FF000000</color>
+    <color name="abyss_text">#FFA8A290</color>
+    <color name="abyss_dim">#FF7D7869</color>
+    <color name="abyss_accent">#FF5DB04C</color>
+    <color name="abyss_warn">#FFD08A2A</color>
+    <!-- Card outlines and row dividers (canvas boards: #615D4E cards, #2C2A22 rules). -->
+    <color name="abyss_outline">#FF615D4E</color>
+    <color name="abyss_rule">#FF2C2A22</color>
+</resources>

@@ -1,0 +1,179 @@
+/*
+ * Copyright (C) 2026 IchthysOS
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.ichthys.abyss;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Settings › Abyss › Modules › ‹name›: the module's own settings (text, number, bool, enum;
+ * secrets masked and write-only), what it can do, details, and Remove. Values are written to
+ * /data/misc/abyss/conf/settings/app-&lt;id&gt;.env and used from the next entry into Abyss.
+ *
+ * <p>A setting that changes where the module may connect (a server address) needs the same
+ * hold-to-approve as the install: the approved addresses are recorded in install.json and
+ * abyssd only connects to those (contract §4). Other changes never need approval.
+ * FLAG_SECURE: the page may show secret fields.
+ */
+public final class ModuleSettingsActivity extends Activity {
+    static final String EXTRA_ID = "org.ichthys.abyss.extra.MODULE_ID";
+    private static final String TAG = "AbyssModules";
+
+    private ModuleStore mStore;
+    private ModuleStore.Installed mMod;
+    private ModuleSpec mSpec;
+    private ModuleUi.SettingsForm mForm;
+    private LinearLayout mPerms;
+    private LinearLayout mApprove;
+    private View mSave;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        LinearLayout col = ModuleUi.page(this, true);
+        mStore = new ModuleStore(new File(ModuleStore.ROOT));
+        String id = getIntent().getStringExtra(EXTRA_ID);
+        mMod = id == null ? null : mStore.get(id);
+        if (mMod == null) {
+            ModuleUi.title(col, getString(R.string.mod_gone));
+            ModuleUi.button(col, getString(R.string.mod_close), v -> finish(), 28);
+            return;
+        }
+        ModuleUi.title(col, mMod.name());
+        String fp = mMod.fingerprint();
+        ModuleUi.dim(col, getString(R.string.mod_row_sub, mMod.version(),
+                String.valueOf(mMod.manifest.get("category")), fp == null ? "?" : fp));
+        try {
+            mSpec = mMod.spec();
+        } catch (ModuleSpec.Invalid | RuntimeException e) {
+            ModuleUi.warn(col, getString(R.string.mod_broken, e.getMessage()));
+            removeButton(col);
+            return;
+        }
+        String about = ModJson.str(mMod.manifest, "about");
+        if (about != null) {
+            ModuleUi.body(col, about);
+        }
+
+        ModuleUi.section(col, getString(R.string.mod_sec_settings));
+        LinearLayout set = ModuleUi.card(col);
+        mForm = new ModuleUi.SettingsForm(set, mSpec, mStore.readSettings(mSpec));
+        mForm.setOnChange(this::refreshPermissions);
+        ModuleUi.dim(set, getString(R.string.mod_settings_when));
+        mApprove = new LinearLayout(this);
+        mApprove.setOrientation(LinearLayout.VERTICAL);
+        set.addView(mApprove, ModuleUi.lp(this, 0));
+        mSave = ModuleUi.button(set, getString(R.string.mod_save), v -> save(false), 16);
+
+        ModuleUi.section(col, getString(R.string.mod_sec_can_do));
+        mPerms = ModuleUi.card(col);
+        refreshPermissions();
+
+        ModuleUi.section(col, getString(R.string.mod_sec_details));
+        LinearLayout det = ModuleUi.card(col);
+        Map<String, Object> src = ModJson.map(mMod.install.get("source"));
+        ModuleUi.dim(det, getString(R.string.mod_details,
+                mMod.id,
+                String.valueOf(mMod.install.get("installed_at")),
+                src != null && src.get("name") != null ? String.valueOf(src.get("name"))
+                        : "file",
+                String.valueOf(mMod.install.get("tree_sha256")).substring(0, 16),
+                fp == null ? "?" : fp)).setTextIsSelectable(true);
+        removeButton(col);
+    }
+
+    private void removeButton(LinearLayout col) {
+        ModuleUi.button(col, getString(R.string.mod_remove), v -> new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.mod_remove_title, mMod.name()))
+                .setMessage(R.string.mod_remove_body)
+                .setPositiveButton(R.string.mod_remove, (d, w) -> remove())
+                .setNegativeButton(R.string.cancel, null)
+                .show(), 28);
+    }
+
+    private Set<String> newOrigins(Map<String, Object> vals) {
+        Set<String> o = mSpec.netOrigins(vals);
+        o.removeAll(mMod.approvedNet());
+        return o;
+    }
+
+    private void refreshPermissions() {
+        Map<String, Object> vals = mForm.values();
+        mPerms.removeAllViews();
+        for (ModuleSpec.Permission p : mSpec.permissions(vals)) {
+            ModuleUi.body(mPerms, "· " + p.words);
+        }
+        // A new address needs a hold, like the install.
+        mApprove.removeAllViews();
+        Set<String> fresh = newOrigins(vals);
+        mSave.setVisibility(fresh.isEmpty() ? View.VISIBLE : View.GONE);
+        if (!fresh.isEmpty()) {
+            List<String> l = new ArrayList<>(fresh);
+            String o = String.join(", ", l);
+            ModuleUi.warn(mApprove, getString(ModuleSpec.isLan(l.get(0))
+                    ? R.string.mod_new_address_lan : R.string.mod_new_address_net, o));
+            ModuleUi.hold(mApprove, getString(R.string.mod_hold_allow), () -> save(true));
+        }
+    }
+
+    private void save(boolean approvedNow) {
+        if (!mForm.validate()) {
+            return;
+        }
+        Map<String, Object> vals = mForm.values();
+        boolean needsApproval = !newOrigins(vals).isEmpty();
+        if (needsApproval && !approvedNow) {
+            refreshPermissions();
+            return;
+        }
+        try {
+            if (needsApproval) {
+                mStore.approveNet(mMod, mSpec, vals, System.currentTimeMillis());
+            }
+            mStore.writeSettings(mSpec, vals);
+            Toast.makeText(this, R.string.mod_saved, Toast.LENGTH_LONG).show();
+            finish();
+        } catch (IOException | RuntimeException e) {
+            Log.w(TAG, "save settings of " + mMod.id, e);
+            Toast.makeText(this, R.string.mod_save_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void remove() {
+        try {
+            mStore.uninstall(mMod.id);
+            Toast.makeText(this, getString(R.string.mod_removed, mMod.name()),
+                    Toast.LENGTH_SHORT).show();
+            finish();
+        } catch (IOException | RuntimeException e) {
+            Log.w(TAG, "remove " + mMod.id, e);
+            Toast.makeText(this, R.string.mod_save_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+}

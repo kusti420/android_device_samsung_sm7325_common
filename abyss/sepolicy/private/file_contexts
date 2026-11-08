@@ -1,0 +1,11 @@
+# Abyss. system_ext is folded into /system on this device (out/.../system/system_ext), so the
+# image is labelled through the /system/system_ext path; keep both spellings like AOSP
+# (system/sepolicy/private/file_contexts:545).
+/(system_ext|system/system_ext)/bin/abyssd      u:object_r:abyssd_exec:s0
+/data/misc/abyss(/.*)?                          u:object_r:abyss_data_file:s0
+# Bluetooth helper socket (init `socket abyss_bt`, abyss.rc). The helper binary
+# /apex/com.android.bt/bin/abyss-btd is labelled abyss_btd_exec by the APEX's own file_contexts
+# (system/sepolicy/apex/com.android.bt-file_contexts), not here: see abyss_btd.te.
+/dev/socket/abyss_bt                            u:object_r:abyss_btd_socket:s0
+# Wi-Fi netd helper socket (init `socket abyss_net`, abyss.rc; abyss_net.te).
+/dev/socket/abyss_net                           u:object_r:abyss_net_socket:s0

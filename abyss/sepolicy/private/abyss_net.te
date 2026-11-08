@@ -1,0 +1,41 @@
+# abyss-net: the Wi-Fi netd helper of Abyss. Same binary as abyssd (/system_ext/bin/abyssd
+# --net-helper), started by init with `seclabel u:r:abyss_net:s0`, `user system` (abyss.rc,
+# service abyss-net), only while sys.abyss.wifi=on and Abyss is active.
+#
+# Why a separate process and domain: netd checks its callers' permissions; uid 1000 (system)
+# passes at once, any other uid (root included) makes netd ask system_server's permission
+# service and wait forever while system_server is stopped (system/netd/include/binder_utils/
+# BinderUtil.h checkAnyPermission, frameworks/native/libs/binder/IServiceManager.cpp
+# checkPermission). abyssd is uid root, so it never calls netd; it sends its requests here.
+# Keeping the netd rights in this small domain also keeps them out of abyssd.
+#
+# Requests (abyssd/src/wifi/netcfg.rs): "up" = networkCreatePhysical(42) + networkAddInterface
+# + interfaceAddAddress + networkAddRoute (subnet, default) + networkSetDefault; "down" =
+# networkClearDefault + networkDestroy + interfaceClearAddrs; on SIGTERM also
+# interfaceSetCfg(wlan0 "down").
+
+type abyss_net, domain, coredomain;
+
+# init -> abyss_net through the service's seclabel; the entrypoint is abyssd's executable.
+# init_daemon_domain(abyssd) already makes init's default transition on abyssd_exec go to abyssd;
+# an explicit seclabel overrides that type_transition, so only the allow rules are needed.
+domain_trans(init, abyssd_exec, abyss_net)
+
+# /dev/socket/abyss_net (init `socket abyss_net seqpacket 0660 system system`). abyssd connects
+# (SOCK_SEQPACKET is the unix_stream_socket class); accept/read/write on the listening socket
+# init created in our domain are granted to every domain (private/domain.te:30).
+type abyss_net_socket, file_type, coredomain_socket;
+unix_socket_connect(abyssd, abyss_net, abyss_net)
+
+# netd's INetd binder service ("netd", netd_service).
+binder_use(abyss_net)
+# NEVERALLOW (hidden by SELINUX_IGNORE_NEVERALLOWS, listed in reports/impl-wifi.md):
+# private/netd.te:174-181 lets only system_server, dumpstate, network_stack, netd and
+# netutils_wrapper find netd_service. Abyss replaces ConnectivityService while system_server is
+# stopped (DECISIONS "DNS/network in Abyss", 15:45), so this is the exception that decision
+# planned for; it needs a matching `-abyss_net` in system/sepolicy before it can ship without the
+# ignore flag. dnsresolver_service is NOT found (abyssd resolves its own names, wifi/dns.rs).
+allow abyss_net netd_service:service_manager find;
+# The calls themselves. The only binder neverallow on netd is for apps
+# (private/netd.te:205 `neverallow { appdomain -network_stack } netd:binder call`).
+binder_call(abyss_net, netd)

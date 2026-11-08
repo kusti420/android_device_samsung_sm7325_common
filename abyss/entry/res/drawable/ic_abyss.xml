@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon: black disc, accent ring, a small dot at the bottom of the "well". -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M24,2a22,22 0,1 1,0 44a22,22 0,1 1,0 -44z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF5DB04C"
+        android:strokeWidth="2"
+        android:pathData="M24,8a16,16 0,1 1,0 32a16,16 0,1 1,0 -32z" />
+    <path
+        android:fillColor="#FFA8A290"
+        android:pathData="M24,29a3,3 0,1 1,0 6a3,3 0,1 1,0 -6z" />
+</vector>

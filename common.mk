@@ -537,3 +537,8 @@ PRODUCT_ENFORCE_VINTF_MANIFEST := false
 # IchthysOS: theme presets for ichthys.nix theme.preset (tracker#50).
 PRODUCT_PACKAGES += \
     ichthys_theme_presets
+
+# Abyss low-power mode (abyss/): Rust abyssd + abyss.rc + entry app.
+PRODUCT_PACKAGES += \
+    abyssd \
+    AbyssEntry

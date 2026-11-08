@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Coming next" card: dashed dim outline, so it never reads as a working control. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <stroke android:width="1dp" android:color="@color/abyss_outline"
+        android:dashWidth="6dp" android:dashGap="4dp" />
+    <corners android:radius="12dp" />
+</shape>

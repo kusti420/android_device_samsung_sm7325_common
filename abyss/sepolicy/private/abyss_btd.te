@@ -1,0 +1,88 @@
+# abyss-btd: Android's Bluetooth stack (libbluetooth, A2DP source + AVRCP target) without the
+# framework, for Bluetooth headphones inside Abyss. /apex/com.android.bt/bin/abyss-btd
+# (packages/modules/Bluetooth/abyss). Started only by init (abyss.rc, seclabel u:r:abyss_btd:s0,
+# user bluetooth) on sys.abyss.bt=on while Abyss is active; abyssd talks to it over the init
+# socket /dev/socket/abyss_bt.
+#
+# Modelled on the Bluetooth app's domain (system/sepolicy/private/bluetooth.te), minus everything
+# that needs the framework or another profile: no app_domain, no service_manager finds for
+# framework services, no tethering/PAN (tun, packet sockets), no uhid (HID), no telephony HAL,
+# and no audio HAL. A2DP audio stays in-process: abyss-btd replaces the stack's
+# audio_hal_interface glue with a ring buffer that abyssd fills over the socket
+# (impl-btd.md §3).
+#
+# Label of the binary: APEX files are labelled from the APEX's own file_contexts at build time
+# (system/sepolicy/apex/com.android.bt-file_contexts, which needs the line
+#   /bin/abyss-btd          u:object_r:abyss_btd_exec:s0
+# ), not from this file_contexts. apex_sepolicy_tests skips types unknown to AOSP policy, so the
+# product-private type passes there. Without that line the binary is system_file, and init
+# cannot enter abyss_btd (entrypoint on a non-exec_type is neverallowed, private/domain.te:703).
+
+type abyss_btd, domain, coredomain;
+type abyss_btd_exec, system_file_type, exec_type, file_type;
+
+# init -> abyss_btd on exec of abyss_btd_exec (also covers the rc's explicit seclabel).
+init_daemon_domain(abyss_btd)
+
+# ---- The abyss_bt socket (init creates it, abyssd connects) --------------------------------
+# /dev/socket/abyss_bt (file_contexts here). init may create sock_files of any plain file_type
+# (private/init.te:417). The listening socket itself is created by init in the service's context,
+# so it is abyss_btd:unix_stream_socket (SOCK_SEQPACKET AF_UNIX sockets use the
+# unix_stream_socket class); listen/accept on self are granted to every domain
+# (private/domain.te:30).
+type abyss_btd_socket, file_type, coredomain_socket;
+# abyssd -> abyss_btd: write on the sock_file + connectto (te_macros unix_socket_connect).
+unix_socket_connect(abyssd, abyss_btd, abyss_btd)
+
+# ---- Bluetooth controller: the HCI HAL ----------------------------------------------------
+# a52sxq uses the QTI HIDL android.hardware.bluetooth@1.0 service (hwbinder); AIDL HALs use
+# servicemanager. Both are covered, as in bluetooth.te. hal_bluetooth's neverallows
+# (private/hal_neverallows.te) are about HAL *servers*; this is a client.
+hal_client_domain(abyss_btd, hal_bluetooth)
+hwbinder_use(abyss_btd)
+binder_use(abyss_btd)
+get_prop(abyss_btd, hwservicemanager_prop)
+
+# ---- Stack data: /data/misc/bluedroid (bt_config.conf: bonds, link keys), /data/misc/bluetooth
+# Same rules as bluetooth.te. No neverallow covers bluetooth_data_file for a coredomain.
+allow abyss_btd bluetooth_data_file:dir create_dir_perms;
+allow abyss_btd bluetooth_data_file:notdevfile_class_set { create_file_perms link };
+# btsnoop / dumpsys logs under /data/misc/bluetooth/logs.
+allow abyss_btd bluetooth_logs_data_file:dir rw_dir_perms;
+allow abyss_btd bluetooth_logs_data_file:file create_file_perms;
+# /data/misc: search (the bluedroid dir lives below it).
+allow abyss_btd system_data_file:dir search;
+
+# ---- Properties ----------------------------------------------------------------------------
+# The stack reads and writes bluetooth.* / persist.bluetooth.* (bluetooth_prop) and its exported
+# config; the set neverallows exclude coredomain (private/property.te:348-366).
+set_prop(abyss_btd, bluetooth_prop)
+set_prop(abyss_btd, exported_bluetooth_prop)
+set_prop(abyss_btd, bluetooth_a2dp_offload_prop)
+set_prop(abyss_btd, bluetooth_audio_hal_prop)
+get_prop(abyss_btd, bluetooth_config_prop)
+get_prop(abyss_btd, device_logging_prop)
+get_prop(abyss_btd, incremental_prop)
+# NOT binder_cache_bluetooth_server_prop: neverallowed for everyone but bluetooth and init
+# (bluetooth.te); only the Java service publishes that cache.
+# aconfig flag storage is readable by every coredomain already (private/domain.te:611-616).
+
+# ---- Power, timers, real time --------------------------------------------------------------
+# /sys/power/wake_lock + CAP_BLOCK_SUSPEND (the stack's wake_lock_* callouts).
+wakelock_use(abyss_btd)
+# Exactly the capabilities bluetooth.te allows (its neverallow list), minus net_raw and
+# net_bind_service (PAN only).
+allow abyss_btd self:global_capability_class_set { net_admin sys_nice };
+allow abyss_btd self:global_capability2_class_set wake_alarm;
+
+# ---- /proc -------------------------------------------------------------------------------
+allow abyss_btd proc_bluetooth_writable:file rw_file_perms;
+allow abyss_btd proc_filesystems:file r_file_perms;
+
+# ---- Logging -------------------------------------------------------------------------------
+# logd: every domain (write_logd(domain)). NOT read_runtime_log_tags: runtime_event_log_tags_file
+# reads are neverallowed outside a fixed list (private/domain.te); the stack then falls back to
+# the static event-log-tags.
+# Metrics (libstatssocket): statsd keeps running in Abyss. Failing writes are harmless; this
+# only avoids the denial spam.
+unix_socket_send(abyss_btd, statsdw, statsd)

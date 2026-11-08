@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     IchthysOS: privileged permissions for AbyssEntry (ro.control_privapp_permissions=enforce).
+     AbyssEntry runs as the system uid, which passes most permission checks anyway; listing the
+     privileged ones it requests keeps the boot-time allowlist check quiet (and enforce mode from
+     crash-looping system_server).
+-->
+<permissions>
+    <privapp-permissions package="org.ichthys.abyss">
+        <permission name="android.permission.WRITE_SECURE_SETTINGS" />
+        <!-- Wi-Fi hand-over (WifiHandoff.java): getPrivilegedConfiguredNetworks. -->
+        <permission name="android.permission.READ_WIFI_CREDENTIAL" />
+    </privapp-permissions>
+</permissions>

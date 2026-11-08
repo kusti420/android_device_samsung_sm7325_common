@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Abyss</string>
+    <string name="title">Abyss</string>
+    <string name="intro">The phone as a keys-only music player, with Android switched off.</string>
+
+    <!-- Settings home page tile (injected through com.android.settings.action.IA_SETTINGS). -->
+    <string name="settings_tile_title">Abyss</string>
+    <string name="settings_tile_summary">Keys-only music mode, captures, brightness</string>
+
+    <!-- Section headers -->
+    <string name="sec_enter">ENTER</string>
+    <string name="sec_captures">CAPTURES</string>
+    <string name="sec_settings">SETTINGS · used the next time you enter</string>
+    <string name="sec_scripts">SCRIPTS</string>
+    <string name="sec_apps">APPS &amp; CONTAINERS</string>
+
+    <!-- Enter -->
+    <string name="deep_body">Android switches off. The screen stays black and the phone keys run a small music player. Longest battery.</string>
+    <string name="stops_heading">Stops while you are in Abyss</string>
+    <string name="stops_body">• Calls can\'t reach or leave the phone. Missed calls are not shown.\n• Texts usually arrive after you\'re back.\n• Clock alarms don\'t ring.\n• Wi-Fi and mobile data don\'t work.</string>
+    <string name="keeps_heading">Keeps going</string>
+    <string name="keeps_body">• Music from the microSD card and phone storage.\n• Wired or USB headphones, or Bluetooth headphones paired in Android (switch them on in Abyss: menu › Bluetooth).</string>
+    <string name="back_heading">Coming back</string>
+    <string name="back_body">Hold the power key for 3 seconds. Android takes about 30 s to come back.</string>
+    <string name="lite_note">This is v1-lite: while music plays the phone does not deep-sleep yet, so the battery goes down faster than it will later.</string>
+    <string name="no_headphones">No wired or USB headphones are plugged in. Bluetooth headphones can be switched on inside Abyss: menu › Bluetooth.</string>
+    <string name="enter">Enter Abyss</string>
+    <string name="going">Going dark…</string>
+    <string name="not_installed">Abyss is not part of this build.</string>
+    <string name="busy">Abyss is busy (%1$s). Try again in a moment.</string>
+    <string name="failed">Could not start Abyss.</string>
+
+    <!-- Captures -->
+    <string name="captures_empty">Nothing saved yet. In Abyss, press Volume Down + Power briefly to save the song that\'s playing.</string>
+    <string name="captures_hint">Tap to copy. Touch and hold to share or delete.</string>
+    <string name="captures_count">%1$d saved</string>
+    <string name="captures_unreadable">The captures file could not be read.</string>
+    <string name="captures_write_failed">Could not change the captures file.</string>
+    <string name="captures_share_all">Share all</string>
+    <string name="captures_save_file">Save to file</string>
+    <string name="captures_clear_all">Clear all</string>
+    <string name="captures_clear_title">Clear all captures?</string>
+    <string name="captures_clear_body">All %1$d saved songs are removed from this phone. This can\'t be undone.</string>
+    <string name="captures_clear_ok">Clear all</string>
+    <string name="captures_saved_to_file">Saved %1$d captures.</string>
+    <string name="captures_deleted">Deleted.</string>
+    <string name="capture_copy">Copy</string>
+    <string name="capture_share">Share</string>
+    <string name="capture_delete">Delete</string>
+    <string name="captures_share_subject">Saved in Abyss</string>
+    <string name="captures_file_name">abyss-captures.txt</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- Settings -->
+    <string name="brightness_title">Brightness in Abyss</string>
+    <string name="brightness_value">%1$d of 486</string>
+    <string name="brightness_default">%1$d of 486 · default</string>
+    <string name="screen_timeout_title">Screen stays on</string>
+    <string name="screen_timeout_summary">After a key press, before the screen goes black again.</string>
+    <string name="screen_timeout_other">Set to %1$d s by hand.</string>
+    <string name="seconds">%1$d s</string>
+    <string name="suspend_title">Deep sleep (experimental)</string>
+    <string name="suspend_summary">Lets the phone sleep while the screen is off and nothing plays. Not proven on this phone yet: if keys or music misbehave, switch it off.</string>
+    <string name="volume_title">Volume limit</string>
+    <string name="volume_summary">200 volume steps. Above 140, the safe-listening mark, Abyss asks for a second ▲ press before it goes louder.</string>
+    <string name="bt_title">Bluetooth headphones</string>
+    <string name="bt_summary">Abyss uses the headphones paired here in Android. Bluetooth is off at the start of every Abyss session; switch it on there: menu › Bluetooth.</string>
+    <string name="bt_none">No Bluetooth headphones paired.</string>
+    <string name="bt_off">Bluetooth is off in Android, so the paired list can\'t be shown.</string>
+    <string name="bt_last_used">last used in Abyss</string>
+    <string name="bt_open_settings">Pair headphones</string>
+    <string name="setting_failed">Could not save this setting.</string>
+
+    <!-- Coming next -->
+    <string name="coming_next">coming next · %1$s</string>
+    <string name="scripts_body">Your own Termux bash scripts, run from all-off: Wi-Fi time, triggers and a receipt for each run. Not in this build: you can\'t add scripts yet.</string>
+    <string name="apps_body">abyss.* apps from sources you add, with their own screens in Abyss; containers as an experiment. Not in this build.</string>
+    <string name="docs_scripts">Read more: Abyss guide › Scripts and apps</string>
+    <string name="docs_apps">Read more: Abyss reference › Containers</string>
+    <!-- Where the Abyss docs live. Empty = the "Read more" lines are plain text, not links. -->
+    <string name="docs_base_url" translatable="false"></string>
+    <string name="docs_path_scripts" translatable="false">guide/scripts-and-apps</string>
+    <string name="docs_path_apps" translatable="false">reference/containers</string>
+</resources>

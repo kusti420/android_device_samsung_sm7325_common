@@ -1,0 +1,246 @@
+# Abyss v1-lite: Android's framework switched off, abyssd drives screen, keys and the
+# headphone jack on its own. Installed as /system_ext/etc/init/abyss.rc (init_rc on the
+# abyssd rust_binary). Protocol and manual test: INTEGRATION.md next to this file.
+#
+#   sys.abyss.request  enter | leave | ""            entry app (enter), abyssd (leave), this file
+#   sys.abyss.state    off | entering | active | leaving   ONLY this file (init) writes it
+#   sys.abyss.hal      restarted                        this file, each time the audio HAL is
+#                                                       brought back while Abyss is active
+#   sys.abyss.brightness  <uint> | ""               abyssd (level); this file writes it to the
+#                                                       panel while active, resets it on leave
+#   sys.abyss.bt       on | off                         abyssd (Bluetooth switch in its menu), this
+#                                                       file (off on enter and leave); on = start
+#                                                       abyss-btd while active, off = stop it
+#   sys.abyss.wifi     on | off                         abyssd (first Wi-Fi lease / last release),
+#                                                       this file (off on enter and leave); on =
+#                                                       start abyss-net + wpa_supplicant while
+#                                                       active, off = stop both
+#   persist.abyss.after_leave  <string>             entry app only (abyssd no longer writes it:
+#                                                       Abyss Light is retired); not used here
+#
+# Backlight: enter saves panel0-backlight/brightness to /data/misc/abyss/brightness.saved,
+# leave copies it back (all exit paths, including the crash guard).
+#
+# Stop/start lists follow AOSP toolbox `stop`/`start` (system/core/toolbox/start.cpp
+# ControlDefaultServices: netd surfaceflinger audioserver zygote zygote_secondary), minus
+# netd (DNS for later Wi-Fi use), plus the display composer HAL, cameraserver and the media
+# services. Nothing is stopped by class: `class_stop main` would also take netd, wificond,
+# statsd, installd and the vendor main-class daemons; cnss-daemon is class late_start.
+#
+# Explicit stop/start never runs a service's `onrestart` lines (init: SVC_DISABLED path in
+# Service::Reap); only a crash does.
+
+on post-fs-data
+    # conf/ is written by the main OS, out/ by abyssd (one writer per file). setgid so files
+    # abyssd creates (uid root) land in group system; abyssd uses umask 007.
+    mkdir /data/misc/abyss 02770 system system
+    mkdir /data/misc/abyss/conf 02770 system system
+    mkdir /data/misc/abyss/out 02770 system system
+    mkdir /data/misc/abyss/handoff 02770 system system
+    mkdir /data/misc/abyss/store 02770 system system
+
+on boot
+    setprop sys.abyss.state off
+    # Kernel default is 0644 and init.rc only chowns it to system, so abyssd (uid root, group
+    # system, no CAP_DAC_OVERRIDE) could not write it for the experimental suspend loop.
+    chmod 0660 /sys/power/wakeup_count
+
+service abyssd /system_ext/bin/abyssd
+    class abyss
+    user root
+    # wakelock: /sys/power/wake_lock is radio:wakelock 0660 (init.rc).
+    # system: /sys/power/state, /sys/power/wakeup_count, /data/misc/abyss, /dev/socket/abyss_net.
+    # wifi: /dev/socket/wpa_wlan0 (wifi:wifi 0660, the supplicant's global control socket).
+    # inet: AID_INET, the group Android's network sockets are created with.
+    group root input audio graphics system media_rw sdcard_rw wakelock wifi inet
+    # BLOCK_SUSPEND: kernel wake_lock writes + EPOLLWAKEUP. WAKE_ALARM: CLOCK_*_ALARM timerfds.
+    # SYS_NICE: real-time audio thread. NET_RAW: the DHCP client's AF_PACKET socket and
+    # SO_BINDTODEVICE on the DNS/HTTP sockets (wifi/). Deliberately NOT: SYS_ADMIN (the first
+    # opener of /dev/dri/card0 becomes DRM master on its own once the composer is gone;
+    # DRM_IOCTL_SET_MASTER is DRM_ROOT_ONLY on this 5.4 kernel), DAC_OVERRIDE / DAC_READ_SEARCH
+    # (platform neverallow), NET_ADMIN (the supplicant brings wlan0 up and sets the MAC, netd sets
+    # addresses and routes).
+    capabilities BLOCK_SUSPEND WAKE_ALARM SYS_NICE NET_RAW
+    seclabel u:r:abyssd:s0
+    # SIGTERM first, SIGKILL after 200 ms: abyssd restores touch/panel state on SIGTERM.
+    gentle_kill
+    stdio_to_kmsg
+    disabled
+    oneshot
+
+# Bluetooth helper: Android's Bluetooth stack (libbluetooth from the com.android.bt APEX) running
+# on its own, without the framework (packages/modules/Bluetooth/abyss). abyssd talks to it over
+# /dev/socket/abyss_bt (SOCK_SEQPACKET; protocol in abyssd/src/bt.rs). Off by default: started
+# only by sys.abyss.bt=on while Abyss is active, stopped by sys.abyss.bt=off and on every leave
+# BEFORE zygote starts (the QTI HCI HAL serves one client at a time; Android's own Bluetooth
+# must find it free).
+service abyss-btd /apex/com.android.bt/bin/abyss-btd
+    user bluetooth
+    # bluetooth: /data/misc/bluedroid (bt_config.conf). net_bt_admin, net_bt: the stack's
+    # AID-based checks (as the Bluetooth app). system: socket group, shared with abyssd.
+    # wakelock: /sys/power/wake_lock (radio:wakelock 0660), the stack's wake_lock_* callouts.
+    group bluetooth net_bt_admin net_bt system wakelock
+    # The capabilities the Bluetooth app has (bluetooth.te neverallow lists exactly these):
+    # BLOCK_SUSPEND for wake_lock writes, WAKE_ALARM for the stack's *_ALARM timers, NET_ADMIN
+    # for HCI socket options, SYS_NICE for the real-time A2DP encoder thread.
+    capabilities BLOCK_SUSPEND WAKE_ALARM NET_ADMIN SYS_NICE
+    # abyssd (uid root, group system) connects; labelled abyss_btd_socket (sepolicy/private).
+    socket abyss_bt seqpacket 0660 bluetooth system
+    seclabel u:r:abyss_btd:s0
+    # SIGTERM first (the helper disconnects and releases the HCI HAL), SIGKILL after 200 ms.
+    gentle_kill
+    disabled
+    oneshot
+
+on property:sys.abyss.bt=on && property:sys.abyss.state=active
+    start abyss-btd
+
+on property:sys.abyss.bt=off
+    stop abyss-btd
+
+# Wi-Fi leases (abyssd/src/wifi). abyssd writes sys.abyss.wifi=on for the first lease and off
+# after the last release (+ linger). Two services:
+# - wpa_supplicant: Android's own (vendor android.hardware.wifi.supplicant-service.rc, class
+#   main, disabled oneshot, `-g@android:wpa_wlan0`). Airplane mode stopped it through the
+#   framework; nothing at the kernel level blocks Wi-Fi (the QCA driver has no rfkill hook, the
+#   framework never touches the cfg80211 rfkill). abyssd adds wlan0 over the global control
+#   socket and removes it again before `off` (graceful: link down), so the SIGKILL from `stop`
+#   only ends an idle process.
+# - abyss-net: abyssd --net-helper as uid system, the only process that talks to netd (netd's
+#   permission check hangs for any uid but system while system_server is stopped; netcfg.rs).
+#   On SIGTERM it destroys the Abyss network and takes wlan0 down, so every off/leave path
+#   (also after an abyssd crash) gives Android a clean netd and a link that is down.
+service abyss-net /system_ext/bin/abyssd --net-helper
+    user system
+    # system: socket owner + abyssd reaches it through its system group. inet: network sockets.
+    group system inet
+    # Same binary as abyssd, entered into its own domain (sepolicy/private/abyss_net.te).
+    seclabel u:r:abyss_net:s0
+    # abyssd (uid root, group system) connects; labelled abyss_net_socket (sepolicy/private).
+    socket abyss_net seqpacket 0660 system system
+    # SIGTERM first (clean-up: 4 binder calls to netd), SIGKILL after 200 ms.
+    gentle_kill
+    disabled
+    oneshot
+
+on property:sys.abyss.wifi=on && property:sys.abyss.state=active
+    start abyss-net
+    start wpa_supplicant
+
+on property:sys.abyss.wifi=off
+    stop wpa_supplicant
+    stop abyss-net
+
+# ---------------------------------------------------------------------------------------
+# ENTER (the entry app sets sys.abyss.request=enter)
+on property:sys.abyss.request=enter && property:sys.abyss.state=off && property:sys.boot_completed=1
+    setprop sys.abyss.state entering
+    # Save Android's backlight level while the composer still owns it (the composer leaves the
+    # node at its last value, often 1, once it is stopped). Restored on leave. `copy` refuses
+    # group-writable sources (init ReadFile, system/core/init/util.cpp:179) and
+    # init.samsung.display.rc makes brightness 0664 system:system, so drop g+w just for the read.
+    # rm first: if the copy fails, leave must not restore an old session's value.
+    rm /data/misc/abyss/brightness.saved
+    chmod 0644 /sys/class/backlight/panel0-backlight/brightness
+    copy /sys/class/backlight/panel0-backlight/brightness /data/misc/abyss/brightness.saved
+    chmod 0664 /sys/class/backlight/panel0-backlight/brightness
+    # Framework first, so nothing in system_server reacts to the rest going away.
+    stop zygote_secondary
+    stop zygote
+    stop cameraserver
+    stop media.swcodec
+    stop mediaextractor
+    stop mediametrics
+    stop media
+    # Lazy AIDL service (`interface aidl media.transcoding`); comes back on demand, never started here.
+    stop media.transcoding
+    # abyssd plays through tinyalsa, so audioserver must let go of the PCMs. audioserver.rc then
+    # stops + starts vendor.audio-hal (`on property:init.svc.audioserver=stopped`): the HAL
+    # keeps running, freshly restarted, a few hundred ms AFTER this action. abyssd waits for that
+    # before it touches the mixer (INTEGRATION.md "Audio settle").
+    stop audioserver
+    stop surfaceflinger
+    # Holds DRM master on /dev/dri/card0 (class hal animation, not main).
+    stop vendor.qti.hardware.display.composer
+    # The four big cores (cpu4-7: 3x A78 + 1x A78 prime on SM7325) are not needed for a music
+    # player; the four little A55s handle decoding with headroom.
+    write /sys/devices/system/cpu/cpu4/online 0
+    write /sys/devices/system/cpu/cpu5/online 0
+    write /sys/devices/system/cpu/cpu6/online 0
+    write /sys/devices/system/cpu/cpu7/online 0
+    # Bluetooth is off at the start of every session (owner, DECISIONS "Added 21:00").
+    setprop sys.abyss.bt off
+    # Wi-Fi too: also stops a supplicant Android left running ("Wi-Fi stays on in airplane
+    # mode"; the entry app switches Wi-Fi off and waits, this is the backstop).
+    setprop sys.abyss.wifi off
+    start abyssd
+    # After `start`: if abyssd already died, this setprop itself fires the crash guard below.
+    setprop sys.abyss.state active
+
+# ---------------------------------------------------------------------------------------
+# LEAVE (abyssd sets sys.abyss.request=leave after the 3 s power-key hold; the crash guard too)
+on property:sys.abyss.request=leave && property:sys.abyss.state=active
+    # Leave "active" before stopping abyssd so its "stopped" does not re-fire the crash guard.
+    setprop sys.abyss.state leaving
+    # Clear abyssd's level; with state=leaving the brightness trigger below does not fire, and a
+    # stale value cannot be re-applied when the next session reaches state=active.
+    setprop sys.abyss.brightness ""
+    stop abyssd
+    # Bluetooth helper off BEFORE the framework: Android's Bluetooth app needs the HCI HAL.
+    # `stop` waits for the process to die (SIGTERM, SIGKILL after 200 ms: gentle_kill).
+    stop abyss-btd
+    setprop sys.abyss.bt off
+    # Wi-Fi off BEFORE the framework: stops wpa_supplicant (Android's Wi-Fi starts its own) and
+    # abyss-net, which removes the Abyss network from netd and takes wlan0 down on SIGTERM.
+    setprop sys.abyss.wifi off
+    # Put Android's level back before the composer starts (it also re-applies its own level once
+    # system_server is up; this covers the boot animation and a framework that never comes up).
+    # The file is init's own (root, 0600), so `copy` accepts it. Missing file = logged, no-op.
+    copy /data/misc/abyss/brightness.saved /sys/class/backlight/panel0-backlight/brightness
+    # Same order as toolbox `start`, with the composer before SurfaceFlinger and the media
+    # services before the framework.
+    write /sys/devices/system/cpu/cpu4/online 1
+    write /sys/devices/system/cpu/cpu5/online 1
+    write /sys/devices/system/cpu/cpu6/online 1
+    write /sys/devices/system/cpu/cpu7/online 1
+    start vendor.qti.hardware.display.composer
+    start surfaceflinger
+    # audioserver.rc's `init.svc.audioserver=running` action starts the HAL services (no-op:
+    # vendor.audio-hal is already running).
+    start audioserver
+    start media
+    start mediaextractor
+    start mediametrics
+    start media.swcodec
+    start cameraserver
+    start zygote
+    start zygote_secondary
+    setprop sys.abyss.state off
+    setprop sys.abyss.request ""
+
+# A request that cannot run (wrong state) is dropped so the next one is a fresh write.
+on property:sys.abyss.request=leave && property:sys.abyss.state=off
+    setprop sys.abyss.request ""
+
+# ---------------------------------------------------------------------------------------
+# Crash guard: abyssd is oneshot; if it exits (crash, panic, OOM kill) while Abyss is active,
+# bring Android back instead of leaving a black, deaf phone.
+on property:init.svc.abyssd=stopped && property:sys.abyss.state=active
+    setprop sys.abyss.request leave
+
+# Backlight: abyssd sets sys.abyss.brightness=<level> (persist.abyss.brightness, default 160 of
+# 486) after its first frame and again on every wake; init writes it, because the node is
+# vendor_sysfs_graphics and only init gets that right (sepolicy/vendor/abyss_backlight.te).
+# Only while active: a write that arrives while leaving cannot clobber the restored value.
+# Every setprop fires this, also with an unchanged value.
+on property:sys.abyss.brightness=* && property:sys.abyss.state=active
+    write /sys/class/backlight/panel0-backlight/brightness ${sys.abyss.brightness}
+
+# Audio guard: if the vendor audio HAL crashes while Abyss is active, its `onrestart restart
+# audioserver` (vendor/etc/init/android.hardware.audio.service.rc, device init.qcom.rc override)
+# brings audioserver back and it would grab the PCMs. Stop it again; audioserver.rc then
+# restarts the HAL once more, which resets the mixer, so tell abyssd to re-apply its route.
+# abyssd treats more than 3 of these within 60 s as fatal and requests leave (loop breaker).
+on property:init.svc.audioserver=running && property:sys.abyss.state=active
+    stop audioserver
+    setprop sys.abyss.hal restarted

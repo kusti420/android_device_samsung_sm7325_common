@@ -1,0 +1,13 @@
+# Features the abyssd module host implements (abyssd/src/modules.rs FEATURES; a unit test keeps
+# the two in step). Installed as /system_ext/etc/abyss/features; the module installer refuses a
+# module whose requires.features names anything not listed here.
+apps
+settings
+menu:get
+media:stream
+media:stream:radio-v1
+media:stream:http
+capture:fields
+post:capture
+needs:media
+radio:wifi

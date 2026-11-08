@@ -1,0 +1,58 @@
+//
+// Abyss: ultra-low-power keys-only mode of IchthysOS.
+// SPDX-License-Identifier: Apache-2.0
+//
+// This directory is inside the device/samsung/sm7325-common soong_namespace
+// (exported via PRODUCT_SOONG_NAMESPACES in common.mk). Add "abyssd" to
+// PRODUCT_PACKAGES to install it.
+
+// abyssd v1-lite: DRM renderer + evdev keys + symphonia decode + tinyalsa jack
+// output. Installed as /system_ext/bin/abyssd. See abyssd/README.md.
+rust_binary {
+    name: "abyssd",
+    crate_name: "abyssd",
+    srcs: ["abyssd/src/main.rs"],
+    edition: "2021",
+    system_ext_specific: true,
+    // Service definition + enter/leave/crash-guard actions (see abyss.rc).
+    init_rc: ["abyss.rc"],
+    // Static Rust deps: abyssd must keep running while most of Android is stopped.
+    prefer_rlib: true,
+    rustlibs: [
+        "libandroid_logger", // android_logger 0.15.1
+        "libanyhow", // anyhow 1.0.102
+        // INetd client in the abyss-net helper (wifi/netd.rs); links libbinder_ndk.so.
+        "libbinder_rs",
+        "libdrm_rust", // drm 0.15.0 (re-exports drm-fourcc 2.2.0)
+        "libevdev", // evdev 0.13.2
+        "liblibc", // libc 0.2.183
+        "liblog_rust", // log 0.4.29
+        "libnix", // nix 0.29.0 (poll, fcntl, ioctl, time, stat)
+        "librustutils", // system properties (system/librustutils)
+        "libserde_json", // serde_json 1.0.146
+        "libsignal_hook", // signal-hook 0.4.3
+        "libsymphonia_bundle_flac", // symphonia-bundle-flac 0.5.5
+        "libsymphonia_bundle_mp3", // symphonia-bundle-mp3 0.5.5
+        "libsymphonia_core", // symphonia-core 0.5.5
+    ],
+    // Hand-written FFI in abyssd/src/audio.rs.
+    shared_libs: [
+        "libaudioroute",
+        "libtinyalsa",
+    ],
+    // /system_ext/etc/abyss/features: what the module host implements (the installer reads it).
+    required: ["abyss_features"],
+}
+
+// The features of abyssd's module host (abyssd/src/modules.rs FEATURES; a unit test keeps them
+// in step). The module installer in the control center refuses modules that need anything else.
+prebuilt_etc {
+    name: "abyss_features",
+    src: "etc/features",
+    filename: "features",
+    sub_dir: "abyss",
+    system_ext_specific: true,
+}
+
+// --- integration (abyss.rc) below ---
+// abyss.rc is installed through init_rc above (no prebuilt_etc needed).

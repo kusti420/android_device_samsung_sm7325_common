@@ -1,0 +1,204 @@
+# Abyss v1-lite daemon: /system_ext/bin/abyssd (Rust, device/samsung/sm7325-common/abyss/abyssd).
+# Started only by init (abyss.rc, seclabel u:r:abyssd:s0) after the framework, SurfaceFlinger,
+# the display composer and audioserver have been stopped.
+#
+# This dir is PRODUCT private policy (like sepolicy/private): it may name platform private
+# types (system_app) and the device's product-public sysfs_battery. Nothing here is visible
+# to vendor policy, so vendor-labelled nodes (backlight vendor_sysfs_graphics, touch
+# sysfs_sec_touchscreen, /dev/wlan) are NOT reachable yet; see INTEGRATION.md "Not covered".
+#
+# Every rule was checked against system/sepolicy neverallows (file:line in the comments).
+# The build has SELINUX_IGNORE_NEVERALLOWS := true (a52sxq BoardConfig.mk), which would hide a
+# violation, so nothing here relies on it.
+
+type abyssd, domain, coredomain;
+type abyssd_exec, system_file_type, exec_type, file_type;
+
+# init -> abyssd on exec of abyssd_exec (also covers the rc's explicit seclabel).
+init_daemon_domain(abyssd)
+
+# ---- Logging -------------------------------------------------------------------------------
+# logd: every domain may write (write_logd(domain), private/domain.te:137).
+# stdio_to_kmsg in abyss.rc + early/panic messages. Only apps are neverallowed
+# (app_neverallows.te:26, priv_app_all.te:235).
+allow abyssd kmsg_device:chr_file w_file_perms;
+
+# ---- Properties ----------------------------------------------------------------------------
+# sys.abyss.request=leave (power-key hold / fatal error). Types: property.te here.
+set_prop(abyssd, abyss_prop)
+# sys.abyss.state / sys.abyss.hal: read only; init is their only writer.
+get_prop(abyssd, abyss_state_prop)
+# persist.abyss.* (audio card/device/paths, experimental suspend switch, and
+# persist.abyss.brightness = the level abyssd asks for, default 160). Read only.
+get_prop(abyssd, abyss_config_prop)
+# sys.abyss.brightness=<level>: init writes it to panel0-backlight/brightness while
+# sys.abyss.state=active (abyss.rc). Product-private type, so no platform neverallow applies
+# (the core_property_type/vendor neverallows in private/property.te are about platform and
+# vendor types); set_prop also grants the read.
+set_prop(abyssd, abyss_brightness_prop)
+# persist.abyss.after_leave: no longer written by abyssd (Abyss Light retired), so no rule.
+# sys.abyss.bt=on|off: the Bluetooth switch; init starts/stops abyss-btd on it (abyss.rc).
+# Product-private type, no platform neverallow applies (same reasoning as above).
+set_prop(abyssd, abyss_bt_prop)
+# The helper's socket (unix_socket_connect(abyssd, abyss_btd, abyss_btd)) is in abyss_btd.te.
+# sys.powerctl=shutdown (power off menu row, low-battery shutdown). powerctl_prop is
+# system_public_prop (public/property.te:252); the core_property_type set-neverallow
+# excludes it (private/property.te:316).
+set_prop(abyssd, powerctl_prop)
+# init.svc.* of the stopped services (init_service_status_private_prop) is already readable by
+# every coredomain (private/coredomain.te:12). init.svc.vendor.* (e.g. vendor.audio-hal) is
+# vendor_default_prop = vendor_internal_prop on this shipping-API-30 device and may NOT be read
+# by coredomain (private/property.te:197-202); abyssd uses sys.abyss.hal instead.
+
+# ---- Display: DRM/KMS on /dev/dri/card0 ----------------------------------------------------
+# /dev/dri/card0, controlD64, renderD128 are graphics_device (qcom sepolicy_vndr
+# legacy-um/generic/vendor/common/file_contexts:359-361); /dev/dri itself is "device"
+# (search granted to all domains, private/domain.te:70). Only untrusted_app, isolated_app and
+# shell are neverallowed (private/app.te:606). Mirrors recovery.te "GUI".
+allow abyssd graphics_device:dir r_dir_perms;
+allow abyssd graphics_device:chr_file rw_file_perms;
+
+# ---- Keys and the jack switch: evdev --------------------------------------------------------
+# /dev/input(/.*)? = input_device (private/file_contexts:135). Read + ioctl (EVIOCGRAB,
+# EVIOCGSW...). Neverallows cover appdomain (app.te:760) and shell writes (shell.te:578) only.
+allow abyssd input_device:dir r_dir_perms;
+allow abyssd input_device:chr_file r_file_perms;
+
+# ---- Audio: tinyalsa straight to the 3.5 mm jack --------------------------------------------
+# /dev/snd(/.*)? = audio_device (private/file_contexts:155). The only neverallow is for HAL
+# *servers* other than the audio/omx HAL (private/hal_audio.te:41); abyssd is not a
+# halserverdomain. audioserver is stopped while abyssd runs (abyss.rc).
+allow abyssd audio_device:dir r_dir_perms;
+allow abyssd audio_device:chr_file rw_file_perms;
+# /proc/asound (cards, pcm list) for card/device discovery. USB DACs (e.g. FiiO BTR5) show up
+# here too: /proc/asound/cards ("USB-Audio"), cardN/usbid, cardN/stream0 (formats/rates), and
+# their nodes are /dev/snd/pcmCNDxp + controlCN = audio_device (rule above). The whole
+# /proc/asound tree is proc_asound (genfscon proc /asound, private/genfs_contexts:6). No
+# neverallow on proc_asound reads for a non-app domain (app.te only restricts apps).
+# Hot-plug is seen on the uevent socket below; no USB sysfs read is needed.
+r_dir_file(abyssd, proc_asound)
+# /vendor/etc/mixer_paths.xml is vendor_configs_file (private/file_contexts:441), which every
+# domain may already read (private/domain.te:193-194) and which the full_treble coredomain
+# neverallow exempts (private/domain.te:2234). No rule needed.
+
+# ---- Uevents: jack, USB/charger, power_supply changes ----------------------------------------
+# Only apps are neverallowed (app_neverallows.te:20, priv_app_all.te:229).
+allow abyssd self:netlink_kobject_uevent_socket create_socket_perms_no_ioctl;
+
+# ---- Battery: /sys/class/power_supply/battery/* -----------------------------------------------
+# /sys/class/power_supply/battery is a symlink into
+# /sys/devices/platform/soc/soc:battery/power_supply/battery = sysfs_battery (device
+# sepolicy/vendor/genfs_contexts:29-30, type in sepolicy/public/file.te:1, product public).
+# NOT sysfs_batteryinfo: that type is neverallowed for coredomain under full_treble
+# (private/domain.te:1637-1655), sysfs_battery is not covered by it.
+r_dir_file(abyssd, sysfs_battery)
+# /sys/class/power_supply itself is plain "sysfs" (dir listing + the symlinks; lnk_file read and
+# dir search are already granted to all domains, private/domain.te:213,271).
+allow abyssd sysfs:dir r_dir_perms;
+# The fuel-gauge / charger power_supply nodes (s2mu106-fuelgauge, pca9468, sm5451, usbpd-manager)
+# are labelled sysfs_wakeup (device genfs_contexts:54-66); read only.
+r_dir_file(abyssd, sysfs_wakeup)
+
+# ---- Music: internal storage lower path and the microSD lower mount ---------------------------
+# FUSE (/sdcard, /storage) dies with MediaProvider, so abyssd reads below it, read only.
+# /data/media = media_userdir_file (private/file_contexts:648): search only; its neverallow is
+# add_name/remove_name/write (private/vold.te:404-416).
+allow abyssd media_userdir_file:dir search;
+# /data/media/0/... = media_rw_data_file (private/file_contexts:650). No neverallow for
+# non-app domains (mediaserver/drmserver have the same r_dir_file).
+r_dir_file(abyssd, media_rw_data_file)
+# /mnt is tmpfs (search: private/domain.te:65); /mnt/media_rw = mnt_media_rw_file
+# (private/file_contexts:964), list the volume UUIDs.
+allow abyssd mnt_media_rw_file:dir r_dir_perms;
+# A not-yet-mounted /mnt/media_rw/<uuid> is mnt_media_rw_stub_file (private/vold.te:24).
+allow abyssd mnt_media_rw_stub_file:dir getattr;
+# vold mounts the card at /mnt/media_rw/<uuid>: vfat / exfat (genfs, private/genfs_contexts:344,
+# 346) or LineageOS sdcard_posix for ext4/f2fs cards; all carry the sdcard_type attribute.
+# Neverallows exist only for specific domains (ephemeral/isolated apps, wifi HAL servers,
+# pcc_component), none for a coredomain daemon.
+allow abyssd sdcard_type:dir r_dir_perms;
+allow abyssd sdcard_type:file r_file_perms;
+
+# ---- State: /data/misc/abyss -----------------------------------------------------------------
+# conf/ is read, out/ is written with atomic replace (create tmp + rename), handoff/ is read.
+# One type for the tree; init creates the dirs (abyss.rc post-fs-data).
+type abyss_data_file, file_type, data_file_type, core_data_file_type;
+allow abyssd abyss_data_file:dir create_dir_perms;
+allow abyssd abyss_data_file:file create_file_perms;
+
+# ---- Wake locks, wake alarms, real-time audio -------------------------------------------------
+# /sys/power/wake_lock|wake_unlock + CAP_BLOCK_SUSPEND (also needed for EPOLLWAKEUP) + the
+# ISystemSuspend AIDL acquireWakeLock path (system_suspend_service, NOT the control service).
+wakelock_use(abyssd)
+# timerfd CLOCK_BOOTTIME_ALARM / CLOCK_REALTIME_ALARM. No neverallow on wake_alarm.
+allow abyssd self:global_capability2_class_set wake_alarm;
+# SCHED_FIFO for the audio thread (setsched on self is granted to all domains,
+# private/domain.te:7-22; this is the capability).
+allow abyssd self:global_capability_class_set sys_nice;
+
+# ---- Experimental suspend (persist.abyss.suspend=1, off by default) --------------------------
+# /sys/power/state and /sys/power/wakeup_count = sysfs_power (private/genfs_contexts:173,176).
+# No neverallow on sysfs_power writes; system_server and charger hold the same rule. abyss.rc
+# makes wakeup_count group-writable (0660 system).
+allow abyssd sysfs_power:file rw_file_perms;
+
+# ---- Backlight: NOT written by abyssd ---------------------------------------------------------
+# /sys/class/backlight/panel0-backlight/brightness (and max_brightness) is vendor_sysfs_graphics
+# (vendor_file_contexts: /sys/devices/platform/soc/ae00000.qcom,mdss_mdp/backlight(/.*)?). That
+# is a VENDOR type: this product policy cannot name it (product_sepolicy.conf has no such type,
+# compile error), and vendor policy cannot name the product-private abyssd. Making abyssd a
+# product-public type so vendor policy could grant it would put a system domain's rights to a
+# vendor sysfs node into vendor policy, i.e. across the Treble line. Instead abyssd sets
+# sys.abyss.brightness and init (already granted setattr on that type by vendor policy) writes
+# the node; the one vendor rule init needs is ../vendor/abyss_backlight.te. abyssd can neither
+# read nor write the node, so it does not read max_brightness either (hard-code 486).
+
+# ---- Deliberately NOT granted -----------------------------------------------------------------
+# * ISuspendControlService.enableAutosuspend (the real fix for "no deep sleep"):
+#     find on system_suspend_control_service is neverallowed for everyone but system_server,
+#     atrace, bluetooth, dumpstate, traceur_app (private/system_suspend.te:59-67); the internal
+#     service likewise (private/system_suspend_internal_server.te:4-12). Needs a neverallow
+#     exception in system/sepolicy (v1.0). v1-lite has no deep sleep.
+# * dac_override / dac_read_search: neverallowed outside a fixed list
+#     (private/domain.te:2056-2091). abyssd relies on its groups (media_rw, system, wakelock,
+#     audio, input, graphics) instead; see abyss.rc.
+# * sys_admin (DRM_IOCTL_SET_MASTER is DRM_ROOT_ONLY on 5.4): not needed, the first opener of
+#     card0 becomes master once the composer has exited (drivers/gpu/drm/drm_auth.c:251-265).
+# * INetd / IDnsResolver from abyssd itself: not needed. netd's permission check would hang for
+#     uid root while system_server is stopped, so only abyss-net (uid system) talks to netd;
+#     see abyss_net.te for its rules and the netd_service neverallow it needs.
+
+# ---- Wi-Fi leases (src/wifi) -----------------------------------------------------------------
+# sys.abyss.wifi=on|off: init starts/stops wpa_supplicant + abyss-net (abyss.rc). Product-private
+# type, no platform neverallow applies (same reasoning as abyss_bt_prop above).
+set_prop(abyssd, abyss_wifi_prop)
+# DNS over UDP, the Wi-Fi test's HTTP over TCP, and bionic's connect() hook to fwmarkd:
+# netdomain (private/net.te: udp/tcp self, name_bind/name_connect, fwmarkd + dnsproxyd
+# connect). The netdomain neverallows are about apps (ephemeral_app, sdk_sandbox, isolated).
+net_domain(abyssd)
+# CAP_NET_RAW (abyss.rc capabilities): the DHCP client's AF_PACKET socket, SO_BINDTODEVICE on the
+# DNS/HTTP sockets. Capability neverallows exist only for named domains (bluetooth.te:99,
+# netutils_wrapper.te:51, hal_neverallows.te:63) and apps; none covers a coredomain daemon.
+allow abyssd self:global_capability_class_set net_raw;
+# DHCP over AF_PACKET (SOCK_DGRAM, ETH_P_IP) on wlan0. No ioctl is used (if_nametoindex runs on a
+# udp_socket, covered by netdomain). packet_socket neverallows: apps (app_neverallows.te) and
+# hal_uwb_vendor_server only.
+allow abyssd self:packet_socket create_socket_perms_no_ioctl;
+# wpa_supplicant's global control interface, /dev/socket/wpa_wlan0 (wpa_socket,
+# private/file_contexts:197; init creates it for the vendor service, so the socket object is
+# the supplicant's domain, reached through the platform attribute hal_wifi_supplicant_server).
+# abyssd's datagram sockets are bound to abstract names (self:unix_dgram_socket is granted to
+# every domain, private/domain.te:29); the supplicant answers with sendto to that name, so it
+# needs sendto on abyssd's socket.
+allow abyssd wpa_socket:sock_file write;
+allow abyssd hal_wifi_supplicant_server:unix_dgram_socket sendto;
+allow hal_wifi_supplicant_server abyssd:unix_dgram_socket sendto;
+# NEVERALLOW (hidden by SELINUX_IGNORE_NEVERALLOWS, listed in reports/impl-wifi.md): the two
+# sendto rules above are core<->vendor socket traffic, private/domain.te:1014-1024 (coredomain
+# -init -adbd may not establish communication with a non-core domain) and
+# private/domain.te:2181-2200 (a vendor domain may not with a coredomain other than logd, netd,
+# mdnsd, ...). The Treble-clean route is the supplicant's AIDL HAL (hal_client_domain(abyssd,
+# hal_wifi_supplicant)), but android.hardware.wifi.supplicant has no Rust backend
+# (hardware/interfaces/wifi/supplicant/aidl/Android.bp: rust enabled: false) and its
+# ISupplicantStaIfaceCallback alone has 45 methods. Swap to it when the backend exists.
+# The abyss-net socket: unix_socket_connect(abyssd, abyss_net, abyss_net) in abyss_net.te.

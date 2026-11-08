@@ -1,0 +1,40 @@
+# Abyss property types (product private, like sepolicy/private/ichthys_*). All readers and
+# writers are coredomain (init, abyssd, system_app, shell), so *_internal_prop fits:
+# product_internal_prop only adds "no non-coredomain access" (public/te_macros:976-984).
+
+# sys.abyss.request (and anything else under sys.abyss. without its own entry):
+# written by the entry app (enter), abyssd (leave) and init (reset to "").
+product_internal_prop(abyss_prop)
+
+# sys.abyss.state, sys.abyss.hal: init is the only writer (abyss.rc). Everyone else reads.
+product_internal_prop(abyss_state_prop)
+
+# persist.abyss.* without its own entry, e.g. persist.abyss.brightness (abyssd's level),
+# persist.abyss.audio.*, persist.abyss.suspend: read by abyssd, written by Settings/the entry
+# app (system_app) or a root shell.
+product_internal_prop(abyss_config_prop)
+
+# sys.abyss.brightness: the backlight level abyssd wants (uint). Only abyssd (and a debug shell)
+# writes it; init applies it to /sys/class/backlight/panel0-backlight/brightness (abyss.rc) while
+# sys.abyss.state=active. abyssd cannot write the node itself: it is vendor_sysfs_graphics, a
+# vendor type product policy cannot name (see ../vendor/abyss_backlight.te).
+product_internal_prop(abyss_brightness_prop)
+
+# persist.abyss.after_leave: what the entry app does once Android is back. abyssd no longer
+# writes it (Abyss Light is retired, Bluetooth lives inside Abyss); the entry app still reads
+# and clears a stale value. Separate type so only system_app (and a debug shell) can set it.
+product_internal_prop(abyss_after_leave_prop)
+
+# sys.abyss.bt (on|off): the Bluetooth switch in abyssd's menu. abyssd writes it; init starts
+# abyss-btd on "on" while sys.abyss.state=active, stops it on "off", and writes "off" itself on
+# enter and leave (abyss.rc). Own type so only abyssd (and a debug shell) can start the helper.
+product_internal_prop(abyss_bt_prop)
+
+# sys.abyss.wifi (on|off): abyssd writes "on" for the first Wi-Fi lease and "off" after the last
+# release; init starts wpa_supplicant + abyss-net on "on" while sys.abyss.state=active, stops both
+# on "off", and writes "off" itself on enter and leave (abyss.rc). Own type so only abyssd (and a
+# debug shell) can start Android's supplicant inside Abyss.
+product_internal_prop(abyss_wifi_prop)
+
+# init can read and write every property (private/init.te:713 allows init property_service set
+# on every property_type), so it needs no rule here.
