@@ -448,7 +448,7 @@ impl ResumeState {
         ResumeState {
             track: v["track"].as_str().map(PathBuf::from),
             position_ms: v["position_ms"].as_u64().unwrap_or(0),
-            volume: v["volume"].as_u64().map(|x| x.min(100) as u32).unwrap_or(40),
+            volume: v["volume"].as_u64().map(|x| x.min(160) as u32).unwrap_or(40),
             shuffle: v["shuffle"].as_bool().unwrap_or(false),
         }
     }
