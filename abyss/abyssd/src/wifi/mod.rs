@@ -54,7 +54,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Result};
-use log::{info, warn};
+use log::{debug, info, warn};
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 
 use crate::{clock, control};
@@ -546,13 +546,13 @@ impl Worker {
     fn handle(&mut self, cmd: Cmd) {
         match cmd {
             Cmd::Acquire { id, holder } => {
-                info!("wifi: lease {id} taken by {holder} ({} held)", self.leases.len() + 1);
+                debug!("wifi: lease {id} taken by {holder} ({} held)", self.leases.len() + 1);
                 self.leases.insert(id, holder);
                 self.on_acquire();
             }
             Cmd::Release { id, next_use_in_ms } => {
                 if let Some(h) = self.leases.remove(&id) {
-                    info!("wifi: lease {id} ({h}) released, next use {next_use_in_ms:?} ms");
+                    debug!("wifi: lease {id} ({h}) released, next use {next_use_in_ms:?} ms");
                 }
                 self.on_release(next_use_in_ms);
             }
@@ -597,10 +597,12 @@ impl Worker {
             self.teardown("last lease released");
             return;
         }
+        // Per-burst lines are debug!: a radio station asks every ~14 s, and each info! line is a
+        // write to session.log on /data (a UFS wake) that tells nobody anything.
         let until = clock::now_ms() + linger;
         self.linger_until = Some(until);
         if let Some(l) = &self.link {
-            info!("wifi: lingering {} s on {} (power save)", linger / 1000, l.ssid);
+            debug!("wifi: lingering {} s on {} (power save)", linger / 1000, l.ssid);
             let p = Phase::Lingering { ssid: l.ssid.clone(), ip: l.lease.ip, until };
             self.set_phase(p);
         }
