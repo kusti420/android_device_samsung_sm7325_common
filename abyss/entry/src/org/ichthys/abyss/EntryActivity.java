@@ -101,6 +101,11 @@ public final class EntryActivity extends Activity {
     private static final String PROP_NAV_START = "persist.abyss.nav.start";
     private static final String[] NAV_START_VALUES = {"player", "home"};
     private static final int[] NAV_START_LABELS = {R.string.nav_start_player, R.string.nav_start_home};
+    /** LDAC bitrate for Bluetooth in Abyss (abyss-btd); the first value is the default. */
+    private static final String PROP_BT_LDAC_QUALITY = "persist.abyss.bt.ldac_quality";
+    private static final String[] BT_LDAC_QUALITY_VALUES = {"990", "660", "330", "abr"};
+    private static final int[] BT_LDAC_QUALITY_LABELS = {R.string.bt_quality_990,
+            R.string.bt_quality_660, R.string.bt_quality_330, R.string.bt_quality_abr};
     /** Internet in Abyss (abyssd uplink.rs); first value = default. */
     private static final String PROP_NET_MODE = "persist.abyss.net.mode";
     private static final String[] NET_MODE_VALUES = {"wifi_mobile", "wifi", "mobile"};
@@ -143,6 +148,7 @@ public final class EntryActivity extends Activity {
     private LinearLayout mScreenTimeout;
     private TextView mScreenTimeoutOther;
     private LinearLayout mNavStart;
+    private LinearLayout mBtLdacQuality;
     private LinearLayout mNetMode;
     private LinearLayout mNetFormat;
     private Switch mSuspend;
@@ -532,6 +538,9 @@ public final class EntryActivity extends Activity {
 
         mNavStart = findViewById(R.id.nav_start);
         addChoices(mNavStart, PROP_NAV_START, NAV_START_VALUES, NAV_START_LABELS);
+        mBtLdacQuality = findViewById(R.id.bt_ldac_quality);
+        addChoices(mBtLdacQuality, PROP_BT_LDAC_QUALITY, BT_LDAC_QUALITY_VALUES,
+                BT_LDAC_QUALITY_LABELS);
         mNetMode = findViewById(R.id.net_mode);
         addChoices(mNetMode, PROP_NET_MODE, NET_MODE_VALUES, NET_MODE_LABELS);
         mNetFormat = findViewById(R.id.net_format);
@@ -572,6 +581,8 @@ public final class EntryActivity extends Activity {
         }
         showScreenTimeout(secs);
         showChoice(mNavStart, SystemProperties.get(PROP_NAV_START, ""), NAV_START_VALUES);
+        showChoice(mBtLdacQuality, SystemProperties.get(PROP_BT_LDAC_QUALITY, ""),
+                BT_LDAC_QUALITY_VALUES);
         showChoice(mNetMode, SystemProperties.get(PROP_NET_MODE, ""), NET_MODE_VALUES);
         showChoice(mNetFormat, SystemProperties.get(PROP_NET_FORMAT, ""), NET_FORMAT_VALUES);
         mSuspend.setChecked(SystemProperties.getBoolean(PROP_SUSPEND, false));

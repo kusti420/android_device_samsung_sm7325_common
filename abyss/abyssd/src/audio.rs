@@ -5,10 +5,19 @@
 //! in /proc/asound/cards, e.g. a FiiO BTR5 in USB DAC mode) > the 3.5 mm jack.
 //! Never the speaker.
 //!
-//! Bluetooth (`BtOut`): CPU decode only (no DSP offload for A2DP); s16le stereo
-//! PCM goes over the abyss_bt socket at the rate abyss-btd asks for (the SBC/AAC
-//! codec rate, 44.1 or 48 kHz; the player resamples). Volume is the same software
-//! gain as USB; the headset is kept at full scale (bt.rs "Volume policy").
+//! Bluetooth, two modes (abyss-btd's `mode`, persist.abyss.bt.offload=1 opt-in):
+//! - A2DP offload (opt-in): the ADSP encodes (a2dp_dsp.rs
+//!   programs its SLIMBUS_7_RX encoder from the negotiated codec) and abyssd feeds it like
+//!   the jack: `CompressOut` with the Bluetooth target (DSP decode, route
+//!   "compress-offload-playback bt-a2dp" = SLIMBUS_7_RX Audio Mixer MultiMedia4) or, for
+//!   CPU-decoded streams, `BtOut` -> `BtDspOut` (PCM on hw:0,0, "deep-buffer-playback
+//!   bt-a2dp"). The AP may sleep between DSP fragments. If the DSP refuses the codec,
+//!   abyssd asks abyss-btd for software encoding (`BtLink`, bt.rs request_software).
+//! - Software (`BtOut`): s16le stereo PCM goes over the abyss_bt socket at the rate
+//!   abyss-btd asks for (the codec rate, 44.1 or 48 kHz; the player resamples).
+//!
+//! Volume is the same software gain as USB (Q13 stream gain on the compress path); the
+//! headset is kept at full scale (bt.rs "Volume policy").
 //!
 //! USB: plain tinyalsa `pcm_open(card, 0, PCM_OUT)`. The card's hw params are
 //! queried (rate range, formats); abyssd tries the file's rate, then 48 kHz,
@@ -259,6 +268,7 @@ pub struct TinyAlsaOut {
     pcm: Option<PcmHandle>,
     routed: bool,
     created_at: u64,
+    label: &'static str,
 }
 
 impl TinyAlsaOut {
@@ -287,7 +297,18 @@ impl TinyAlsaOut {
             pcm: None,
             routed: false,
             created_at: clock::now_ms(),
+            label: "tinyalsa-jack",
         }
+    }
+
+    /// The deep-buffer front end routed to the Bluetooth backend (A2DP offload, CPU decode).
+    /// No settle wait: Bluetooth is switched on long after the audio HAL restart at entry.
+    pub fn bluetooth() -> Self {
+        let mut t = TinyAlsaOut::from_props();
+        t.paths = prop_paths("persist.abyss.audio.bt_paths", "deep-buffer-playback bt-a2dp,bt-a2dp");
+        t.created_at = 0;
+        t.label = "bluetooth-dsp";
+        t
     }
 
     /// "Audio settle": stopping audioserver makes init restart the vendor
@@ -433,7 +454,7 @@ impl AudioOut for TinyAlsaOut {
     }
 
     fn name(&self) -> &'static str {
-        "tinyalsa-jack"
+        self.label
     }
 
     fn hal_restarted(&mut self) {
@@ -622,17 +643,43 @@ pub struct BtOut {
     fmt_gen: u64,
     link_gen: u64,
     pkt: Vec<u8>,
+    /// Offload mode: PCM to the DSP encoder instead of the socket.
+    dsp: Option<BtDspOut>,
+    use_dsp: bool,
 }
 
 impl BtOut {
     pub fn new(bt: std::sync::Arc<bt::Shared>) -> Self {
-        BtOut { bt, fd: None, fmt_gen: 0, link_gen: 0, pkt: Vec::with_capacity(1 + bt::PCM_FRAMES_PER_PACKET * 4) }
+        BtOut {
+            bt,
+            fd: None,
+            fmt_gen: 0,
+            link_gen: 0,
+            pkt: Vec::with_capacity(1 + bt::PCM_FRAMES_PER_PACKET * 4),
+            dsp: None,
+            use_dsp: false,
+        }
     }
 }
 
 impl AudioOut for BtOut {
-    fn open(&mut self, _rate: u32) -> Result<u32> {
+    fn open(&mut self, rate: u32) -> Result<u32> {
         self.fd = None;
+        if self.bt.offload() {
+            let bt = self.bt.clone();
+            let d = self.dsp.get_or_insert_with(|| BtDspOut::new(bt));
+            match d.open(rate) {
+                Ok(r) => {
+                    self.use_dsp = true;
+                    return Ok(r);
+                }
+                Err(e) => {
+                    self.use_dsp = false;
+                    return Err(e);
+                }
+            }
+        }
+        self.use_dsp = false;
         // The A2DP codec fixes the rate (SBC/AAC: 44.1 or 48 kHz); the player
         // resamples from the file's rate.
         let (rate, fmt_gen, link_gen, fd) = self.bt.start_stream()?;
@@ -644,6 +691,12 @@ impl AudioOut for BtOut {
     }
 
     fn write(&mut self, samples: &[i16]) -> Result<()> {
+        if self.use_dsp {
+            return match self.dsp.as_mut() {
+                Some(d) => d.write(samples),
+                None => Err(anyhow!("bluetooth dsp stream not open")),
+            };
+        }
         let Some(fd) = self.fd.clone() else { return Err(anyhow!("bluetooth stream not open")) };
         match self.bt.still_valid(self.fmt_gen, self.link_gen) {
             Ok(true) => {}
@@ -675,17 +728,132 @@ impl AudioOut for BtOut {
     }
 
     fn standby(&mut self) {
+        if let Some(d) = self.dsp.as_mut() {
+            d.standby();
+        }
+        self.use_dsp = false;
         if self.fd.take().is_some() {
             self.bt.suspend_stream();
         }
     }
 
     fn is_open(&self) -> bool {
+        if self.use_dsp {
+            return self.dsp.as_ref().is_some_and(|d| d.is_open());
+        }
         self.fd.is_some()
     }
 
     fn name(&self) -> &'static str {
-        "bluetooth"
+        if self.use_dsp {
+            "bluetooth-dsp"
+        } else {
+            "bluetooth"
+        }
+    }
+
+    fn hal_restarted(&mut self) {
+        if let Some(d) = self.dsp.as_mut() {
+            d.hal_restarted();
+        }
+    }
+}
+
+/// The A2DP offload stream with abyss-btd plus the DSP's Bluetooth encoder: `prepare`
+/// before routing a front end to SLIMBUS_7_RX, `release` after the route is down
+/// (the order of the vendor HAL: a2dp_start_playback in enable_snd_device, reset_codec_config
+/// after the stream stopped).
+pub struct BtLink {
+    bt: std::sync::Arc<bt::Shared>,
+    enc: crate::a2dp_dsp::BtEncoder,
+    started: bool,
+}
+
+impl BtLink {
+    pub fn new(bt: std::sync::Arc<bt::Shared>, card: u32) -> BtLink {
+        BtLink { bt, enc: crate::a2dp_dsp::BtEncoder::new(card), started: false }
+    }
+
+    /// Starts the A2DP stream (`play`; the stack sends the offload start command) and
+    /// programs the encoder. A refused encoder config switches the helper to software.
+    pub fn prepare(&mut self) -> Result<()> {
+        if self.started {
+            return Ok(());
+        }
+        let c = self.bt.start_offload()?;
+        if let Err(e) = self.enc.program(&c) {
+            self.bt.suspend_stream();
+            self.bt.request_software();
+            return Err(e.context(format!("DSP encoder for {}", c.label())));
+        }
+        info!("bluetooth: offload stream started, {}", c.label());
+        self.started = true;
+        Ok(())
+    }
+
+    /// The DSP would not take the stream (open/start failed after `prepare`).
+    pub fn failed(&mut self) {
+        self.release();
+        self.bt.request_software();
+    }
+
+    pub fn release(&mut self) {
+        if self.started {
+            self.enc.reset();
+            self.bt.suspend_stream();
+            self.started = false;
+        }
+    }
+
+    pub fn hal_restarted(&mut self) {
+        // The mixer is back at defaults; the A2DP stream itself is still started (a
+        // repeated `play` is answered at once), so only the encoder must be set again.
+        self.enc.hal_restarted();
+        self.started = false;
+    }
+}
+
+/// PCM (CPU decode) to the DSP's Bluetooth encoder.
+pub struct BtDspOut {
+    pcm: TinyAlsaOut,
+    link: BtLink,
+}
+
+impl BtDspOut {
+    pub fn new(bt: std::sync::Arc<bt::Shared>) -> BtDspOut {
+        let pcm = TinyAlsaOut::bluetooth();
+        let card = pcm.card;
+        BtDspOut { pcm, link: BtLink::new(bt, card) }
+    }
+
+    fn open(&mut self, rate: u32) -> Result<u32> {
+        self.link.prepare()?;
+        match self.pcm.open(rate) {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                self.pcm.standby();
+                self.link.failed();
+                Err(e)
+            }
+        }
+    }
+
+    fn write(&mut self, samples: &[i16]) -> Result<()> {
+        self.pcm.write(samples)
+    }
+
+    fn standby(&mut self) {
+        self.pcm.standby();
+        self.link.release();
+    }
+
+    fn is_open(&self) -> bool {
+        self.pcm.is_open()
+    }
+
+    fn hal_restarted(&mut self) {
+        self.pcm.hal_restarted();
+        self.link.hal_restarted();
     }
 }
 
@@ -1014,6 +1182,10 @@ pub struct CompressOut {
     device: u32,
     xml: String,
     paths: Vec<String>,
+    jack_paths: Vec<String>,
+    bt_paths: Vec<String>,
+    /// Some = the Bluetooth target (A2DP offload); None = the jack.
+    link: Option<BtLink>,
     vol_ctl: String,
     plans: Vec<(u32, u32)>,
     route: Option<Route>,
@@ -1034,12 +1206,9 @@ impl CompressOut {
             .unwrap_or(7);
         let xml = control::prop_str("persist.abyss.audio.mixer_xml")
             .unwrap_or_else(|| "/vendor/etc/mixer_paths.xml".into());
-        let paths = control::prop_str("persist.abyss.audio.offload_paths")
-            .unwrap_or_else(|| "compress-offload-playback headphones,headset".into())
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
+        let paths = prop_paths("persist.abyss.audio.offload_paths", "compress-offload-playback headphones,headset");
+        let bt_paths =
+            prop_paths("persist.abyss.audio.bt_offload_paths", "compress-offload-playback bt-a2dp,bt-a2dp");
         let plans = control::prop_str("persist.abyss.audio.offload_frags")
             .map(|s| parse_plans(&s))
             .filter(|p| !p.is_empty())
@@ -1048,7 +1217,10 @@ impl CompressOut {
             card,
             device,
             xml,
+            jack_paths: paths.clone(),
             paths,
+            bt_paths,
+            link: None,
             vol_ctl: format!("Compress Playback {device} Volume"),
             plans,
             route: None,
@@ -1083,6 +1255,10 @@ impl CompressOut {
         // The volume is stored per front end and applied at START
         // (msm_compr_trigger), so set it before the stream exists.
         self.set_volume(vol_q13)?;
+        // Bluetooth: A2DP stream started + encoder programmed before the backend is routed.
+        if let Some(l) = self.link.as_mut() {
+            l.prepare()?;
+        }
         if !self.routed {
             let paths = self.paths.clone();
             if let Some(r) = self.route.as_mut() {
@@ -1110,6 +1286,16 @@ impl CompressOut {
                 }
             }
         }
+        if let Some(l) = self.link.as_mut() {
+            // The DSP did not take the stream on the Bluetooth port (e.g. the encoder
+            // block): software encoding from here.
+            let paths = self.paths.clone();
+            if let Some(r) = self.route.as_mut() {
+                r.reset(&paths);
+            }
+            self.routed = false;
+            l.failed();
+        }
         self.standby();
         Err(last.unwrap_or_else(|| anyhow!("no fragment plan")))
     }
@@ -1135,7 +1321,8 @@ impl CompressOut {
         Ok(())
     }
 
-    /// Powers the offload route down (the stream must be closed already).
+    /// Powers the offload route down (the stream must be closed already); Bluetooth:
+    /// then suspends the A2DP stream and resets the encoder.
     pub fn standby(&mut self) {
         if self.routed {
             let paths = self.paths.clone();
@@ -1144,7 +1331,29 @@ impl CompressOut {
             }
             self.routed = false;
         }
+        if let Some(l) = self.link.as_mut() {
+            l.release();
+        }
         self.mixer = None;
+    }
+
+    /// Points the DSP path at the jack (None) or at Bluetooth headphones. Powers down
+    /// whatever the old target had first.
+    pub fn set_bluetooth(&mut self, bt: Option<std::sync::Arc<bt::Shared>>) {
+        if bt.is_some() == self.link.is_some() {
+            return;
+        }
+        self.standby();
+        match bt {
+            Some(b) => {
+                self.link = Some(BtLink::new(b, self.card));
+                self.paths = self.bt_paths.clone();
+            }
+            None => {
+                self.link = None;
+                self.paths = self.jack_paths.clone();
+            }
+        }
     }
 
     pub fn is_routed(&self) -> bool {
@@ -1155,7 +1364,20 @@ impl CompressOut {
         self.route = None;
         self.routed = false;
         self.mixer = None;
+        if let Some(l) = self.link.as_mut() {
+            l.hal_restarted();
+        }
     }
+}
+
+/// A comma-separated mixer path list from a property, or the default.
+fn prop_paths(prop: &str, default: &str) -> Vec<String> {
+    control::prop_str(prop)
+        .unwrap_or_else(|| default.into())
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 fn parse_plans(s: &str) -> Vec<(u32, u32)> {

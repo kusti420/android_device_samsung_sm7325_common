@@ -7,6 +7,7 @@
 // binder's declare_binder_interface! (wifi/netd.rs) uses alloc internally.
 extern crate alloc;
 
+mod a2dp_dsp;
 mod audio;
 mod backlight;
 mod battery;
@@ -103,6 +104,8 @@ const VOLUME_STEP_MAX: u32 = 10;
 const LOW_BATTERY_PCT: u32 = 3;
 const LOW_BATTERY_WARN_MS: u64 = 60_000;
 const SESSION_LOG: &str = "/data/misc/abyss/out/session.log";
+/// sys.abyss.debug "bt-<what>": what to do once the Bluetooth output is up (App::debug_start).
+static DEBUG_AFTER_BT: Mutex<Option<String>> = Mutex::new(None);
 /// More audio HAL restarts than this within `HAL_RESTART_WINDOW_MS` = give up and leave.
 const HAL_RESTART_MAX: usize = 3;
 const HAL_RESTART_WINDOW_MS: u64 = 60_000;
@@ -426,9 +429,13 @@ impl App {
                 None if bt_lost => self.say(now, "Bluetooth gone: paused.", WARN),
                 None => self.say(now, "Headphones out: paused.", WARN),
             }
+            let bt_now = matches!(new, Some(Output::Bluetooth { .. }));
             self.output = new.clone();
             self.player.send(Cmd::Output(new));
             self.dirty = true;
+            if bt_now {
+                self.debug_bt_ready(now);
+            }
         }
         self.output_check_at = now + self.output_check_every();
     }
@@ -624,6 +631,32 @@ impl App {
         if let Some((queue, index)) = self.resume_queue(&track) {
             info!("start: {} ready (paused)", track.display());
             self.player.send(Cmd::Load { queue, index, start_ms: self.resume.position_ms, play: false });
+            self.ui.go(Screen::NowPlaying);
+        }
+    }
+
+    /// Root-only test hook (hand tests of Bluetooth, no key presses): sys.abyss.debug, read
+    /// once at start. "bt" = connect the last headphones; "bt-play" = then Continue;
+    /// "bt-file:/path.flac" = then play that file. sys.* is gone after a reboot.
+    fn debug_start(&mut self, now: u64) {
+        let Some(d) = control::prop_str("sys.abyss.debug") else { return };
+        if !d.starts_with("bt") {
+            return;
+        }
+        warn!("debug: sys.abyss.debug={d}: connecting the last Bluetooth headphones");
+        if let Ok(mut p) = DEBUG_AFTER_BT.lock() {
+            *p = d.strip_prefix("bt-").map(|s| s.to_string());
+        }
+        self.request(Request::BtConnect(None), now);
+    }
+
+    fn debug_bt_ready(&mut self, now: u64) {
+        let Some(what) = DEBUG_AFTER_BT.lock().ok().and_then(|mut p| p.take()) else { return };
+        warn!("debug: Bluetooth output up: {what}");
+        if what == "play" {
+            self.request(Request::Resume, now);
+        } else if let Some(f) = what.strip_prefix("file:") {
+            self.player.send(Cmd::Load { queue: vec![PathBuf::from(f)], index: 0, start_ms: 0, play: true });
             self.ui.go(Screen::NowPlaying);
         }
     }
@@ -1105,11 +1138,14 @@ impl App {
     /// Suspend is allowed while music plays only when the DSP decodes it and
     /// the player thread is just waiting for the DSP's next write-done
     /// interrupt (a wakeup source: glink IPCC IRQ). CPU-decode playback never
-    /// suspends; Bluetooth playback is always CPU decode, so it never suspends
-    /// either. Nor while Bluetooth is turning on/off or connecting.
+    /// suspends. Bluetooth playback may suspend only on that same DSP path (A2DP
+    /// offload: the ADSP also encodes, the controller sends; the BT host-wake
+    /// line wakes the AP for headset keys). Not while Bluetooth is turning
+    /// on/off or connecting.
     fn may_suspend(&self, now: u64) -> bool {
         let bt_playing = matches!(self.output, Some(Output::Bluetooth { .. }))
-            && self.status.state == PlayState::Playing;
+            && self.status.state == PlayState::Playing
+            && !self.player.offload_sleepable();
         self.suspend_enabled
             && !self.screen_on
             && now >= self.suspend_retry_at
@@ -1338,6 +1374,7 @@ fn run() -> Result<Exit> {
     }
     app.check_low_battery(now);
     app.open_ready();
+    app.debug_start(now);
 
     let mut events = Vec::new();
     loop {

@@ -28,7 +28,7 @@ use anyhow::{anyhow, Result};
 use log::{info, warn};
 use serde_json::{json, Value};
 
-use crate::{clock, control, library};
+use crate::{a2dp_dsp, clock, control, library};
 
 /// init starts abyss-btd on `on` (while Abyss is active) and stops it on `off`.
 pub const PROP_BT: &str = "sys.abyss.bt";
@@ -84,6 +84,11 @@ pub struct LinkState {
     pub audio: Audio,
     /// The headphones A2DP is connected to.
     pub connected: Option<Device>,
+    /// The helper's A2DP mode (its `mode` event, sent on accept and after a switch):
+    /// true = the ADSP encodes (abyssd programs it, a2dp_dsp.rs), false = PCM over the socket.
+    pub offload: bool,
+    /// The codec of the last `format` event when it was an offload one.
+    pub codec: Option<a2dp_dsp::CodecCfg>,
 }
 
 pub struct Shared {
@@ -101,6 +106,8 @@ impl Shared {
                 fmt_gen: 0,
                 audio: Audio::Suspended,
                 connected: None,
+                offload: false,
+                codec: None,
             }),
             cv: Condvar::new(),
         }
@@ -158,6 +165,40 @@ impl Shared {
             return Err(anyhow!("Bluetooth headphones disconnected"));
         }
         Ok(s.fmt_gen == fmt_gen && s.audio == Audio::Started)
+    }
+
+    /// Offload mode in use (the player then feeds the DSP instead of the socket).
+    pub fn offload(&self) -> bool {
+        self.m.lock().map(|s| s.offload && s.fd.is_some()).unwrap_or(false)
+    }
+
+    /// Offload: `play`, wait for "audio started" (the controller took the offload start
+    /// command), return the negotiated codec for the DSP encoder.
+    pub fn start_offload(&self) -> Result<a2dp_dsp::CodecCfg> {
+        self.start_stream()?;
+        let s = self.m.lock().map_err(|_| anyhow!("bt state poisoned"))?;
+        if !s.offload {
+            return Err(anyhow!("Bluetooth helper is in software mode"));
+        }
+        s.codec.clone().ok_or_else(|| anyhow!("audio started without an offload codec"))
+    }
+
+    /// The DSP refused the codec: ask the helper for software encoding (it restarts A2DP
+    /// and reconnects the headset; the player resumes when the output comes back).
+    pub fn request_software(&self) {
+        let fd = match self.m.lock() {
+            Ok(mut s) => {
+                s.offload = false;
+                s.fd.clone()
+            }
+            Err(_) => None,
+        };
+        if let Some(fd) = fd {
+            warn!("bluetooth: offload failed, asking abyss-btd for software encoding");
+            if let Err(e) = send_json(&fd, &json!({"cmd": "mode", "offload": false})) {
+                warn!("bt: mode: {e}");
+            }
+        }
     }
 
     /// `pause` from the player thread (standby). Never blocks long.
@@ -359,6 +400,13 @@ fn update_shared(shared: &Shared, gen: u64, v: &Value) {
         "format" => {
             s.rate = v.get("rate").and_then(|r| r.as_u64()).unwrap_or(0) as u32;
             s.fmt_gen += 1;
+            let offload = v.get("offload").and_then(|x| x.as_bool()).unwrap_or(false);
+            s.offload = offload;
+            s.codec = if offload { a2dp_dsp::CodecCfg::from_event(v) } else { None };
+        }
+        "mode" => {
+            s.offload = v.get("offload").and_then(|x| x.as_bool()).unwrap_or(false);
+            s.codec = None;
         }
         "audio" => {
             s.audio = match str_of(v, "state") {
@@ -854,6 +902,10 @@ impl Bt {
                 if let Some(a) = v.get("abs").and_then(|a| a.as_u64()) {
                     notes.push(Note::Volume(a.min(127) as u32));
                 }
+            }
+            "mode" => {
+                let off = v.get("offload").and_then(|x| x.as_bool()).unwrap_or(false);
+                info!("bluetooth: A2DP {}", if off { "offload (DSP encodes)" } else { "software encoding" });
             }
             // format / audio: handled for the player in update_shared.
             _ => {}

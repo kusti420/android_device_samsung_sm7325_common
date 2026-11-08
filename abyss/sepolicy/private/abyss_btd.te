@@ -7,9 +7,9 @@
 # Modelled on the Bluetooth app's domain (system/sepolicy/private/bluetooth.te), minus everything
 # that needs the framework or another profile: no app_domain, no service_manager finds for
 # framework services, no tethering/PAN (tun, packet sockets), no uhid (HID), no telephony HAL,
-# and no audio HAL. A2DP audio stays in-process: abyss-btd replaces the stack's
-# audio_hal_interface glue with a ring buffer that abyssd fills over the socket
-# (impl-btd.md §3).
+# and no audio HAL. abyss-btd replaces the stack's audio_hal_interface glue: in software mode
+# with a ring buffer that abyssd fills over the socket (impl-btd.md §3); in offload mode the
+# stack only signals (HCI) and abyssd programs the ADSP itself (abyssd/src/a2dp_dsp.rs).
 #
 # Label of the binary: APEX files are labelled from the APEX's own file_contexts at build time
 # (system/sepolicy/apex/com.android.bt-file_contexts, which needs the line
@@ -63,6 +63,8 @@ set_prop(abyss_btd, bluetooth_audio_hal_prop)
 get_prop(abyss_btd, bluetooth_config_prop)
 get_prop(abyss_btd, device_logging_prop)
 get_prop(abyss_btd, incremental_prop)
+# persist.abyss.bt.offload / .codec / .ldac_quality (Settings › Abyss, abyss-btd daemon.rs).
+get_prop(abyss_btd, abyss_config_prop)
 # NOT binder_cache_bluetooth_server_prop: neverallowed for everyone but bluetooth and init
 # (bluetooth.te); only the Java service publishes that cache.
 # aconfig flag storage is readable by every coredomain already (private/domain.te:611-616).

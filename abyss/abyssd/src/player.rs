@@ -1,11 +1,11 @@
 //! Playback thread. Two paths:
-//! - DSP (jack, FLAC <= 48 kHz / MP3): symphonia only DEMUXES; the encoded
-//!   frames go to the ADSP through `CompressOut` in large fragments, and the
-//!   thread sleeps in poll() until the DSP has used a fragment up. While it
-//!   sleeps there `offload_sleepable` is set, so abyssd may suspend the AP.
-//! - CPU decode (USB DAC, Bluetooth, other codecs, > 48 kHz, or offload
-//!   failed): symphonia decode → i16 stereo → AudioOut. Bluetooth is always
-//!   CPU decode (A2DP has no DSP offload here), so it never suspends the AP.
+//! - DSP (jack, or Bluetooth with A2DP offload; FLAC <= 48 kHz / MP3): symphonia
+//!   only DEMUXES; the encoded frames go to the ADSP through `CompressOut` in large
+//!   fragments, and the thread sleeps in poll() until the DSP has used a fragment
+//!   up. While it sleeps there `offload_sleepable` is set, so abyssd may suspend
+//!   the AP. For Bluetooth the ADSP also encodes (a2dp_dsp.rs).
+//! - CPU decode (USB DAC, Bluetooth in software mode, other codecs, > 48 kHz,
+//!   streams, or offload failed): symphonia decode → i16 stereo → AudioOut.
 //!
 //! The vendored `symphonia` umbrella crate is built without codec features,
 //! so the FLAC and MP3 bundles are registered here by hand.
@@ -670,6 +670,11 @@ impl Engine {
             self.reopen = true;
         }
         let old = std::mem::replace(&mut self.output, o.clone());
+        // The DSP path follows the output: the jack, or the Bluetooth encoder.
+        self.comp.set_bluetooth(match &o {
+            Some(Output::Bluetooth { .. }) => Some(self.bt.clone()),
+            _ => None,
+        });
         let Some(new) = o else {
             if self.playing {
                 self.pause();
@@ -826,7 +831,12 @@ impl Engine {
         self.reopen = false;
         self.pos_ms = start_ms;
         let Some(path) = self.queue.get(self.index).cloned() else { return };
-        if self.offload_enabled && matches!(self.output, Some(Output::Jack)) {
+        let dsp_output = match self.output {
+            Some(Output::Jack) => true,
+            Some(Output::Bluetooth { .. }) => self.bt.offload(),
+            _ => false,
+        };
+        if self.offload_enabled && dsp_output {
             match self.open_offload(&path, start_ms) {
                 Ok(t) => {
                     // Only one front end feeds the jack: close the PCM one.
@@ -840,8 +850,8 @@ impl Engine {
             }
         } else if matches!(self.output, Some(Output::Usb { .. })) {
             info!("offload: not used (USB DAC output): cpu decode");
-        } else if matches!(self.output, Some(Output::Bluetooth { .. })) {
-            info!("offload: not used (Bluetooth output): cpu decode");
+        } else if matches!(self.output, Some(Output::Bluetooth { .. })) && self.offload_enabled {
+            info!("offload: not used (Bluetooth software encoding): cpu decode");
         } else if !self.offload_enabled {
             info!("offload: not used (disabled for this session): cpu decode");
         }
