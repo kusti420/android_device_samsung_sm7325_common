@@ -12,6 +12,15 @@ ro.vendor.nfc.                                   u:object_r:vendor_nfc_prop:s0
 # Perf
 ro.vendor.extension_library                      u:object_r:vendor_mpctl_prop:s0
 
+# IchthysOS: Samsung bootloader serials, not app-readable (see property.te).
+ro.boot.ap_serial                                u:object_r:vendor_sec_serial_prop:s0
+ro.boot.cp_serial                                u:object_r:vendor_sec_serial_prop:s0
+ro.boot.cpuid                                    u:object_r:vendor_sec_serial_prop:s0
+ro.boot.em.did                                   u:object_r:vendor_sec_serial_prop:s0
+ro.boot.un                                       u:object_r:vendor_sec_serial_prop:s0
+ro.boot.serialno.                                u:object_r:vendor_sec_serial_prop:s0
+ro.boot.sec_serialno                             u:object_r:vendor_sec_serial_prop:s0
+
 # RIL
 ro.vendor.multisim.                              u:object_r:vendor_radio_prop:s0
 ro.vendor.radio.                                 u:object_r:vendor_radio_prop:s0

@@ -1,2 +1,7 @@
 # qseecom
 vendor_internal_prop(vendor_qseecomd_prop)
+
+# IchthysOS: Samsung bootloader serials (ro.boot.ap_serial, ro.boot.em.did, ...). Unlabelled they
+# fall into bootloader_prop, which every domain (apps included) may read: a hardware ID that
+# survives factory reset. vendor_internal_prop keeps them away from coredomain (apps, shell).
+vendor_internal_prop(vendor_sec_serial_prop)
