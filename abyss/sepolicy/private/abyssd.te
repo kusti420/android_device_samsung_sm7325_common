@@ -202,3 +202,23 @@ allow hal_wifi_supplicant_server abyssd:unix_dgram_socket sendto;
 # (hardware/interfaces/wifi/supplicant/aidl/Android.bp: rust enabled: false) and its
 # ISupplicantStaIfaceCallback alone has 45 methods. Swap to it when the backend exists.
 # The abyss-net socket: unix_socket_connect(abyssd, abyss_net, abyss_net) in abyss_net.te.
+
+# ---- Mobile data leases (src/mobile) ---------------------------------------------------------
+# sys.abyss.mobile=on|off (abyss-net for the call) and sys.abyss.modem=abyss (init stops
+# vendor.sehradiomanager + ril-daemon; leave starts them again). Product-private type, no
+# platform neverallow applies (same reasoning as abyss_bt_prop above). init.svc.ril-daemon is
+# init_service_status_private_prop, readable by every coredomain (private/coredomain.te:12).
+set_prop(abyssd, abyss_mobile_prop)
+# QMI over QRTR to the modem (AF_QIPCRTR datagrams: DMS power, UIM SIM state, NAS registration,
+# WDS data call). The kernel checks nothing for ephemeral ports (net/qrtr/qrtr.c
+# qrtr_port_assign). qipcrtr_socket is neverallowed only for app domains (app_neverallows.te:141,
+# priv_app_all.te:301, gmscore_app.te:193, *_zygote.te); the modem is a remote QRTR node, not a
+# vendor domain, so no core<->vendor rule is involved. No ioctl.
+allow abyssd self:qipcrtr_socket create_socket_perms_no_ioctl;
+# RTM_GETLINK dump: which rmnet_dataN carries which QMAP mux id. Neverallows on netlink_route
+# (bind, nlmsg_readpriv, RTM_GETLINK xperm) cover untrusted/priv apps only (app_neverallows.te:150,
+# priv_app_all.te:305).
+allow abyssd self:netlink_route_socket { create_socket_perms_no_ioctl nlmsg_read };
+# /sys/class/net/rmnet_dataN/statistics/{rx,tx}_bytes: data used this session. sysfs_net reads
+# are neverallowed for apps only (app_neverallows.te:118, priv_app_all.te:284).
+r_dir_file(abyssd, sysfs_net)

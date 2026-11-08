@@ -101,6 +101,14 @@ public final class EntryActivity extends Activity {
     private static final String PROP_NAV_START = "persist.abyss.nav.start";
     private static final String[] NAV_START_VALUES = {"player", "home"};
     private static final int[] NAV_START_LABELS = {R.string.nav_start_player, R.string.nav_start_home};
+    /** Internet in Abyss (abyssd uplink.rs); first value = default. */
+    private static final String PROP_NET_MODE = "persist.abyss.net.mode";
+    private static final String[] NET_MODE_VALUES = {"wifi_mobile", "wifi", "mobile"};
+    private static final int[] NET_MODE_LABELS =
+            {R.string.net_mode_wifi_mobile, R.string.net_mode_wifi, R.string.net_mode_mobile};
+    private static final String PROP_NET_FORMAT = "persist.abyss.net.mobile_format";
+    private static final String[] NET_FORMAT_VALUES = {"mp3-128", "same"};
+    private static final int[] NET_FORMAT_LABELS = {R.string.net_format_small, R.string.net_format_same};
 
     /** Experimental kernel suspend while idle (abyssd suspend.rs), off by default. */
     private static final String PROP_SUSPEND = "persist.abyss.suspend";
@@ -135,6 +143,8 @@ public final class EntryActivity extends Activity {
     private LinearLayout mScreenTimeout;
     private TextView mScreenTimeoutOther;
     private LinearLayout mNavStart;
+    private LinearLayout mNetMode;
+    private LinearLayout mNetFormat;
     private Switch mSuspend;
     private boolean mBinding;
     private LinearLayout mBtList;
@@ -522,6 +532,10 @@ public final class EntryActivity extends Activity {
 
         mNavStart = findViewById(R.id.nav_start);
         addChoices(mNavStart, PROP_NAV_START, NAV_START_VALUES, NAV_START_LABELS);
+        mNetMode = findViewById(R.id.net_mode);
+        addChoices(mNetMode, PROP_NET_MODE, NET_MODE_VALUES, NET_MODE_LABELS);
+        mNetFormat = findViewById(R.id.net_format);
+        addChoices(mNetFormat, PROP_NET_FORMAT, NET_FORMAT_VALUES, NET_FORMAT_LABELS);
 
         mSuspend = findViewById(R.id.suspend);
         mSuspend.setOnCheckedChangeListener((b, on) -> {
@@ -558,6 +572,8 @@ public final class EntryActivity extends Activity {
         }
         showScreenTimeout(secs);
         showChoice(mNavStart, SystemProperties.get(PROP_NAV_START, ""), NAV_START_VALUES);
+        showChoice(mNetMode, SystemProperties.get(PROP_NET_MODE, ""), NET_MODE_VALUES);
+        showChoice(mNetFormat, SystemProperties.get(PROP_NET_FORMAT, ""), NET_FORMAT_VALUES);
         mSuspend.setChecked(SystemProperties.getBoolean(PROP_SUSPEND, false));
         mBinding = false;
         refreshBluetooth();

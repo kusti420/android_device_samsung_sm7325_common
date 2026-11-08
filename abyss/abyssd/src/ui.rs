@@ -812,6 +812,8 @@ impl Ui {
             || (self.screen == Screen::NowPlaying && v.status.state == PlayState::Playing)
             // The Wi-Fi line counts the linger down / follows the bring-up.
             || (self.screen == Screen::Battery && (v.wifi.lingering() || v.wifi.busy()))
+            // Mobile data: bring-up steps and the linger countdown.
+            || (self.screen == Screen::Battery && crate::mobile::live())
     }
 
     pub fn draw(&mut self, cv: &mut Canvas, v: &View) {
@@ -1062,11 +1064,12 @@ impl Ui {
         // "Wi-Fi off" / "Wi-Fi on (Home)": Wi-Fi is on only while a lease is held (or lingers).
         kv(cv, y, "wi-fi", &SMALL.ellipsize(&v.wifi.summary(), max_w - col as u32), "");
         y += SMALL_LH;
+        // Mobile data: "off" / "LTE · Telia EE · 3 bars" (mobile/mod.rs; on only while needed).
+        kv(cv, y, "mobile", &SMALL.ellipsize(&crate::mobile::summary(), max_w - col as u32), "");
+        y += SMALL_LH;
         if v.bt.phase() == Phase::Off {
-            kv(cv, y, "off", "Bluetooth, mobile", "");
+            kv(cv, y, "off", "Bluetooth", "");
         } else {
-            kv(cv, y, "off", "mobile", "");
-            y += SMALL_LH;
             kv(cv, y, "on", &SMALL.ellipsize(&format!("Bluetooth · {}", v.bt.summary()), max_w - col as u32), "");
         }
         y + SMALL_LH + 36
@@ -1346,6 +1349,14 @@ impl Ui {
                 SMALL.draw(cv, MARGIN, y, &l, DIM);
                 y += SMALL_LH;
             }
+        }
+        // Mobile data: state, network, address and the bytes used this session (mobile/mod.rs).
+        y += 18;
+        SMALL.draw(cv, MARGIN, y, "MOBILE DATA", DIM);
+        y += SMALL_LH;
+        for l in wrap(&SMALL, &crate::mobile::detail(), max_w).into_iter().take(3) {
+            SMALL.draw(cv, MARGIN, y, &l, TEXT);
+            y += SMALL_LH;
         }
         y + 30
     }

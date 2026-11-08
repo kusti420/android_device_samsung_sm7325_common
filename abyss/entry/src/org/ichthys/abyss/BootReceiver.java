@@ -29,6 +29,7 @@ import android.util.Log;
  * <ul>
  * <li>{@link GoDark#restore}: radios and double-tap wake as they were before entering.</li>
  * <li>{@link WifiHandoff#clear}: the Wi-Fi hand-over (it holds passphrases) is deleted.</li>
+ * <li>{@link MobileHandoff#clear}: the mobile-data hand-over (an APN may have a password) too.</li>
  * <li>A stale persist.abyss.after_leave (an older abyssd wrote "light" to open Abyss Light) is
  *     cleared. Abyss Light is retired (owner, 2026-11-07): nothing is ever opened from here.</li>
  * </ul>
@@ -48,6 +49,7 @@ public final class BootReceiver extends BroadcastReceiver {
         }
         GoDark.restore(context);
         WifiHandoff.clear();
+        MobileHandoff.clear();
         if (!SystemProperties.get(PROP_AFTER_LEAVE, "").isEmpty()) {
             try {
                 SystemProperties.set(PROP_AFTER_LEAVE, "");

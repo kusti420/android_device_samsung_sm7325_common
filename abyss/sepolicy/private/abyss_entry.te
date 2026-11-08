@@ -48,6 +48,8 @@ userdebug_or_eng(`
   set_prop(shell, abyss_bt_prop)
   # sys.abyss.wifi on|off by hand (starts wpa_supplicant + abyss-net while Abyss is active).
   set_prop(shell, abyss_wifi_prop)
+  # sys.abyss.mobile / sys.abyss.modem by hand (mobile data bring-up tests).
+  set_prop(shell, abyss_mobile_prop)
 ')
 
 # ---- Modules (impl-radio-module): Settings › Abyss › Modules installs signed declarative

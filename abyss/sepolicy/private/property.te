@@ -38,3 +38,10 @@ product_internal_prop(abyss_wifi_prop)
 
 # init can read and write every property (private/init.te:713 allows init property_service set
 # on every property_type), so it needs no rule here.
+
+# sys.abyss.mobile (on|off) and sys.abyss.modem (rild|abyss): mobile data inside Abyss
+# (abyssd/src/mobile). abyssd writes both; init starts abyss-net on mobile=on, stops
+# vendor.sehradiomanager + ril-daemon on modem=abyss while sys.abyss.state=active, and writes
+# mobile=off / modem=rild itself on boot, enter and leave (leave also starts rild again before
+# the framework). Own type so only abyssd (and a debug shell) can stop Android's RIL.
+product_internal_prop(abyss_mobile_prop)

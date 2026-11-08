@@ -16,6 +16,13 @@
 //! - `{"op":"down","ifname":"wlan0"}` → default cleared, NET_ID destroyed, addresses cleared.
 //! - `{"op":"ping"}` → netd's isAlive.
 //!
+//! Mobile data (abyssd/src/mobile) uses the same ops with `"net_id":43` (MOBILE_NET_ID), plus
+//! `"link_up":true` (interfaceSetCfg "up" before the address: abyss-net has no NET_ADMIN and
+//! rmnet links are not brought up by anyone else), `"mtu":<n>` and `"default_dev":true` (the
+//! default route straight onto the raw-IP point-to-point link, no gateway); "down" with
+//! `"link_down":true` also takes the link down. `net_id` defaults to NET_ID (Wi-Fi). The newest
+//! network that is up is netd's default; taking one down hands the default to the other one.
+//!
 //! Reply: `{"ok":true,"ms":<n>}` or `{"ok":false,"err":"<method>: <netd status>"}`.
 //!
 //! Clean-up guarantee: on SIGTERM (init `stop`, i.e. every Wi-Fi off and every leave, also after
@@ -42,6 +49,9 @@ const SOCKET_NAME: &str = "abyss_net";
 /// accepts the OEM range 1..50 (NetworkController MIN_OEM_ID..MAX_OEM_ID). Using an OEM id means
 /// a network left behind could never collide with one Android creates after the return.
 pub const NET_ID: i32 = 42;
+/// Mobile data's network (same OEM range; Wi-Fi and mobile can be up at the same time while the
+/// uplink switches).
+pub const MOBILE_NET_ID: i32 = 43;
 
 // ---------------------------------------------------------------------------
 // abyssd side
@@ -135,6 +145,33 @@ impl NetCfg {
         info!("netcfg: down {ifname}");
         Ok(())
     }
+
+    /// Mobile data: rmnet link up, address, routes onto the link, MOBILE_NET_ID as default.
+    pub fn up_mobile(&mut self, ifname: &str, s: &crate::mobile::qmi::IpSettings) -> Result<u64> {
+        let mut req = json!({
+            "op": "up",
+            "net_id": MOBILE_NET_ID,
+            "ifname": ifname,
+            "ip": s.ip.to_string(),
+            "prefix": s.prefix,
+            "subnet": s.subnet(),
+            "link_up": true,
+            "default_dev": true,
+        });
+        if let Some(m) = s.mtu {
+            req["mtu"] = json!(m);
+        }
+        let r = self.request(&req)?;
+        let ms = r["ms"].as_u64().unwrap_or(0);
+        info!("netcfg: up {ifname} {}/{} (mobile) via netd in {ms} ms", s.ip, s.prefix);
+        Ok(ms)
+    }
+
+    pub fn down_mobile(&mut self, ifname: &str) -> Result<()> {
+        self.request(&json!({"op": "down", "net_id": MOBILE_NET_ID, "ifname": ifname, "link_down": true}))?;
+        info!("netcfg: down {ifname} (mobile)");
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -148,31 +185,65 @@ fn ignore(e: netd::CallError, benign: i32) -> Result<()> {
     }
 }
 
-fn do_up(n: &Netd, req: &Value) -> Result<()> {
+/// The networks this helper brought up, oldest first; the newest is netd's default.
+#[derive(Default)]
+struct Nets {
+    up: Vec<(i32, String)>,
+}
+
+fn net_id_of(req: &Value) -> i32 {
+    req["net_id"].as_i64().map(|v| v as i32).filter(|v| [NET_ID, MOBILE_NET_ID].contains(v)).unwrap_or(NET_ID)
+}
+
+fn do_up(n: &Netd, req: &Value, nets: &mut Nets) -> Result<()> {
+    let net_id = net_id_of(req);
     let ifname = req["ifname"].as_str().ok_or_else(|| anyhow!("no ifname"))?;
     let ip = req["ip"].as_str().ok_or_else(|| anyhow!("no ip"))?;
     let prefix = req["prefix"].as_i64().ok_or_else(|| anyhow!("no prefix"))? as i32;
     let subnet = req["subnet"].as_str().ok_or_else(|| anyhow!("no subnet"))?;
-    // A network from an earlier lease (or a crashed session) would make create fail.
-    let _ = n.network_clear_default();
-    n.network_destroy(NET_ID).or_else(|e| ignore(e, netd::ENONET))?;
-    n.network_create_physical(NET_ID, netd::PERMISSION_NONE).map_err(|e| anyhow!("{e}"))?;
-    n.network_add_interface(NET_ID, ifname).map_err(|e| anyhow!("{e}"))?;
-    n.interface_add_address(ifname, ip, prefix).or_else(|e| ignore(e, netd::EEXIST))?;
-    n.network_add_route(NET_ID, ifname, subnet, "").or_else(|e| ignore(e, netd::EEXIST))?;
-    if let Some(gw) = req["gateway"].as_str() {
-        n.network_add_route(NET_ID, ifname, "0.0.0.0/0", gw).or_else(|e| ignore(e, netd::EEXIST))?;
+    // A network from an earlier lease (or a crashed session) would make create fail. The
+    // default is only cleared when no other Abyss network is up (it moves to this one below).
+    if nets.up.iter().all(|(id, _)| *id == net_id) {
+        let _ = n.network_clear_default();
     }
-    n.network_set_default(NET_ID).map_err(|e| anyhow!("{e}"))?;
+    n.network_destroy(net_id).or_else(|e| ignore(e, netd::ENONET))?;
+    nets.up.retain(|(id, _)| *id != net_id);
+    if req["link_up"].as_bool() == Some(true) {
+        // Before the address: interfaceSetCfg clears the IPv4 address, then reports the empty
+        // one as "Failed to add addr" (netd.rs); the flag is applied either way.
+        let _ = n.interface_set_flag(ifname, "up");
+    }
+    if let Some(mtu) = req["mtu"].as_i64() {
+        if let Err(e) = n.interface_set_mtu(ifname, mtu as i32) {
+            warn!("up: {e} (keeping the link's MTU)");
+        }
+    }
+    n.network_create_physical(net_id, netd::PERMISSION_NONE).map_err(|e| anyhow!("{e}"))?;
+    n.network_add_interface(net_id, ifname).map_err(|e| anyhow!("{e}"))?;
+    n.interface_add_address(ifname, ip, prefix).or_else(|e| ignore(e, netd::EEXIST))?;
+    n.network_add_route(net_id, ifname, subnet, "").or_else(|e| ignore(e, netd::EEXIST))?;
+    if req["default_dev"].as_bool() == Some(true) {
+        n.network_add_route(net_id, ifname, "0.0.0.0/0", "").or_else(|e| ignore(e, netd::EEXIST))?;
+    } else if let Some(gw) = req["gateway"].as_str() {
+        n.network_add_route(net_id, ifname, "0.0.0.0/0", gw).or_else(|e| ignore(e, netd::EEXIST))?;
+    }
+    n.network_set_default(net_id).map_err(|e| anyhow!("{e}"))?;
+    nets.up.push((net_id, ifname.to_string()));
     Ok(())
 }
 
 /// Everything "down" does, best effort; errors are logged, never fatal.
-fn do_down(n: &Netd, ifname: &str) {
-    if let Err(e) = n.network_clear_default() {
+fn do_down(n: &Netd, net_id: i32, ifname: &str, link_down: bool, nets: &mut Nets) {
+    nets.up.retain(|(id, _)| *id != net_id);
+    // The other Abyss network (if one is up) becomes the default again.
+    let res = match nets.up.last() {
+        Some((other, _)) => n.network_set_default(*other),
+        None => n.network_clear_default(),
+    };
+    if let Err(e) = res {
         warn!("down: {e}");
     }
-    if let Err(e) = n.network_destroy(NET_ID) {
+    if let Err(e) = n.network_destroy(net_id) {
         if e.errno != netd::ENONET {
             warn!("down: {e}");
         }
@@ -180,9 +251,13 @@ fn do_down(n: &Netd, ifname: &str) {
     if let Err(e) = n.interface_clear_addrs(ifname) {
         warn!("down: {e}");
     }
+    if link_down {
+        // Expected to report "Failed to add addr" after the flag change (netd.rs).
+        let _ = n.interface_set_flag(ifname, "down");
+    }
 }
 
-fn handle(netd: &mut Option<Netd>, msg: &[u8]) -> Value {
+fn handle(netd: &mut Option<Netd>, nets: &mut Nets, msg: &[u8]) -> Value {
     let start = clock::now_ms();
     let req: Value = match serde_json::from_slice(msg) {
         Ok(v) => v,
@@ -197,9 +272,10 @@ fn handle(netd: &mut Option<Netd>, msg: &[u8]) -> Value {
     let Some(n) = netd.as_ref() else { return json!({"ok": false, "err": "no netd"}) };
     let op = req["op"].as_str().unwrap_or("");
     let res = match op {
-        "up" => do_up(n, &req),
+        "up" => do_up(n, &req, nets),
         "down" => {
-            do_down(n, req["ifname"].as_str().unwrap_or("wlan0"));
+            let link_down = req["link_down"].as_bool() == Some(true);
+            do_down(n, net_id_of(&req), req["ifname"].as_str().unwrap_or("wlan0"), link_down, nets);
             Ok(())
         }
         "ping" => n.is_alive().map_err(|e| anyhow!("{e}")).and_then(|a| {
@@ -265,7 +341,9 @@ fn helper_loop() -> Result<()> {
     signal_hook::low_level::pipe::register(signal_hook::consts::SIGINT, sig_w)?;
     let listener = control_socket()?;
     let mut netd: Option<Netd> = None;
-    let mut client: Option<UnixStream> = None;
+    let mut nets = Nets::default();
+    // abyssd's Wi-Fi and mobile workers each hold their own connection.
+    let mut clients: Vec<UnixStream> = Vec::new();
     let mut buf = vec![0u8; 4096];
     loop {
         let (sig, lst, cli) = {
@@ -273,7 +351,7 @@ fn helper_loop() -> Result<()> {
                 PollFd::new(sig_r.as_fd(), PollFlags::POLLIN),
                 PollFd::new(listener.as_fd(), PollFlags::POLLIN),
             ];
-            if let Some(c) = &client {
+            for c in &clients {
                 fds.push(PollFd::new(c.as_fd(), PollFlags::POLLIN));
             }
             match poll(&mut fds, PollTimeout::NONE) {
@@ -282,7 +360,8 @@ fn helper_loop() -> Result<()> {
                 Err(e) => return Err(e).context("poll"),
             }
             let ready = |i: usize| fds.get(i).and_then(|f| f.revents()).is_some_and(|r| !r.is_empty());
-            (ready(0), ready(1), ready(2))
+            let cli: Vec<bool> = (0..clients.len()).map(|i| ready(2 + i)).collect();
+            (ready(0), ready(1), cli)
         };
         // A listener that can no longer accept (init closed or shut its socket while stopping
         // us: accept() says EINVAL forever) would turn this loop into a busy spin that floods
@@ -290,8 +369,9 @@ fn helper_loop() -> Result<()> {
         let mut dead_listener = false;
         if lst && !sig {
             match listener.accept() {
-                // One client (abyssd); a new connection replaces an old one.
-                Ok((s, _)) => client = Some(s),
+                // Pushed at the end, so this round's `cli` indices stay valid; a closed
+                // client is removed when its read returns 0.
+                Ok((s, _)) => clients.push(s),
                 Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) => {}
                 Err(e) => {
                     warn!("accept: {e}; control socket unusable, going down");
@@ -300,29 +380,43 @@ fn helper_loop() -> Result<()> {
             }
         }
         if sig || dead_listener {
-            info!("SIGTERM: taking the Abyss network and wlan0 down");
+            info!("SIGTERM: taking the Abyss networks and wlan0 down");
             let n = match netd.take() {
                 Some(n) => Some(n),
                 None => Netd::connect().ok(),
             };
             if let Some(n) = n {
-                do_down(&n, "wlan0");
+                // Mobile data first (its rmnet link goes down too), then Wi-Fi as before.
+                let mobile: Vec<String> =
+                    nets.up.iter().filter(|(id, _)| *id == MOBILE_NET_ID).map(|(_, i)| i.clone()).collect();
+                for ifname in mobile {
+                    do_down(&n, MOBILE_NET_ID, &ifname, true, &mut nets);
+                }
+                do_down(&n, NET_ID, "wlan0", false, &mut nets);
                 // Expected to report "Failed to add addr" after the flag change (netd.rs).
                 let _ = n.interface_set_flag("wlan0", "down");
             }
             return Ok(());
         }
-        if cli {
-            let Some(c) = client.as_mut() else { continue };
+        // Requests are served one at a time, in poll order (one netd connection, invariant I7).
+        let mut dead = Vec::new();
+        for (i, ready) in cli.iter().enumerate() {
+            if !ready {
+                continue;
+            }
+            let Some(c) = clients.get_mut(i) else { continue };
             match c.read(&mut buf) {
-                Ok(0) | Err(_) => client = None,
+                Ok(0) | Err(_) => dead.push(i),
                 Ok(n) => {
-                    let reply = handle(&mut netd, &buf[..n]);
+                    let reply = handle(&mut netd, &mut nets, &buf[..n]);
                     if c.write_all(reply.to_string().as_bytes()).is_err() {
-                        client = None;
+                        dead.push(i);
                     }
                 }
             }
+        }
+        for i in dead.into_iter().rev() {
+            clients.remove(i);
         }
     }
 }

@@ -34,6 +34,9 @@ import android.util.Log;
  * <ul>
  * <li>Wi-Fi hand-over first ({@link WifiHandoff}): the saved networks, the current BSSID/channel
  *     and address, while the Wi-Fi service still has them.</li>
+ * <li>Mobile-data hand-over ({@link MobileHandoff}): the SIM's internet APN and operator, so
+ *     abyssd can bring the modem up on its own for a lease (rild is stopped then; abyss.rc
+ *     starts it again before the framework comes back).</li>
  * <li>Airplane mode on: modem, Wi-Fi and Bluetooth radios off. Airplane mode is a framework
  *     setting only: it blocks nothing in the kernel (no rfkill on the QCA WLAN driver), so abyssd
  *     can still bring Wi-Fi up on its own for a lease while the modem stays off.</li>
@@ -78,6 +81,8 @@ final class GoDark {
                     .putBoolean(K_WIFI, false)
                     .commit();
             WifiHandoff.write(c);
+            // Mobile data for Abyss (APN, operator, data/roaming switches) while telephony runs.
+            MobileHandoff.write(c);
             if (!airplane) {
                 c.getSystemService(ConnectivityManager.class).setAirplaneMode(true);
             }

@@ -33,6 +33,9 @@ mod tags;
 mod ui;
 mod wifi;
 mod wifi_net;
+// Mobile data leases (rild stopped, abyssd's own QMI client) and the Wi-Fi-then-mobile uplink.
+mod mobile;
+mod uplink;
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
@@ -184,6 +187,8 @@ struct App {
     bt: Bt,
     /// Wi-Fi leases (wifi/mod.rs); off unless something holds one.
     wifi: Wifi,
+    /// Mobile-data leases (mobile/mod.rs); the modem stays in low power unless one is held.
+    mobile: mobile::Mobile,
     /// Installed modules (store/), their screens and their stream (modules.rs).
     modules: modules::Host,
     /// A Cmd::Stream was sent and the player has not reported it yet.
@@ -1112,6 +1117,7 @@ impl App {
             && !bt_playing
             && !self.bt.busy()
             && !self.wifi.busy()
+            && !self.mobile.busy()
             && (self.status.state != PlayState::Playing || self.player.offload_sleepable())
             && !self.keys.any_down()
             && self.low_battery_at.is_none()
@@ -1258,7 +1264,9 @@ fn run() -> Result<Exit> {
     let bt = Bt::new().context("bluetooth")?;
     let wifi = Wifi::new().context("wifi")?;
     // Modules reach the network only through Wi-Fi leases, on sockets bound to wlan0.
-    let net: Arc<dyn radio_source::Network> = Arc::new(wifi_net::WifiNet::new(wifi.leaser()));
+    let mobile = mobile::Mobile::new().context("mobile")?;
+    // Wi-Fi first, mobile data when there is no known Wi-Fi (Settings › Abyss; uplink.rs).
+    let net: Arc<dyn radio_source::Network> = Arc::new(uplink::Uplink::new(wifi.leaser(), mobile.leaser()));
     let modules = modules::Host::from_device(net).context("modules")?;
     info!(
         "jack at start: {headphones}; output {}; volume {volume} %",
@@ -1295,6 +1303,7 @@ fn run() -> Result<Exit> {
         output,
         bt,
         wifi,
+        mobile,
         modules,
         stream_sent: false,
         modules_due: None,
@@ -1358,7 +1367,7 @@ fn run() -> Result<Exit> {
 
         let timeout_ms = app.next_wake(now).saturating_sub(now);
         let n_inputs = app.inputs.len();
-        const FIXED: usize = 7; // signal, player, hal watch, bluetooth, wifi, modules, module stream
+        const FIXED: usize = 8; // signal, player, hal watch, bluetooth, wifi, modules, module stream, mobile
         let mut ready = vec![false; FIXED + n_inputs];
         {
             let mut fds = Vec::with_capacity(FIXED + n_inputs);
@@ -1369,6 +1378,7 @@ fn run() -> Result<Exit> {
             fds.push(PollFd::new(app.wifi.poll_fd(), PollFlags::POLLIN));
             fds.push(PollFd::new(app.modules.poll_fd(), PollFlags::POLLIN));
             fds.push(PollFd::new(app.modules.stream_fd().unwrap_or(app.modules.poll_fd()), PollFlags::POLLIN));
+            fds.push(PollFd::new(app.mobile.poll_fd(), PollFlags::POLLIN));
             for fd in app.inputs.fds() {
                 fds.push(PollFd::new(fd, PollFlags::POLLIN));
             }
@@ -1408,6 +1418,11 @@ fn run() -> Result<Exit> {
         if ready[5] || ready[6] {
             app.on_modules(clock::now_ms());
         }
+        if ready[7] {
+            // Same notes (feedback line + redraw) as Wi-Fi.
+            let notes = app.mobile.on_ready();
+            app.on_wifi(notes, clock::now_ms());
+        }
         for i in 0..n_inputs {
             if ready[FIXED + i] {
                 events.clear();
@@ -1429,6 +1444,8 @@ fn finish(mut app: App, how: Exit) -> Result<Exit> {
     app.modules.stop_stream();
     app.player.shutdown(120);
     app.wifi.shutdown(if how == Exit::Term { WIFI_STOP_TERM_MS } else { WIFI_STOP_MS });
+    // Ends the call and puts the modem back to low power; rild comes back on leave (abyss.rc).
+    app.mobile.shutdown(if how == Exit::Term { WIFI_STOP_TERM_MS } else { WIFI_STOP_MS });
     let _ = app.display.blank();
     // Android's backlight level is restored by init (abyss.rc) on leave; init also
     // stops abyss-btd (before zygote) and resets sys.abyss.bt.
@@ -1444,6 +1461,10 @@ fn finish(mut app: App, how: Exit) -> Result<Exit> {
 fn main() {
     // `abyssd --net-helper`: the abyss-net service (uid system), netd configuration for Wi-Fi
     // leases (wifi/netcfg.rs). No display, no session log.
+    // `abyssd --qmi-probe` (root): read-only look at the modem's QMI services (mobile/probe.rs).
+    if std::env::args().nth(1).as_deref() == Some("--qmi-probe") {
+        std::process::exit(mobile::probe::main());
+    }
     if std::env::args().nth(1).as_deref() == Some("--net-helper") {
         std::process::exit(wifi::netcfg::helper_main());
     }

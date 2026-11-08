@@ -17,3 +17,6 @@ persist.abyss.after_leave u:object_r:abyss_after_leave_prop:s0 exact string
 # clamps to 5..120). Same type as the rest of persist.abyss.* (e.g. persist.abyss.brightness via
 # the prefix); the exact uint entry only makes init reject a non-number.
 persist.abyss.screen_timeout_s u:object_r:abyss_config_prop:s0 exact uint
+# Mobile data inside Abyss: abyss-net for the data call, and who drives the modem (abyss.rc).
+sys.abyss.mobile        u:object_r:abyss_mobile_prop:s0 exact enum on off
+sys.abyss.modem         u:object_r:abyss_mobile_prop:s0 exact enum rild abyss

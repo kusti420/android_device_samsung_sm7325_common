@@ -34,7 +34,7 @@
 //! API; `holder` names who holds one (logs only for now).
 
 pub mod dhcp;
-mod dns;
+pub(crate) mod dns;
 mod handoff;
 mod http;
 pub mod netcfg;
@@ -74,9 +74,7 @@ const PROP_MAC: &str = "persist.abyss.wifi.mac";
 const PROP_TEST_URL: &str = "persist.abyss.wifi.test_url";
 const DEFAULT_TEST_URL: &str = "http://connectivitycheck.gstatic.com/generate_204";
 const LINGER_DEFAULT_S: u64 = 30;
-/// Above this a hinted next use turns Wi-Fi off and back on (re-joining costs ~0.6 s + a
-/// DHCP renew; cheaper than staying associated for minutes between long radio bursts).
-const LINGER_MAX_DEFAULT_S: u64 = 90;
+const LINGER_MAX_DEFAULT_S: u64 = 600;
 const LINGER_LIMIT_S: u64 = 1200;
 /// Extra time on top of a hinted next use, so the next lease finds the link still up.
 const LINGER_SLACK_MS: u64 = 5_000;
@@ -184,9 +182,34 @@ impl Drop for Lease {
 pub struct Leaser {
     tx: Tx,
     next_id: Arc<AtomicU64>,
+    shared: Arc<Mutex<Shared>>,
+}
+
+/// Coarse Wi-Fi state for the uplink (uplink.rs: Wi-Fi first, then mobile data).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinkState {
+    Off,
+    /// Starting, associating, getting an address, reconnecting, stopping.
+    Coming,
+    /// Associated with an address (also while lingering).
+    Up,
+    /// Off after a failed bring-up or a lost network (the last error is set).
+    Failed,
 }
 
 impl Leaser {
+    pub fn state(&self) -> LinkState {
+        match self.shared.lock() {
+            Ok(s) => match s.phase {
+                Phase::On { .. } | Phase::Lingering { .. } => LinkState::Up,
+                Phase::Off if s.last_error.is_some() => LinkState::Failed,
+                Phase::Off => LinkState::Off,
+                _ => LinkState::Coming,
+            },
+            Err(_) => LinkState::Off,
+        }
+    }
+
     pub fn acquire(&self, holder: &str) -> Lease {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.tx.send(Cmd::Acquire { id, holder: holder.to_string() });
@@ -269,7 +292,7 @@ impl Wifi {
 
     /// A handle that takes leases from any thread (the radio, module fetches).
     pub fn leaser(&self) -> Leaser {
-        Leaser { tx: self.tx.clone(), next_id: self.next_id.clone() }
+        Leaser { tx: self.tx.clone(), next_id: self.next_id.clone(), shared: self.shared.clone() }
     }
 
     /// The Battery screen's "Wi-Fi test": acquire → GET the test URL → release. The lease goes

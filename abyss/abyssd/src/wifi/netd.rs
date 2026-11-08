@@ -18,6 +18,7 @@
 //! | networkClearDefault() | 67 |
 //! | interfaceSetCfg(InterfaceConfigurationParcel cfg) | 81 |
 //! | interfaceClearAddrs(String ifName) | 83 |
+//! | interfaceSetMtu(String ifName, int mtu) | 85 |
 //!
 //! Strings are `@utf8InCpp String`, i.e. String16 on the wire (AParcel_writeString). Replies
 //! start with the binder status header.
@@ -68,6 +69,8 @@ const NETWORK_SET_DEFAULT: u32 = 66;
 const NETWORK_CLEAR_DEFAULT: u32 = 67;
 const INTERFACE_SET_CFG: u32 = 81;
 const INTERFACE_CLEAR_ADDRS: u32 = 83;
+/// Mobile data (abyssd/src/mobile): the call's MTU on rmnet_dataN.
+const INTERFACE_SET_MTU: u32 = 85;
 
 /// The only uid netd answers without asking system_server (BinderUtil.h checkAnyPermission).
 const AID_SYSTEM: u32 = 1000;
@@ -210,6 +213,13 @@ impl Netd {
 
     pub fn interface_clear_addrs(&self, ifname: &str) -> std::result::Result<(), CallError> {
         self.call_void("interfaceClearAddrs", INTERFACE_CLEAR_ADDRS, |p| p.write(ifname))
+    }
+
+    pub fn interface_set_mtu(&self, ifname: &str, mtu: i32) -> std::result::Result<(), CallError> {
+        self.call_void("interfaceSetMtu", INTERFACE_SET_MTU, |p| {
+            p.write(ifname)?;
+            p.write(&mtu)
+        })
     }
 
     /// interfaceSetCfg with only a flag ("up" / "down"). netd clears the IPv4 address first and

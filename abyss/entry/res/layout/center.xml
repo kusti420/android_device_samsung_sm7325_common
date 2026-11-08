@@ -219,6 +219,49 @@
                 android:layout_marginTop="10dp"
                 android:text="@string/nav_keys_note" />
 
+            <!-- Internet in Abyss: persist.abyss.net.mode (wifi_mobile | wifi | mobile) and
+                 persist.abyss.net.mobile_format (mp3-128 | same); abyssd uplink.rs, read on
+                 entry -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="18dp"
+                android:background="@color/abyss_rule" />
+
+            <TextView
+                style="@style/AbyssLabel"
+                android:layout_marginTop="16dp"
+                android:text="@string/net_mode_title" />
+
+            <TextView
+                style="@style/AbyssDim"
+                android:layout_marginTop="2dp"
+                android:text="@string/net_mode_summary" />
+
+            <LinearLayout
+                android:id="@+id/net_mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal" />
+
+            <TextView
+                style="@style/AbyssLabel"
+                android:layout_marginTop="16dp"
+                android:text="@string/net_format_title" />
+
+            <TextView
+                style="@style/AbyssDim"
+                android:layout_marginTop="2dp"
+                android:text="@string/net_format_summary" />
+
+            <LinearLayout
+                android:id="@+id/net_format"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal" />
+
             <!-- Deep sleep: persist.abyss.suspend 0/1 -->
             <View
                 android:layout_width="match_parent"
