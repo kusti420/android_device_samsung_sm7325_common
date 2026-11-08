@@ -595,6 +595,9 @@ pub enum Effect {
     Exit,
     /// A stream started: hand this feed to the player; open Now Playing.
     Play(Arc<Feed>),
+    /// The picked stream is the one already playing: keep it, unpause if paused, open Now
+    /// Playing.
+    Continue,
     /// `media = "play|pause|toggle|next|prev"`.
     Media(String),
     /// `say`, `buzz`, `show` built-ins: the text (the daemon has no voice yet: shown).
@@ -614,6 +617,9 @@ struct Done {
 
 struct StreamSession {
     module: usize,
+    /// Which station and format plays (`$stream.tag`, `$stream.format`): picking the same one
+    /// again must not restart it.
+    key: (String, String),
     radio: Radio,
     /// The `show` screen, drawn as Now Playing (with the item's context and its own `get`).
     frame: Option<Frame>,
@@ -1211,13 +1217,19 @@ impl Host {
             Err(e) => return Effect::Unsupported(e),
         };
         cfg.allow = Some(self.modules[module].net.clone());
+        // The same station in the same format is already the stream: keep it (no new prebuffer,
+        // no gap), just show it, like Resume does for a library track.
+        let key = (cfg.tag.clone(), cfg.format.clone());
+        if self.stream.as_ref().is_some_and(|s| s.module == module && s.key == key) {
+            return Effect::Continue;
+        }
         self.stop_stream();
         let show = st.get("show").and_then(Value::as_str).filter(|sh| self.screen_def(module, sh).is_some());
         let frame = show.map(|sh| Frame::new(Place::Screen { module, screen: sh.to_string() }, f.binds.clone()));
         match Radio::start(cfg, self.net.clone()) {
             Ok(radio) => {
                 let feed = radio.feed();
-                self.stream = Some(StreamSession { module, radio, frame, paused: false });
+                self.stream = Some(StreamSession { module, key, radio, frame, paused: false });
                 self.start_get(true, false); // the show screen's own data ("Coming up")
                 Effect::Play(feed)
             }

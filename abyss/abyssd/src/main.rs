@@ -681,6 +681,14 @@ impl App {
                     self.say(now, "No headphones: plug in wired or USB ones, or connect Bluetooth ›.", WARN);
                 }
             }
+            Effect::Continue => {
+                if self.status.state != PlayState::Playing {
+                    self.player.send(Cmd::Play);
+                    self.modules.set_paused(false);
+                }
+                self.ui.go(Screen::NowPlaying);
+                self.screen_on_for(now, self.screen_timeout_ms);
+            }
             Effect::Media(op) => match op.as_str() {
                 "play" => self.player.send(Cmd::Play),
                 "pause" => self.player.send(Cmd::Pause),
