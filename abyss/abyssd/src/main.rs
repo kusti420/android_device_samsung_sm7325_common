@@ -637,7 +637,8 @@ impl App {
 
     /// Root-only test hook (hand tests of Bluetooth, no key presses): sys.abyss.debug, read
     /// once at start. "bt" = connect the last headphones; "bt-play" = then Continue;
-    /// "bt-file:/path.flac" = then play that file. sys.* is gone after a reboot.
+    /// "bt-file:/path.flac" = then play that file (a directory: its FLACs). sys.* is gone
+    /// after a reboot.
     fn debug_start(&mut self, now: u64) {
         let Some(d) = control::prop_str("sys.abyss.debug") else { return };
         if !d.starts_with("bt") {
@@ -656,7 +657,16 @@ impl App {
         if what == "play" {
             self.request(Request::Resume, now);
         } else if let Some(f) = what.strip_prefix("file:") {
-            self.player.send(Cmd::Load { queue: vec![PathBuf::from(f)], index: 0, start_ms: 0, play: true });
+            // A directory queues its FLACs (sorted), for runs longer than one track.
+            let mut queue: Vec<PathBuf> = match fs::read_dir(f) {
+                Ok(rd) => rd
+                    .filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("flac")))
+                    .collect(),
+                Err(_) => vec![PathBuf::from(f)],
+            };
+            queue.sort();
+            self.player.send(Cmd::Load { queue, index: 0, start_ms: 0, play: true });
             self.ui.go(Screen::NowPlaying);
         }
     }
