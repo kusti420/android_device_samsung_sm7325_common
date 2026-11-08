@@ -1799,6 +1799,7 @@ pub fn stream_config(st: &Value, sc: &Scope) -> Result<Config, String> {
     };
     let mut format = filled("format").unwrap_or_default();
     let mut mime = None;
+    let mut long = None; // radio #84: the format's advertised long-burst limits
     let url = if let Some(u) = filled("url") {
         u
     } else {
@@ -1809,11 +1810,13 @@ pub fn stream_config(st: &Value, sc: &Scope) -> Result<Config, String> {
             .ok_or("This station has no audio.")?;
         format = name.clone();
         mime = entry.get("type").and_then(Value::as_str).map(str::to_string);
+        long = entry.get("long_bursts").and_then(radio_source::LongBursts::from_json);
         entry.get("url").and_then(Value::as_str).ok_or("This stream has no address.")?.to_string()
     };
     let audio = Url::parse(&url).map_err(|e| e.to_string())?;
     let mut cfg = Config::new(audio);
     cfg.mode = mode;
+    cfg.long = long.filter(|_| mode == Mode::Bursts);
     cfg.songs = filled("songs").and_then(|u| Url::parse(&u).ok());
     // media:stream:screen: the station's `now` link keeps `$stream.next` ("Up next") known.
     cfg.now = filled("now").and_then(|u| Url::parse(&u).ok());

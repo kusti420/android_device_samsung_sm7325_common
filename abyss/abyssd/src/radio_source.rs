@@ -21,6 +21,17 @@
 //! ring continues gaplessly, else the answer is a reset. A reset lets the old decoder play
 //! out, then a new one starts (never spliced). A failed tracklist never stops the audio.
 //!
+//! **Long bursts** (radio #84): when the station's audio entry advertises `long_bursts` (the
+//! server's ring and limits), asks carry `long=1`: the first answer starts ~4-4.5 min behind
+//! live ([`long_hold_s`]: 270 s, less if the server allows less or the compressed audio would
+//! pass [`LONG_MAX_BYTES`]), and the next ask goes out when ~45 s is left, so Wi-Fi wakes about
+//! every 3.5-4 min. `max_s` caps an answer so the buffer never passes the hold (after a pause
+//! or a stall). The audio is kept compressed (decoded a frame at a time by the player) and a
+//! long answer goes to the feed as it arrives: playback starts after the first 15 s, not after
+//! the whole download. An answer cut off mid-body is asked again with the same cursor and the
+//! frames already fed are skipped (a reset answer: skipped by wall time), so nothing repeats.
+//! Without `long_bursts` everything is exactly the classic loop above.
+//!
 //! **Endless**: the plain audio URL, one long answer; frames as they come. The song comes
 //! from a long poll on `now?after=<play_id>&wait=55` in a second thread, plus the tracklist.
 //!
@@ -75,6 +86,72 @@ const MAX_BUFFER_S: f64 = 45.0;
 /// Largest answer body accepted (30 s of FLAC is ~4-5 MB).
 const MAX_AUDIO_BYTES: usize = 24 << 20;
 const MAX_JSON_BYTES: usize = 4 << 20;
+/// Long bursts: the longest hold (the first answer, and the latency behind live).
+pub const LONG_HOLD_S: f64 = 270.0;
+/// Long bursts: ask again when this much is left (less while the buffer is short).
+pub const LONG_HEADROOM_S: f64 = 45.0;
+/// Long bursts: never hold more compressed audio than this (FLAC ~4 min, MP3 320 the hold).
+pub const LONG_MAX_BYTES: f64 = 40.0 * 1024.0 * 1024.0;
+/// What one answer may bring beyond the hold (`max_s` = hold + this - what is held).
+const LONG_SLACK_S: f64 = 15.0;
+/// Long bursts only beat the classic loop when the server lets a stream start further back.
+const CLASSIC_MAX_BEHIND_S: f64 = 30.0;
+/// A long answer goes to the feed in pieces of about this much audio.
+const LONG_PIECE_S: f64 = 2.0;
+
+/// The server's long-burst limits (`long_bursts` of a station's audio entry, radio #84).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LongBursts {
+    pub ring_s: f64,
+    pub max_behind_s: f64,
+    pub max_min_s: f64,
+    pub max_wait_s: f64,
+}
+
+impl LongBursts {
+    /// From the advertised object; None when it is missing, malformed or no better than the
+    /// classic limits (then the classic loop runs).
+    pub fn from_json(v: &Value) -> Option<LongBursts> {
+        let n = |k: &str| v.get(k).and_then(Value::as_f64).filter(|x| x.is_finite() && *x > 0.0);
+        let lb = LongBursts {
+            ring_s: n("ring_s")?,
+            max_behind_s: n("max_behind_s")?,
+            max_min_s: n("max_min_s").unwrap_or(1.0),
+            max_wait_s: n("max_wait_s").unwrap_or(ASK_WAIT_S as f64),
+        };
+        (lb.max_behind_s > CLASSIC_MAX_BEHIND_S && lb.ring_s > lb.max_behind_s).then_some(lb)
+    }
+}
+
+/// Bytes per second of a stream before its first answer is measured (on the high side, so
+/// the first hold never passes the RAM cap).
+pub fn guess_bytes_per_s(format: &str) -> f64 {
+    let f = format.to_ascii_lowercase();
+    match codec_hint(&f, None) {
+        Some("MP3") if f.contains("128") => 17_000.0,
+        Some("MP3") => 41_000.0,
+        _ => 160_000.0,
+    }
+}
+
+/// How much a long-burst stream holds (= how far behind live it starts): [`LONG_HOLD_S`],
+/// capped by the server's `max_behind_s` and by [`LONG_MAX_BYTES`] at `bytes_per_s`.
+pub fn long_hold_s(lb: &LongBursts, bytes_per_s: f64) -> f64 {
+    let by_ram = LONG_MAX_BYTES / bytes_per_s.max(1.0) - LONG_SLACK_S;
+    LONG_HOLD_S.min(lb.max_behind_s).min(by_ram).max(FIRST_BEHIND_S)
+}
+
+/// Ask again when this much is left: a fifth of what the last answer left in hand, within
+/// [`HEADROOM_S`]..[`LONG_HEADROOM_S`] (a short stream after a server restart asks like the
+/// classic loop instead of all the time).
+pub fn long_headroom_s(peak_s: f64) -> f64 {
+    (0.2 * peak_s).clamp(HEADROOM_S, LONG_HEADROOM_S)
+}
+
+/// `max_s` of a long ask: what may come without the buffer passing the hold.
+pub fn long_max_s(hold_s: f64, held_s: f64) -> f64 {
+    (hold_s + LONG_SLACK_S - held_s).max(5.0)
+}
 
 // ---------------------------------------------------------------------------
 // Network access
@@ -161,6 +238,8 @@ pub struct Config {
     pub format: String,
     /// The module's approved origins: every request is checked against them.
     pub allow: Option<Vec<String>>,
+    /// The server's long-burst limits for this format (None = classic bursts, as before).
+    pub long: Option<LongBursts>,
 }
 
 impl Config {
@@ -176,6 +255,7 @@ impl Config {
             title: String::new(),
             format: String::new(),
             allow: None,
+            long: None,
         }
     }
 
@@ -194,6 +274,7 @@ impl Config {
         c.tag = st.id.clone();
         c.title = st.name.clone();
         c.format = format.to_string();
+        c.long = st.long_bursts.get(format).copied();
         Ok(c)
     }
 }
@@ -422,6 +503,8 @@ pub struct Station {
     pub audio: std::collections::BTreeMap<String, Url>,
     pub now_url: Option<Url>,
     pub tracklist_url: Option<Url>,
+    /// `audio.<format>.long_bursts`, where the server offers them.
+    pub long_bursts: std::collections::BTreeMap<String, LongBursts>,
 }
 
 /// `GET <base>/api/v1/stations`, links resolved against the URL they came from.
@@ -443,6 +526,11 @@ pub fn fetch_stations(c: &Client, base: &str) -> io::Result<(String, Vec<Station
                     .collect()
             })
             .unwrap_or_default();
+        let long_bursts = st
+            .get("audio")
+            .and_then(Value::as_object)
+            .map(|a| a.iter().filter_map(|(k, f)| Some((k.clone(), LongBursts::from_json(f.get("long_bursts")?)?))).collect())
+            .unwrap_or_default();
         let bpm = st.get("bpm").and_then(Value::as_array).and_then(|a| Some((a.first()?.as_f64()?, a.get(1)?.as_f64()?)));
         out.push(Station {
             id: id.to_string(),
@@ -453,6 +541,7 @@ pub fn fetch_stations(c: &Client, base: &str) -> io::Result<(String, Vec<Station
             audio,
             now_url: link("now_url"),
             tracklist_url: link("tracklist_url"),
+            long_bursts,
         });
     }
     Ok((brand, out))
@@ -867,6 +956,17 @@ struct Answer {
 fn ask(c: &Client, url: &Url) -> io::Result<Answer> {
     let started = Instant::now();
     let r = c.get(url, &[], Timeouts::io_s(ASK_WAIT_S + 15))?;
+    let mut a = answer_head(&r, started);
+    a.body = r.bytes(MAX_AUDIO_BYTES)?;
+    a.error = (a.status >= 400)
+        .then(|| serde_json::from_slice::<Value>(&a.body).ok()?.get("error")?.as_str().map(str::to_string))
+        .flatten();
+    a.took = started.elapsed();
+    Ok(a)
+}
+
+/// An answer's status and headers (body empty).
+fn answer_head(r: &crate::http::Response<'_>, started: Instant) -> Answer {
     let status = r.status;
     let cursor = r.header("x-stream-cursor").map(str::to_string);
     let reset = r.header("x-stream-reset").map(str::trim) == Some("1");
@@ -875,11 +975,271 @@ fn ask(c: &Client, url: &Url) -> io::Result<Answer> {
     let seconds = r.header_f64("x-stream-seconds").unwrap_or(0.0);
     let head_bytes = r.header_u64("x-stream-head-bytes").map(|v| v as usize);
     let retry_after = r.header_f64("retry-after").unwrap_or(2.0).clamp(1.0, 300.0);
-    let body = r.bytes(MAX_AUDIO_BYTES)?;
-    let error = (status >= 400)
-        .then(|| serde_json::from_slice::<Value>(&body).ok()?.get("error")?.as_str().map(str::to_string))
-        .flatten();
-    Ok(Answer { status, cursor, reset, time_ms, end_ms, seconds, head_bytes, retry_after, body, error, took: started.elapsed() })
+    Answer {
+        status,
+        cursor,
+        reset,
+        time_ms,
+        end_ms,
+        seconds,
+        head_bytes,
+        retry_after,
+        body: Vec::new(),
+        error: None,
+        took: started.elapsed(),
+    }
+}
+
+/// Where a long answer that broke off had got to: the next answer skips what was fed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Partial {
+    /// The feed stream it went to.
+    stream: u64,
+    /// Its X-Stream-Time-Ms (server time of its first sample).
+    time_ms: i64,
+    /// Samples of it that reached the feed (counted from its first sample).
+    samples: u64,
+    /// Server time of the end of what reached the feed.
+    end_ms: i64,
+}
+
+/// What of an answer the feed already has. After `p` broke off, the same stream asked with the
+/// same cursor starts where `p` started: skip exactly the samples it fed (`Ok`). A reset (a new
+/// stream: a cut-off first answer asked again, an unusable cursor, an encoder restart) skips
+/// by wall time up to the end of everything fed (`Err(end_ms)`), so the new stream begins where
+/// the old one ends instead of replaying the headroom.
+fn resume_skip(p: Option<Partial>, reset: bool, stream: Option<u64>, fed_end_ms: Option<i64>) -> Option<Result<u64, i64>> {
+    if !reset {
+        return p.filter(|p| stream == Some(p.stream)).map(|p| Ok(p.samples));
+    }
+    p.map(|p| p.end_ms).into_iter().chain(fed_end_ms).max().map(Err)
+}
+
+/// The long-burst side of the worker (classic bursts keep their own locals in `bursts`).
+struct LongState {
+    lb: LongBursts,
+    cursor: String,
+    /// The feed stream answers go to.
+    cur: Option<u64>,
+    codec: Option<Codec>,
+    rate: f64,
+    /// Measured bytes per second of audio (for the RAM cap), starting from a guess.
+    bytes_per_s: f64,
+    /// What the last answer left in hand (s): sets the headroom.
+    peak_s: f64,
+    partial: Option<Partial>,
+    /// Server time of the end of everything fed so far.
+    fed_end_ms: Option<i64>,
+}
+
+impl LongState {
+    fn hold_s(&self) -> f64 {
+        long_hold_s(&self.lb, self.bytes_per_s)
+    }
+    fn headroom_s(&self) -> f64 {
+        long_headroom_s(self.peak_s)
+    }
+}
+
+/// One long ask, read as it comes: frames go to the feed in pieces (playback can start after
+/// the first seconds; the body is never held twice). The query is built here, so a retry
+/// after an error asks with what holds then. Ok = the whole answer was read (for 200, every
+/// frame is in the feed; `body` is empty).
+fn long_ask(c: &Client, base: &Url, sh: &Shared, hint: Option<&'static str>, st: &mut LongState) -> io::Result<Answer> {
+    let fs = sh.feed.status();
+    let starting = st.cur.is_none() || !fs.latest_started;
+    let hold = st.hold_s();
+    let need = if !starting { 1.0 } else { (sh.cfg.start_s - fs.latest_received_s).max(1.0) };
+    // What the answer may add to the RAM: the part it repeats is skipped, not kept. Without a
+    // cursor the answer is a reset from `behind` back, cut where the feed ends (so up to the
+    // hold); asked again after a cut-off, the same answer comes again and its fed part is skipped.
+    let repeat_s = st
+        .partial
+        .filter(|p| Some(p.stream) == st.cur)
+        .map_or(0.0, |p| p.samples as f64 / st.rate.max(1.0));
+    let held = if st.cur.is_some() && !st.cursor.is_empty() { (fs.buffered_s - repeat_s).max(0.0) } else { 0.0 };
+    let mut cursor = st.cursor.clone();
+    sh.set(|s| {
+        if s.corrupt_cursor && !cursor.is_empty() {
+            cursor = format!("{cursor}x");
+            s.corrupt_cursor = false;
+        }
+    });
+    let wait = st.lb.max_wait_s.clamp(1.0, 30.0).round() as u64;
+    let url = base.with_query(&[
+        ("cursor", cursor),
+        ("cid", sh.cfg.cid.clone()),
+        ("long", "1".into()),
+        ("behind", format!("{}", hold.round())),
+        ("min_s", format!("{}", (need.min(st.lb.max_min_s) * 1000.0).round() / 1000.0)),
+        ("max_s", format!("{}", long_max_s(hold, held).round())),
+        ("wait", wait.to_string()),
+    ]);
+    let started = Instant::now();
+    let mut r = c.get(&url, &[], Timeouts::io_s(wait + 15))?;
+    let mut a = answer_head(&r, started);
+    if a.status != 200 {
+        a.body = r.bytes(MAX_JSON_BYTES)?;
+        a.error = serde_json::from_slice::<Value>(&a.body).ok().and_then(|v| v.get("error")?.as_str().map(str::to_string));
+        a.took = started.elapsed();
+        return Ok(a);
+    }
+    let skip = resume_skip(st.partial, a.reset, st.cur, st.cur.and(st.fed_end_ms));
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut head: Vec<u8> = Vec::new();
+    let mut stream = (!a.reset).then_some(st.cur).flatten();
+    let mut cutter = st.codec.as_ref().map(Cutter::for_codec);
+    if stream.is_none() {
+        cutter = None; // a new stream: opened on its head below
+    }
+    let mut pos: u64 = 0; // samples of this answer seen (fed or skipped)
+    let mut fed: u64 = 0; // of those, how many reached the feed (counted from the answer's start)
+    let mut marked = false;
+    let mut piece: Vec<Frame> = Vec::new();
+    let mut piece_samples: u64 = 0;
+    let mut body_bytes: u64 = 0;
+    let piece_max = (LONG_PIECE_S * st.rate.max(8000.0)) as u64;
+    let limit = (2.0 * LONG_MAX_BYTES) as u64;
+    let result: io::Result<()> = (|| {
+        loop {
+            let n = r.read_some(&mut buf)?;
+            body_bytes += n as u64;
+            if body_bytes > limit {
+                return Err(io::Error::new(ErrorKind::InvalidData, "long answer bigger than the RAM cap"));
+            }
+            let at_end = n == 0;
+            let mut data = &buf[..n];
+            if cutter.is_none() {
+                head.extend_from_slice(data);
+                data = &[];
+                match open_stream(&head, hint, at_end) {
+                    Ok(None) if head.len() < 1 << 20 => {}
+                    Ok(None) => return Err(io::Error::new(ErrorKind::InvalidData, "no audio frames at the start of the answer")),
+                    Ok(Some((info, n0))) => {
+                        let n0 = match info {
+                            Codec::Flac(_) => a.head_bytes.filter(|h| *h <= head.len()).unwrap_or(n0).max(n0),
+                            Codec::Mp3 { .. } => n0,
+                        };
+                        if st.cur.is_some() {
+                            info!("radio: new stream (reset): the old one plays out, then a new decoder starts");
+                            sh.set(|s| s.resets += 1);
+                        }
+                        st.rate = f64::from(info.sample_rate());
+                        let mut ct = Cutter::for_codec(&info);
+                        ct.push(&head[n0..]);
+                        cutter = Some(ct);
+                        let name = info.name();
+                        sh.set(|s| s.codec = Some(name));
+                        let id = sh.feed.begin_stream(info.clone());
+                        st.codec = Some(info);
+                        st.cur = Some(id);
+                        stream = Some(id);
+                        head = Vec::new();
+                    }
+                    Err(e) => return Err(io::Error::new(ErrorKind::InvalidData, format!("reset answer: {e}"))),
+                }
+            }
+            let Some(ct) = cutter.as_mut() else {
+                if at_end {
+                    return Err(io::Error::new(ErrorKind::InvalidData, "cut-off head"));
+                }
+                continue;
+            };
+            ct.push(data);
+            let mut got: Vec<Frame> = Vec::new();
+            while let Some(f) = ct.next() {
+                got.push(f);
+            }
+            if at_end {
+                got.extend(ct.finish());
+                let skipped = ct.take_skipped();
+                if skipped > 0 {
+                    warn!("radio: {skipped} bytes of an answer were not frames");
+                }
+            }
+            let rate = st.rate.max(1.0);
+            for f in got {
+                let start = pos;
+                pos += u64::from(f.samples);
+                let keep = match skip {
+                    Some(Ok(samples)) => start >= samples,
+                    // Wall time: keep a frame unless most of it was already fed.
+                    Some(Err(end_ms)) => {
+                        a.time_ms + ((start as f64 + f64::from(f.samples) / 2.0) * 1000.0 / rate) as i64 >= end_ms
+                    }
+                    None => true,
+                };
+                if !keep {
+                    fed = pos;
+                    continue;
+                }
+                piece_samples += u64::from(f.samples);
+                piece.push(f);
+                if !marked && piece.len() == 1 {
+                    // the mark goes with the first frame fed: its own server time
+                    marked = true;
+                    let t0 = a.time_ms + (start as f64 * 1000.0 / rate) as i64;
+                    let id = stream.unwrap_or(0);
+                    if !sh.feed.push(id, Vec::new(), Some(t0)) {
+                        return Err(io::Error::new(ErrorKind::Interrupted, "stopped"));
+                    }
+                }
+                if piece_samples >= piece_max {
+                    if !sh.feed.push(stream.unwrap_or(0), std::mem::take(&mut piece), None) {
+                        return Err(io::Error::new(ErrorKind::Interrupted, "stopped"));
+                    }
+                    piece_samples = 0;
+                    fed = pos;
+                }
+            }
+            if at_end {
+                if !piece.is_empty() && !sh.feed.push(stream.unwrap_or(0), std::mem::take(&mut piece), None) {
+                    return Err(io::Error::new(ErrorKind::Interrupted, "stopped"));
+                }
+                fed = pos;
+                return Ok(());
+            }
+        }
+    })();
+    a.took = started.elapsed();
+    if let Err(e) = result {
+        // What reached the feed stays: the retry (same cursor) skips it.
+        if !piece.is_empty() {
+            let n: u64 = piece.iter().map(|f| u64::from(f.samples)).sum();
+            if sh.feed.push(stream.unwrap_or(0), std::mem::take(&mut piece), None) {
+                fed += n;
+            }
+        }
+        if let Some(id) = stream.filter(|_| fed > 0) {
+            let end_ms = a.time_ms + (fed as f64 * 1000.0 / st.rate.max(1.0)) as i64;
+            let mut p = Partial { stream: id, time_ms: a.time_ms, samples: fed, end_ms };
+            // A retry that broke off earlier than the one before still has everything the one
+            // before fed: keep the furthest point.
+            if let Some(q) = st.partial {
+                if q.stream == p.stream && q.time_ms == p.time_ms {
+                    p.samples = p.samples.max(q.samples);
+                }
+                p.end_ms = p.end_ms.max(q.end_ms);
+            }
+            st.partial = Some(p);
+            st.fed_end_ms = Some(st.fed_end_ms.unwrap_or(p.end_ms).max(p.end_ms));
+        }
+        if e.kind() == ErrorKind::InvalidData {
+            st.cursor.clear(); // unusable: start a new stream (the feed's part is skipped by time)
+        }
+        return Err(e);
+    }
+    st.partial = None;
+    st.fed_end_ms = Some(st.fed_end_ms.unwrap_or(a.end_ms).max(a.end_ms));
+    if a.seconds >= 5.0 && body_bytes > 0 {
+        let bps = body_bytes as f64 / a.seconds;
+        st.bytes_per_s = if st.bytes_per_s > 0.0 { 0.5 * st.bytes_per_s + 0.5 * bps } else { bps };
+    }
+    let got_s = pos as f64 / st.rate.max(1.0);
+    if a.seconds > 0.0 && (got_s - a.seconds).abs() > 0.2 {
+        info!("radio: answer said {:.3} s, frames hold ~{got_s:.3} s", a.seconds);
+    }
+    Ok(a)
 }
 
 struct Worker {
@@ -1006,6 +1366,44 @@ impl Worker {
         }
     }
 
+    /// Long bursts, before the first ask: names before sound (a long first answer starts playing
+    /// while it still arrives, before the sync that follows it). Retried like the audio while the
+    /// link is down; any answer from the server ends it (names can wait). False = stopped.
+    fn first_sync(&mut self) -> bool {
+        if self.sh.cfg.songs.is_none() {
+            return true;
+        }
+        let sh = self.sh.clone();
+        let got = self.net("tracklist", |c| {
+            let Ok(mut songs) = sh.songs.lock().map(|g| Songs { tracklist: g.tracklist.clone(), items: g.items.clone() })
+            else {
+                return Ok(None);
+            };
+            match songs.sync(c) {
+                Ok(_) => Ok(Some(songs)),
+                Err(e) if matches!(e.kind(), ErrorKind::Other | ErrorKind::InvalidData | ErrorKind::PermissionDenied) => {
+                    info!("radio: tracklist: {e} (names can wait)");
+                    Ok(None)
+                }
+                Err(e) => Err(e),
+            }
+        });
+        let Some(got) = got else { return false };
+        if let Some(songs) = got {
+            let newest = songs.items.last().map(|s| s.play_id.clone());
+            if let Ok(mut g) = self.sh.songs.lock() {
+                for s in songs.items {
+                    g.merge(s);
+                }
+            }
+            if newest.is_some() && newest != self.newest_play {
+                self.newest_play = newest;
+                self.refresh_next();
+            }
+        }
+        true
+    }
+
     /// `now` (no wait): what the rotation plans after the live song ("Up next").
     fn refresh_next(&mut self) {
         let Some(url) = self.now_url.clone() else { return };
@@ -1050,7 +1448,116 @@ impl Worker {
         }
     }
 
+    /// Long bursts: minutes per wake (module doc). Same answers and rules as [`bursts`](Self::bursts);
+    /// the asks carry `long=1`, `max_s`, and the answer goes to the feed as it arrives.
+    fn bursts_long(&mut self, lb: LongBursts) {
+        let mut st = LongState {
+            lb,
+            cursor: String::new(),
+            cur: None,
+            codec: None,
+            rate: 44_100.0,
+            bytes_per_s: guess_bytes_per_s(&self.sh.cfg.format),
+            peak_s: 0.0,
+            partial: None,
+            fed_end_ms: None,
+        };
+        let mut last_end: Option<i64> = None;
+        info!("radio: long bursts (server ring {:.0} s, max behind {:.0} s): hold {:.0} s", lb.ring_s, lb.max_behind_s, st.hold_s());
+        while !self.sh.stopped() {
+            let fs = self.sh.feed.status();
+            // Never ask while plenty is in hand (a paused player): wait for it to play down.
+            let headroom = st.headroom_s();
+            if fs.has_stream && fs.latest_started && fs.buffered_s > headroom + 1.0 {
+                let wait = (fs.buffered_s - headroom).clamp(0.5, st.hold_s() + LONG_SLACK_S);
+                self.give_net(Some((wait * 1000.0) as u64));
+                if !self.sh.sleep(Duration::from_secs_f64(wait)) {
+                    return;
+                }
+                continue;
+            }
+            let Some(base) = self.audio_url.clone() else { return };
+            if st.cur.is_none() && !self.first_sync() {
+                return;
+            }
+            let (sh, hint) = (self.sh.clone(), self.hint);
+            let Some(a) = self.net("audio", |c| long_ask(c, &base, &sh, hint, &mut st)) else { return };
+            self.sh.set(|s| s.asks += 1);
+            self.sync_songs(); // same wake as the audio
+            match a.status {
+                200 => {}
+                204 => {
+                    if let Some(c) = a.cursor {
+                        st.cursor = c;
+                    }
+                    // The server held the ask; only pace a server that answers at once.
+                    if a.took < Duration::from_secs(1) && !self.sh.sleep(Duration::from_secs(1)) {
+                        return;
+                    }
+                    continue;
+                }
+                503 => {
+                    info!("radio: station not encoding (503), retry in {:.0} s", a.retry_after);
+                    self.sh.set(|s| {
+                        s.phase = Phase::OffAir;
+                        s.last_error = a.error.clone().or(Some("not on air".into()));
+                    });
+                    self.give_net(Some((a.retry_after * 1000.0) as u64));
+                    if !self.sh.sleep(Duration::from_secs_f64(a.retry_after)) {
+                        return;
+                    }
+                    continue;
+                }
+                s => {
+                    let why = format!("HTTP {s}: {}", a.error.as_deref().unwrap_or("?"));
+                    warn!("radio: audio {why}");
+                    self.sh.set(|st| st.last_error = Some(why));
+                    if (400..500).contains(&s) && s != 429 {
+                        st.cursor.clear(); // an unusable ask: start a new stream
+                    }
+                    self.give_net(Some(2000));
+                    if !self.sh.sleep(Duration::from_secs(2)) {
+                        return;
+                    }
+                    continue;
+                }
+            }
+            if let (false, Some(e)) = (a.reset, last_end) {
+                if a.time_ms != e && (a.time_ms - e).abs() < 20 {
+                    info!("radio: clock jitter {} ms between answers", a.time_ms - e);
+                }
+            }
+            last_end = Some(a.end_ms);
+            match a.cursor {
+                Some(c) => st.cursor = c,
+                None => {
+                    warn!("radio: answer without a cursor: next ask starts over");
+                    st.cursor.clear();
+                }
+            }
+            let fs = self.sh.feed.status();
+            st.peak_s = fs.buffered_s;
+            if !fs.latest_started {
+                self.sh.set(|s| s.phase = Phase::Buffering);
+                continue; // keep buffering: min_s makes the server wait
+            }
+            self.sh.set(|s| {
+                s.phase = Phase::Playing;
+                s.last_error = None;
+            });
+            self.fill_gap();
+            let sleep = (fs.buffered_s - st.headroom_s()).max(0.5);
+            self.give_net(Some((sleep * 1000.0) as u64));
+            if !self.sh.sleep(Duration::from_secs_f64(sleep)) {
+                return;
+            }
+        }
+    }
+
     fn bursts(&mut self) {
+        if let Some(lb) = self.sh.cfg.long {
+            return self.bursts_long(lb);
+        }
         let mut cursor = String::new();
         let mut cur: Option<u64> = None;
         let mut last_end: Option<i64> = None;
@@ -1602,5 +2109,209 @@ mod tests {
         let m = [frame(14, false), frame(14, false)].concat();
         assert!(matches!(open_stream(&m, None, true), Ok(Some((Codec::Mp3 { sample_rate: 44100, .. }, 0)))));
         assert!(open_stream(&[0u8; 600], None, true).is_err());
+    }
+
+    #[test]
+    fn long_burst_limits_and_plan() {
+        let lb = LongBursts::from_json(&json!({"ring_s": 360, "max_behind_s": 300, "max_min_s": 240, "max_wait_s": 30})).unwrap();
+        assert_eq!(lb, LongBursts { ring_s: 360.0, max_behind_s: 300.0, max_min_s: 240.0, max_wait_s: 30.0 });
+        // Missing, malformed or no better than the classic limits: the classic loop.
+        assert!(LongBursts::from_json(&json!({"ring_s": 60, "max_behind_s": 30})).is_none());
+        assert!(LongBursts::from_json(&json!({"ring_s": "x", "max_behind_s": 300})).is_none());
+        assert!(LongBursts::from_json(&json!({"max_behind_s": 300})).is_none());
+        // The hold: 270 s for MP3, less for FLAC (RAM cap), never past the server's max.
+        let flac = long_hold_s(&lb, 175_000.0); // a loud FLAC stream: the RAM cap decides
+        assert!((200.0..270.0).contains(&flac), "{flac}");
+        assert!((flac + LONG_SLACK_S) * 175_000.0 <= LONG_MAX_BYTES + 1.0);
+        assert_eq!(long_hold_s(&lb, 40_000.0), LONG_HOLD_S);
+        let small = LongBursts { max_behind_s: 120.0, ..lb };
+        assert_eq!(long_hold_s(&small, 40_000.0), 120.0);
+        assert_eq!(long_hold_s(&lb, guess_bytes_per_s("flac")), long_hold_s(&lb, 160_000.0));
+        assert!(guess_bytes_per_s("mp3-128") < guess_bytes_per_s("mp3"));
+        // Headroom: 45 s on a full hold, the classic 5 s on a short stream (no asking all the time).
+        assert_eq!(long_headroom_s(260.0), LONG_HEADROOM_S);
+        assert_eq!(long_headroom_s(20.0), HEADROOM_S);
+        // max_s: what may come without passing the hold.
+        assert_eq!(long_max_s(270.0, 45.0), 240.0);
+        assert_eq!(long_max_s(270.0, 400.0), 5.0);
+        // Resume after a cut-off answer: same stream = exact samples, a reset = by wall time.
+        let p = Partial { stream: 3, time_ms: 1000, samples: 4410, end_ms: 1100 };
+        assert_eq!(resume_skip(Some(p), false, Some(3), Some(1100)), Some(Ok(4410)));
+        assert_eq!(resume_skip(Some(p), true, Some(3), Some(1100)), Some(Err(1100)));
+        assert_eq!(resume_skip(None, false, Some(3), Some(900)), None, "a whole answer before: nothing to skip");
+        // Any reset skips what the feed has (the old stream plays it out): no replayed headroom.
+        assert_eq!(resume_skip(None, true, Some(3), Some(900)), Some(Err(900)));
+        assert_eq!(resume_skip(None, true, None, None), None, "the first answer");
+    }
+
+    #[test]
+    fn stream_config_reads_long_bursts() {
+        let lb = json!({"ring_s": 360, "max_behind_s": 300, "max_min_s": 240, "max_wait_s": 30});
+        let station = json!({"audio": {"flac": {"url": "http://radio.example:8080/a/flac", "type": "audio/flac", "long_bursts": lb},
+                                       "mp3": {"url": "http://radio.example:8080/a/mp3"}}});
+        let mut sc = crate::modules::Scope::new();
+        sc.push("station", &station);
+        let cfg = |fmt: &str, proto: &str| {
+            crate::modules::stream_config(&json!({"protocol": proto, "formats": "$station.audio", "format": fmt}), &sc).unwrap()
+        };
+        assert_eq!(cfg("flac", "radio-v1").long.map(|l| l.max_behind_s), Some(300.0));
+        assert_eq!(cfg("mp3", "radio-v1").long, None, "not advertised: classic bursts");
+        assert_eq!(cfg("flac", "http").long, None, "a plain stream never asks for bursts");
+    }
+
+    /// A radio server in memory: answers by the ask's `cursor`, and can cut a body off.
+    struct FakeRadio {
+        asks: Mutex<Vec<String>>,
+        answer: Box<dyn Fn(usize, &str) -> (Vec<u8>, Option<usize>) + Send + Sync>,
+    }
+
+    struct FakeConn {
+        radio: Arc<FakeRadio>,
+        req: Vec<u8>,
+        out: Vec<u8>,
+        at: usize,
+        cut: Option<usize>,
+    }
+
+    impl Read for FakeConn {
+        fn read(&mut self, b: &mut [u8]) -> io::Result<usize> {
+            let end = self.cut.unwrap_or(self.out.len()).min(self.out.len());
+            if self.at >= end && self.cut.is_some() {
+                return Err(io::Error::new(ErrorKind::ConnectionReset, "fake: cut off"));
+            }
+            let n = b.len().min(end - self.at).min(700);
+            b[..n].copy_from_slice(&self.out[self.at..self.at + n]);
+            self.at += n;
+            Ok(n)
+        }
+    }
+
+    impl Write for FakeConn {
+        fn write(&mut self, b: &[u8]) -> io::Result<usize> {
+            self.req.extend_from_slice(b);
+            if self.req.windows(4).any(|w| w == b"\r\n\r\n") && self.out.is_empty() {
+                let line = String::from_utf8_lossy(&self.req).lines().next().unwrap_or("").to_string();
+                let target = line.split(' ').nth(1).unwrap_or("").to_string();
+                let k = {
+                    let mut a = self.radio.asks.lock().unwrap();
+                    a.push(target.clone());
+                    a.len() - 1
+                };
+                let (out, cut) = (self.radio.answer)(k, &target);
+                self.out = out;
+                self.cut = cut;
+            }
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl crate::http::Conn for FakeConn {
+        fn set_timeouts(&self, _: Duration) -> io::Result<()> {
+            Ok(())
+        }
+        fn aborter(&self) -> Option<crate::http::Aborter> {
+            None
+        }
+    }
+
+    struct FakeTransport(Arc<FakeRadio>);
+
+    impl Transport for FakeTransport {
+        fn connect(&self, _: &Url, _: Duration) -> io::Result<Box<dyn crate::http::Conn>> {
+            Ok(Box::new(FakeConn { radio: self.0.clone(), req: Vec::new(), out: Vec::new(), at: 0, cut: None }))
+        }
+    }
+
+    fn query(target: &str, k: &str) -> Option<String> {
+        let q = target.split_once('?')?.1;
+        q.split('&').find_map(|kv| {
+            let (a, b) = kv.split_once('=')?;
+            (a == k).then(|| b.replace("%2E", ".").replace("%2e", "."))
+        })
+    }
+
+    #[test]
+    fn long_bursts_resume_cut_off_answers_without_repeats_or_gaps() {
+        use crate::flac_stream::testenc::{frame, head};
+        use crate::stream::{FeedPlayer, Pcm};
+        // Frame i: 4410 samples (0.1 s), both channels hold i, server time 1_000_000 + 100 i ms.
+        const T0: i64 = 1_000_000;
+        let answer = |frames: std::ops::Range<u64>, first: u64, reset: bool, cursor: &str| {
+            let mut body = if reset { head(4410) } else { Vec::new() };
+            let head_len = body.len();
+            for i in frames.clone() {
+                body.extend(frame(i - first, 4410, Some(i as i16), Some(-(i as i16))));
+            }
+            let h = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\nX-Stream-Cursor: {cursor}\r\nX-Stream-Reset: {}\r\n\
+                 X-Stream-Time-Ms: {}\r\nX-Stream-End-Ms: {}\r\nX-Stream-Seconds: {:.3}\r\nX-Stream-Head-Bytes: {head_len}\r\n\r\n",
+                body.len(),
+                u8::from(reset),
+                T0 + 100 * frames.start as i64,
+                T0 + 100 * frames.end as i64,
+                (frames.end - frames.start) as f64 / 10.0,
+            );
+            let at = h.len();
+            ([h.into_bytes(), body].concat(), at)
+        };
+        let radio = Arc::new(FakeRadio {
+            asks: Mutex::new(Vec::new()),
+            answer: Box::new(move |k, target| {
+                let cursor = query(target, "cursor").unwrap_or_default();
+                match (k, cursor.as_str()) {
+                    // The first answer breaks off half way; its retry (cursor "" again) is a new
+                    // stream that starts 1 s later: what was fed is skipped by wall time.
+                    (0, "") => {
+                        let (a, at) = answer(0..50, 0, true, "E.0.50");
+                        let cut = at + (a.len() - at) / 2;
+                        (a, Some(cut))
+                    }
+                    (_, "") => (answer(10..60, 10, true, "E.10.60").0, None),
+                    // A continuation breaks off; asked again with the same cursor it comes again
+                    // from the same start: what was fed is skipped by samples.
+                    (2, "E.10.60") => {
+                        let (a, at) = answer(60..80, 10, false, "E.10.80");
+                        (a.clone(), Some(at + (a.len() - at) * 3 / 5))
+                    }
+                    (_, "E.10.60") => (answer(60..80, 10, false, "E.10.80").0, None),
+                    _ => (b"HTTP/1.1 204 No Content\r\nConnection: close\r\nX-Stream-Cursor: E.10.80\r\nContent-Length: 0\r\n\r\n".to_vec(), None),
+                }
+            }),
+        });
+        let mut cfg = Config::new(Url::parse("http://radio.example:8080/api/v1/audio/hs/flac").unwrap());
+        cfg.format = "flac".into();
+        cfg.start_s = 0.5;
+        cfg.long = Some(LongBursts { ring_s: 360.0, max_behind_s: 300.0, max_min_s: 240.0, max_wait_s: 30.0 });
+        let net: Arc<dyn Network> = Arc::new(OpenNetwork(Arc::new(FakeTransport(radio.clone()))));
+        let mut r = Radio::start(cfg, net).unwrap();
+        let mut p = FeedPlayer::new(r.feed());
+        let mut out = Vec::new();
+        let mut got: Vec<(i16, Option<i64>)> = Vec::new();
+        let until = Instant::now() + Duration::from_secs(20);
+        while got.len() < 80 && Instant::now() < until {
+            match p.next_pcm(&mut out, Duration::from_millis(50)) {
+                Pcm::Samples { .. } => got.push((out[0], r.feed().now_wall_ms())),
+                Pcm::Ended => break,
+                _ => {}
+            }
+        }
+        let asks = radio.asks.lock().unwrap().clone();
+        r.stop(1000);
+        let values: Vec<i16> = got.iter().map(|g| g.0).collect();
+        assert_eq!(values, (0..80).collect::<Vec<i16>>(), "every frame once, in order; asks {asks:?}");
+        // The clock follows: after frame i plays, you hear the server time of frame i + 1.
+        for (v, t) in &got {
+            assert_eq!(*t, Some(T0 + 100 * (i64::from(*v) + 1)), "frame {v}");
+        }
+        assert!(asks.len() >= 4, "{asks:?}");
+        let first = &asks[0];
+        assert_eq!(query(first, "long").as_deref(), Some("1"));
+        assert!(query(first, "behind").and_then(|b| b.parse::<f64>().ok()).is_some_and(|b| b > 200.0), "{first}");
+        assert!(query(first, "max_s").is_some() && query(first, "wait").as_deref() == Some("30"), "{first}");
+        assert_eq!(query(&asks[3], "cursor").as_deref(), Some("E.10.60"), "a cut continuation is asked again as it was");
+        assert_eq!(r.status().resets, 1, "the retried first answer is the one new stream");
     }
 }

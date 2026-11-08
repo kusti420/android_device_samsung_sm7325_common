@@ -85,6 +85,8 @@ struct StreamBuf {
     id: u64,
     codec: Codec,
     frames: VecDeque<Frame>,
+    /// Compressed bytes held (what the frames take in RAM).
+    bytes: u64,
     received: u64,
     played: u64,
     marks: Vec<Mark>,
@@ -123,6 +125,8 @@ struct Inner {
 pub struct FeedStatus {
     /// Seconds received but not played yet, over every stream that is still queued.
     pub buffered_s: f64,
+    /// The compressed bytes those take.
+    pub buffered_bytes: u64,
     /// The newest stream: seconds received, and whether it has started playing.
     pub latest_received_s: f64,
     pub latest_started: bool,
@@ -173,6 +177,7 @@ impl Feed {
             id,
             codec,
             frames: VecDeque::new(),
+            bytes: 0,
             received: 0,
             played: 0,
             marks: Vec::new(),
@@ -200,6 +205,7 @@ impl Feed {
         }
         for f in frames {
             s.received += u64::from(f.samples);
+            s.bytes += f.bytes.len() as u64;
             s.frames.push_back(f);
         }
         if !s.started && (s.received - s.played) as f64 / s.rate() >= start_s {
@@ -238,6 +244,7 @@ impl Feed {
         let latest = g.streams.back();
         FeedStatus {
             buffered_s,
+            buffered_bytes: g.streams.iter().map(|s| s.bytes).sum(),
             latest_received_s: latest.map_or(0.0, |s| s.received as f64 / s.rate()),
             latest_started: latest.is_some_and(|s| s.started),
             has_stream: latest.is_some(),
@@ -296,6 +303,7 @@ impl Feed {
                 Some(s) => match s.frames.pop_front() {
                     Some(f) => {
                         s.played += u64::from(f.samples);
+                        s.bytes = s.bytes.saturating_sub(f.bytes.len() as u64);
                         s.started = true;
                         let (id, codec) = (s.id, s.codec.clone());
                         g.dry = false;
@@ -475,6 +483,7 @@ mod tests {
         assert_eq!(fs.len(), 4);
         feed.push(id, fs, Some(1000));
         assert!((feed.status().buffered_s - 4.0 * 1152.0 / 44100.0).abs() < 1e-9);
+        assert_eq!(feed.status().buffered_bytes, 4 * mp3_frame(14, false).len() as u64);
         // Zero payloads are not real audio: the decoder may refuse them; it must not panic.
         let mut p = FeedPlayer::new(feed.clone());
         let mut out = Vec::new();

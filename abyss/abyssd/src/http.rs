@@ -799,6 +799,16 @@ impl<'c> Response<'c> {
         Ok(out)
     }
 
+    /// The next piece of the body (Ok(0) = the end), for a body too big to hold twice (a long
+    /// radio burst). Once the end is read the connection is kept, as after [`bytes`](Self::bytes).
+    pub fn read_some(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        let n = self.body.read(out)?;
+        if n == 0 {
+            self.finish();
+        }
+        Ok(n)
+    }
+
     /// The body as a stream (endless audio). The connection is not kept afterwards.
     pub fn into_reader(mut self) -> BodyReader<'c> {
         self.keep = false;
@@ -812,6 +822,7 @@ impl<'c> Response<'c> {
     fn finish(&mut self) {
         self.client.cancel.unregister(self.reg.take());
         if self.keep && self.body.done && self.body.wire.avail().is_empty() {
+            self.keep = false; // once (read_some may see the end again)
             let wire = std::mem::replace(&mut self.body.wire, Wire::new(Box::new(Closed)));
             self.client.put_idle(self.origin.clone(), wire.conn);
         }
