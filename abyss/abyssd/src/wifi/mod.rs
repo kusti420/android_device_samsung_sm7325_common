@@ -74,7 +74,9 @@ const PROP_MAC: &str = "persist.abyss.wifi.mac";
 const PROP_TEST_URL: &str = "persist.abyss.wifi.test_url";
 const DEFAULT_TEST_URL: &str = "http://connectivitycheck.gstatic.com/generate_204";
 const LINGER_DEFAULT_S: u64 = 30;
-const LINGER_MAX_DEFAULT_S: u64 = 600;
+/// Above this a hinted next use turns Wi-Fi off and back on (re-joining costs ~0.6 s + a
+/// DHCP renew; cheaper than staying associated for minutes between long radio bursts).
+const LINGER_MAX_DEFAULT_S: u64 = 90;
 const LINGER_LIMIT_S: u64 = 1200;
 /// Extra time on top of a hinted next use, so the next lease finds the link still up.
 const LINGER_SLACK_MS: u64 = 5_000;
