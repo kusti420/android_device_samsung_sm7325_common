@@ -1813,6 +1813,11 @@ pub fn stream_config(st: &Value, sc: &Scope) -> Result<Config, String> {
         u
     } else {
         let formats = s("formats").and_then(|t| single(t, sc)).and_then(Value::as_object).ok_or("This stream has no address.")?;
+        // On mobile data: the format picked in Settings › Abyss ("Radio on mobile data"), if this
+        // station offers it.
+        if let Some(f) = crate::uplink::mobile_format().filter(|f| formats.contains_key(f)) {
+            format = f;
+        }
         let (name, entry) = formats
             .get_key_value(&format)
             .or_else(|| formats.iter().next())
