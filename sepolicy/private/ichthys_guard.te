@@ -12,3 +12,13 @@ allow platform_app_36 ichthys_guard_service:service_manager find;
 # Settings (system_app) hosts the Guard UI, tiles and notifications (com.android.settings.ichthys.guard).
 allow system_app ichthys_guard_service:service_manager find;
 allow shell ichthys_guard_service:service_manager find;
+
+# Shield evidence reporters (GuardShieldReporter: ServiceManager.getService("ichthys_guard") then
+# the oneway noteShield): ContactsProvider and CalendarProvider run as priv_app (android.uid.shared;
+# priv_app_36 while they target SDK 36), TelephonyProvider and com.android.phone as radio. Only the
+# lookup is allowed here; IchthysGuardService still accepts evidence only from the system image's
+# copies of those packages (isTrustedReporter) and gates every other method by the signature
+# permission above.
+allow priv_app ichthys_guard_service:service_manager find;
+allow priv_app_36 ichthys_guard_service:service_manager find;
+allow radio ichthys_guard_service:service_manager find;
