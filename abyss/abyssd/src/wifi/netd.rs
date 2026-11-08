@@ -13,7 +13,7 @@
 //! | networkDestroy(int netId) | 5 |
 //! | networkAddInterface(int netId, String iface) | 6 |
 //! | interfaceAddAddress(String ifName, String addr, int prefixLength) | 14 |
-//! | networkAddRoute(int netId, String ifName, String dest, String nextHop) | 61 |
+//! | networkAddRouteParcel(int netId, in RouteInfoParcel route) | 96 |
 //! | networkSetDefault(int netId) | 66 |
 //! | networkClearDefault() | 67 |
 //! | interfaceSetCfg(InterfaceConfigurationParcel cfg) | 81 |
@@ -63,7 +63,7 @@ const NETWORK_CREATE_PHYSICAL: u32 = 3;
 const NETWORK_DESTROY: u32 = 5;
 const NETWORK_ADD_INTERFACE: u32 = 6;
 const INTERFACE_ADD_ADDRESS: u32 = 14;
-const NETWORK_ADD_ROUTE: u32 = 61;
+const NETWORK_ADD_ROUTE_PARCEL: u32 = 96;
 const NETWORK_SET_DEFAULT: u32 = 66;
 const NETWORK_CLEAR_DEFAULT: u32 = 67;
 const INTERFACE_SET_CFG: u32 = 81;
@@ -183,11 +183,20 @@ impl Netd {
         dest: &str,
         next_hop: &str,
     ) -> std::result::Result<(), CallError> {
-        self.call_void("networkAddRoute", NETWORK_ADD_ROUTE, |p| {
+        // networkAddRoute (index 61) is DEPRECATED in netd (NetdNativeService.cpp:967 returns
+        // EX_UNSUPPORTED_OPERATION); ConnectivityService uses networkAddRouteParcel.
+        // `in RouteInfoParcel route`: non-null marker, then the size-prefixed fields in AIDL
+        // order (destination, ifName, nextHop, mtu, isLocalRoute).
+        self.call_void("networkAddRouteParcel", NETWORK_ADD_ROUTE_PARCEL, |p| {
             p.write(&net_id)?;
-            p.write(ifname)?;
-            p.write(dest)?;
-            p.write(next_hop)
+            p.write(&NON_NULL_PARCELABLE_FLAG)?;
+            p.sized_write(|sub| {
+                sub.write(dest)?;
+                sub.write(ifname)?;
+                sub.write(next_hop)?;
+                sub.write(&0i32)?;
+                sub.write(&false)
+            })
         })
     }
 

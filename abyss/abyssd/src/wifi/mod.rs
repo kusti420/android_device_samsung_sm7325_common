@@ -745,7 +745,16 @@ impl Worker {
         if n.hidden {
             w.set_network(id, "scan_ssid", "1")?;
         }
-        let has = |s: Sec| n.security.contains(&s);
+        // Android keeps a home network saved with a password as "WPA2 or WPA3" (security params
+        // PSK + auto-upgraded SAE) and joins with whatever the router offers, but the legacy
+        // key-management bits the hand-over reads can show only SAE. Joining SAE-only (with PMF
+        // required) then skips a WPA2 router ("key mgmt mismatch", "MFP Required but network
+        // not MFP Capable") and the lease timed out in SCANNING. A password network is offered
+        // as WPA2/WPA3 transition, like Android does; a valid WPA2 passphrase is 8..63 chars.
+        let sae_with_psk = !has_psk(n)
+            && n.security.contains(&Sec::Sae)
+            && n.passphrase.as_deref().is_some_and(|p| (8..=63).contains(&p.len()));
+        let has = |s: Sec| n.security.contains(&s) || (sae_with_psk && s == Sec::Psk);
         // key_mgmt takes a space-separated list (the control interface passes the rest of the
         // line as the value).
         let (km, pmf) = if has(Sec::Psk) && has(Sec::Sae) {
@@ -1093,4 +1102,9 @@ impl Worker {
         );
         Ok((code, line))
     }
+}
+
+/// Whether the hand-over already lists WPA2-Personal for this network.
+fn has_psk(n: &handoff::Network) -> bool {
+    n.security.contains(&Sec::Psk)
 }
