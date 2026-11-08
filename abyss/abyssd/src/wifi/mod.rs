@@ -74,7 +74,9 @@ const PROP_MAC: &str = "persist.abyss.wifi.mac";
 const PROP_TEST_URL: &str = "persist.abyss.wifi.test_url";
 const DEFAULT_TEST_URL: &str = "http://connectivitycheck.gstatic.com/generate_204";
 const LINGER_DEFAULT_S: u64 = 30;
-const LINGER_MAX_DEFAULT_S: u64 = 600;
+/// Above this a hinted next use turns Wi-Fi off and back on (re-joining costs ~0.6 s + a
+/// DHCP renew; cheaper than staying associated for minutes between long radio bursts).
+const LINGER_MAX_DEFAULT_S: u64 = 90;
 const LINGER_LIMIT_S: u64 = 1200;
 /// Extra time on top of a hinted next use, so the next lease finds the link still up.
 const LINGER_SLACK_MS: u64 = 5_000;
@@ -120,17 +122,26 @@ pub enum Note {
 
 struct Shared {
     phase: Phase,
+    /// Leases sent but not yet handled by the worker (state() says Coming meanwhile, so the
+    /// uplink waits for this attempt instead of acting on the previous one's outcome).
+    pending: u32,
     last_error: Option<String>,
     test_running: bool,
     last_test: Option<TestResult>,
     notes: VecDeque<Note>,
     /// Saved networks abyssd cannot join, "SSID: why" (for the Battery screen).
     skipped: Vec<String>,
+    /// The DHCP lease's DNS servers while associated with an address (uplink.rs resolves
+    /// names with them).
+    dns: Vec<Ipv4Addr>,
 }
 
 enum Cmd {
     Acquire { id: u64, holder: String },
-    Release { id: u64, next_use_in_ms: Option<u64> },
+    /// `warm_ms`: stay associated at least this long (the uplink's switching window).
+    Release { id: u64, next_use_in_ms: Option<u64>, warm_ms: u64 },
+    /// Stay associated at least until this boot ms if no lease is held (and the link is up).
+    Warm { until: u64 },
     /// The Wi-Fi test, holding its own lease (taken through the public API).
     Test(Lease),
     Shutdown(Sender<()>),
@@ -163,8 +174,14 @@ impl Lease {
 
     /// Releases now. `next_use_in_ms`: when the holder expects to need Wi-Fi again (keeps the
     /// link up until then if that is within persist.abyss.wifi.linger_max_s).
-    pub fn release(mut self, next_use_in_ms: Option<u64>) {
-        self.tx.send(Cmd::Release { id: self.id, next_use_in_ms });
+    pub fn release(self, next_use_in_ms: Option<u64>) {
+        self.release_warm(next_use_in_ms, 0);
+    }
+
+    /// As `release`, but stays associated at least `warm_ms` whatever the hint says (the
+    /// uplink's switching window: a station switch right after finds the link up).
+    pub fn release_warm(mut self, next_use_in_ms: Option<u64>, warm_ms: u64) {
+        self.tx.send(Cmd::Release { id: self.id, next_use_in_ms, warm_ms });
         self.done = true;
     }
 }
@@ -172,7 +189,7 @@ impl Lease {
 impl Drop for Lease {
     fn drop(&mut self) {
         if !self.done {
-            self.tx.send(Cmd::Release { id: self.id, next_use_in_ms: None });
+            self.tx.send(Cmd::Release { id: self.id, next_use_in_ms: None, warm_ms: 0 });
         }
     }
 }
@@ -202,6 +219,7 @@ impl Leaser {
         match self.shared.lock() {
             Ok(s) => match s.phase {
                 Phase::On { .. } | Phase::Lingering { .. } => LinkState::Up,
+                Phase::Off if s.pending > 0 => LinkState::Coming,
                 Phase::Off if s.last_error.is_some() => LinkState::Failed,
                 Phase::Off => LinkState::Off,
                 _ => LinkState::Coming,
@@ -212,8 +230,22 @@ impl Leaser {
 
     pub fn acquire(&self, holder: &str) -> Lease {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut s) = self.shared.lock() {
+            s.pending += 1;
+        }
         self.tx.send(Cmd::Acquire { id, holder: holder.to_string() });
         Lease { id, tx: self.tx.clone(), done: false }
+    }
+
+    /// Keeps a lingering link associated until at least `until` (boot ms). Brings nothing up;
+    /// ignored while a lease is held (its release takes the window).
+    pub fn warm(&self, until: u64) {
+        self.tx.send(Cmd::Warm { until });
+    }
+
+    /// The DNS servers of the current DHCP lease (empty while off).
+    pub fn dns(&self) -> Vec<Ipv4Addr> {
+        self.shared.lock().map(|s| s.dns.clone()).unwrap_or_default()
     }
 }
 
@@ -249,6 +281,8 @@ impl Wifi {
         let (tx, rx) = channel();
         let shared = Arc::new(Mutex::new(Shared {
             phase: Phase::Off,
+            pending: 0,
+            dns: Vec::new(),
             last_error: None,
             test_running: false,
             last_test: None,
@@ -422,6 +456,17 @@ impl Wifi {
     }
 }
 
+/// How long to stay associated after the last release (0 = off now): the hinted next use if
+/// it is within `max_ms` (plus slack), the default without a hint, never less than `warm_ms`.
+fn linger_ms(hint: Option<u64>, warm_ms: u64, default_ms: u64, max_ms: u64) -> u64 {
+    match hint {
+        Some(h) if h <= max_ms => h + LINGER_SLACK_MS,
+        Some(_) => 0,
+        None => default_ms,
+    }
+    .max(warm_ms)
+}
+
 // ---------------------------------------------------------------------------
 // The worker
 
@@ -484,10 +529,15 @@ fn kv<'a>(st: &'a [(String, String)], k: &str) -> Option<&'a str> {
 impl Worker {
     fn notify(&self) {
         let _ = (&self.poke_w).write(&[1]);
+        crate::uplink::changed();
     }
 
     fn set_phase(&self, p: Phase) {
         if let Ok(mut s) = self.shared.lock() {
+            s.dns = match (&p, &self.link) {
+                (Phase::On { .. } | Phase::Lingering { .. }, Some(l)) => l.lease.dns.clone(),
+                _ => Vec::new(),
+            };
             if s.phase != p {
                 s.phase = p;
             }
@@ -574,13 +624,18 @@ impl Worker {
                 debug!("wifi: lease {id} taken by {holder} ({} held)", self.leases.len() + 1);
                 self.leases.insert(id, holder);
                 self.on_acquire();
-            }
-            Cmd::Release { id, next_use_in_ms } => {
-                if let Some(h) = self.leases.remove(&id) {
-                    debug!("wifi: lease {id} ({h}) released, next use {next_use_in_ms:?} ms");
+                if let Ok(mut s) = self.shared.lock() {
+                    s.pending = s.pending.saturating_sub(1);
                 }
-                self.on_release(next_use_in_ms);
+                self.notify();
             }
+            Cmd::Release { id, next_use_in_ms, warm_ms } => {
+                if let Some(h) = self.leases.remove(&id) {
+                    debug!("wifi: lease {id} ({h}) released, next use {next_use_in_ms:?} ms, warm {warm_ms} ms");
+                }
+                self.on_release(next_use_in_ms, warm_ms);
+            }
+            Cmd::Warm { until } => self.on_warm(until),
             Cmd::Test(lease) => self.run_test(lease),
             Cmd::Shutdown(_) => {}
         }
@@ -606,18 +661,14 @@ impl Worker {
         }
     }
 
-    fn on_release(&mut self, hint: Option<u64>) {
+    fn on_release(&mut self, hint: Option<u64>, warm_ms: u64) {
         if !self.leases.is_empty() || self.link.is_none() {
             if self.leases.is_empty() && self.wpa.is_some() {
                 self.teardown("last lease released");
             }
             return;
         }
-        let linger = match hint {
-            Some(h) if h <= self.linger_max_ms => h + LINGER_SLACK_MS,
-            Some(_) => 0,
-            None => self.linger_default_ms,
-        };
+        let linger = linger_ms(hint, warm_ms, self.linger_default_ms, self.linger_max_ms);
         if linger == 0 {
             self.teardown("last lease released");
             return;
@@ -628,6 +679,19 @@ impl Worker {
         self.linger_until = Some(until);
         if let Some(l) = &self.link {
             debug!("wifi: lingering {} s on {} (power save)", linger / 1000, l.ssid);
+            let p = Phase::Lingering { ssid: l.ssid.clone(), ip: l.lease.ip, until };
+            self.set_phase(p);
+        }
+    }
+
+    /// The switching window (uplink.rs): a lingering link stays associated until `until`.
+    fn on_warm(&mut self, until: u64) {
+        let Some(cur) = self.linger_until else { return };
+        if !self.leases.is_empty() || until <= cur {
+            return;
+        }
+        self.linger_until = Some(until);
+        if let Some(l) = self.link.as_ref().filter(|l| l.associated) {
             let p = Phase::Lingering { ssid: l.ssid.clone(), ip: l.lease.ip, until };
             self.set_phase(p);
         }
@@ -1132,6 +1196,7 @@ impl Worker {
         self.net = None;
         self.wpa = None;
         self.dns.clear();
+        crate::uplink::link_down(true);
         control::set(PROP_WIFI, "off");
         self.set_phase(Phase::Off);
     }
@@ -1186,5 +1251,21 @@ impl Worker {
             t_http - t_dns
         );
         Ok((code, line))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::linger_ms;
+
+    #[test]
+    fn linger_rules() {
+        // Classic bursts: the hint (+5 s).
+        assert_eq!(linger_ms(Some(10_000), 0, 30_000, 90_000), 15_000);
+        // Long bursts (~220 s): off at once, unless the switching window holds it.
+        assert_eq!(linger_ms(Some(220_000), 0, 30_000, 90_000), 0);
+        assert_eq!(linger_ms(Some(220_000), 90_000, 30_000, 90_000), 90_000);
+        assert_eq!(linger_ms(None, 0, 30_000, 90_000), 30_000);
+        assert_eq!(linger_ms(None, 75_000, 30_000, 90_000), 75_000);
     }
 }

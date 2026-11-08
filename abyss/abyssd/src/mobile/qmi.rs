@@ -30,6 +30,9 @@ pub const DMS_GET_OPERATING_MODE: u16 = 0x002D;
 pub const DMS_SET_OPERATING_MODE: u16 = 0x002E;
 // NAS
 pub const NAS_GET_SERVING_SYSTEM: u16 = 0x0024;
+pub const NAS_SET_SYSTEM_SELECTION_PREFERENCE: u16 = 0x0033;
+pub const NAS_GET_SYSTEM_SELECTION_PREFERENCE: u16 = 0x0034;
+pub const NAS_GET_SYSTEM_INFO: u16 = 0x004D;
 pub const NAS_GET_SIGNAL_INFO: u16 = 0x004F;
 // WDS
 pub const WDS_START_NETWORK: u16 = 0x0020;
@@ -598,6 +601,79 @@ pub fn parse_signal_info(m: &Msg) -> Result<Signal> {
     })
 }
 
+/// NR state from NAS Get System Info (TLV ids as in libqmi 1.38's qmi-service-nas.json).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NrInfo {
+    /// 0x4A NR5G Service Status Info, first byte: 0 none, 1 limited, 2 available, 4 power save.
+    pub service: Option<u8>,
+    /// 0x4E "EUTRA with NR5G availability": the LTE cell offers EN-DC (5G NSA anchor).
+    pub endc_available: Option<bool>,
+    /// 0x4F "DCNR restriction": the network does not allow EN-DC for this subscription.
+    pub dcnr_restricted: Option<bool>,
+}
+
+pub fn get_system_info() -> Req {
+    Req::new(NAS_GET_SYSTEM_INFO)
+}
+
+pub fn parse_system_info(m: &Msg) -> Result<NrInfo> {
+    m.ok("get system info")?;
+    Ok(NrInfo {
+        service: m.u8(0x4A),
+        endc_available: m.u8(0x4E).map(|b| b != 0),
+        dcnr_restricted: m.u8(0x4F).map(|b| b != 0),
+    })
+}
+
+/// The radio shown on the status line: "5G SA" (NR alone), "5G NSA" (LTE anchor with an NR
+/// leg in use: NR service available, or an NR signal measured on an EN-DC cell), else the
+/// serving radio's own name. `radios` = Get Serving System's radio list.
+pub fn radio_label(radios: &[u8], nr: &NrInfo, sig: &Signal) -> Option<&'static str> {
+    let lte = radios.contains(&RADIO_LTE);
+    let nr_listed = radios.contains(&RADIO_NR5G);
+    if nr_listed && !lte {
+        return Some("5G SA");
+    }
+    if lte {
+        let restricted = nr.dcnr_restricted == Some(true) || nr.endc_available == Some(false);
+        let nr_rsrp = sig.nr_rsrp.is_some_and(|v| (-140..=-44).contains(&v));
+        if nr_listed || (!restricted && (nr.service == Some(2) || nr_rsrp)) {
+            return Some("5G NSA");
+        }
+        return Some(radio_name(RADIO_LTE));
+    }
+    [RADIO_UMTS, RADIO_TDSCDMA, RADIO_GSM].into_iter().find(|r| radios.contains(r)).or_else(|| radios.first().copied()).map(radio_name)
+}
+
+/// QMI NAS RAT mode preference bits (TLV 0x11 of Get/Set System Selection Preference).
+pub const MODE_PREF_LTE: u16 = 1 << 4;
+pub const MODE_PREF_NR5G: u16 = 1 << 6;
+
+pub fn get_system_selection_preference() -> Req {
+    Req::new(NAS_GET_SYSTEM_SELECTION_PREFERENCE)
+}
+
+pub fn parse_mode_preference(m: &Msg) -> Result<u16> {
+    m.ok("get system selection preference")?;
+    m.u16(0x11).ok_or_else(|| anyhow!("get system selection preference: no mode preference"))
+}
+
+/// Sets only the RAT mode preference, until the next modem power cycle (0x17 change duration
+/// 0): the modem's saved (NV) preference that rild set is never written.
+pub fn set_mode_preference(mode: u16) -> Req {
+    Req::new(NAS_SET_SYSTEM_SELECTION_PREFERENCE).tlv(0x11, &mode.to_le_bytes()).u8(0x17, 0)
+}
+
+/// The mode preference for Abyss from the one Android left (`found`): LTE = without NR,
+/// 5G = with NR. None = leave it as it is (already so, or not an LTE-capable preference).
+pub fn wanted_mode_preference(found: u16, five_g: bool) -> Option<u16> {
+    if found & MODE_PREF_LTE == 0 {
+        return None;
+    }
+    let want = if five_g { found | MODE_PREF_NR5G } else { found & !MODE_PREF_NR5G };
+    (want != found).then_some(want)
+}
+
 // ---------------------------------------------------------------------------------------------
 // WDS
 
@@ -898,6 +974,43 @@ mod tests {
         // Invalid / missing values give no bars rather than a wrong number.
         assert_eq!(Signal { lte_rsrp: Some(0), ..Default::default() }.bars(Some(RADIO_LTE)), None);
         assert_eq!(Signal { lte_rsrp: Some(-100), ..Default::default() }.bars(Some(RADIO_NR5G)), Some(3));
+    }
+
+    #[test]
+    fn nr_label() {
+        let none = NrInfo::default();
+        let sig = Signal::default();
+        assert_eq!(radio_label(&[RADIO_LTE], &none, &sig), Some("LTE"));
+        assert_eq!(radio_label(&[RADIO_NR5G], &none, &sig), Some("5G SA"));
+        assert_eq!(radio_label(&[RADIO_LTE, RADIO_NR5G], &none, &sig), Some("5G NSA"));
+        let nsa = NrInfo { service: Some(2), endc_available: Some(true), dcnr_restricted: Some(false) };
+        assert_eq!(radio_label(&[RADIO_LTE], &nsa, &sig), Some("5G NSA"));
+        // An NR measurement on an EN-DC cell counts; on a restricted one it does not.
+        let nr_sig = Signal { nr_rsrp: Some(-95), ..Default::default() };
+        assert_eq!(radio_label(&[RADIO_LTE], &none, &nr_sig), Some("5G NSA"));
+        let restricted = NrInfo { dcnr_restricted: Some(true), ..nsa };
+        assert_eq!(radio_label(&[RADIO_LTE], &restricted, &nr_sig), Some("LTE"));
+        // EN-DC offered but no NR leg (idle, LTE-only preference): still LTE.
+        let ready = NrInfo { service: Some(0), endc_available: Some(true), dcnr_restricted: Some(false) };
+        assert_eq!(radio_label(&[RADIO_LTE], &ready, &sig), Some("LTE"));
+        assert_eq!(radio_label(&[RADIO_UMTS], &none, &sig), Some("3G"));
+        let m = resp(NAS_GET_SYSTEM_INFO, &[(0x4A, &[2, 2, 0]), (0x4E, &[1]), (0x4F, &[0])]);
+        assert_eq!(parse_system_info(&m).unwrap(), nsa);
+    }
+
+    #[test]
+    fn mode_preference() {
+        let android = 0x04 | 0x08 | MODE_PREF_LTE | MODE_PREF_NR5G; // GSM UMTS LTE NR
+        assert_eq!(wanted_mode_preference(android, false), Some(0x04 | 0x08 | MODE_PREF_LTE));
+        assert_eq!(wanted_mode_preference(android, true), None);
+        assert_eq!(wanted_mode_preference(0x1C, true), Some(0x1C | MODE_PREF_NR5G));
+        assert_eq!(wanted_mode_preference(0x1C, false), None);
+        assert_eq!(wanted_mode_preference(0x0C, false), None, "no LTE: left alone");
+        let r = set_mode_preference(0x1C).encode(7);
+        assert_eq!(&r[3..5], &NAS_SET_SYSTEM_SELECTION_PREFERENCE.to_le_bytes());
+        assert_eq!(&r[7..], &[0x11, 2, 0, 0x1C, 0, 0x17, 1, 0, 0]);
+        let m = resp(NAS_GET_SYSTEM_SELECTION_PREFERENCE, &[(0x11, &[0x5C, 0])]);
+        assert_eq!(parse_mode_preference(&m).unwrap(), 0x5C);
     }
 
     #[test]

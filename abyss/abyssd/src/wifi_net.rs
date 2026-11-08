@@ -4,6 +4,10 @@
 //! Leases are taken from the radio's and the module fetches' own threads, so this uses
 //! `wifi::Leaser`, a cloneable, thread-safe handle on the same lease API as
 //! `Wifi::acquire` (hook patch in wifi/mod.rs).
+//!
+//! Inside abyssd the uplink (uplink.rs) now takes Wi-Fi leases itself (it needs
+//! `Lease::release_warm` and its own resolver); this stays for the radio-host test tools.
+#![allow(dead_code)]
 
 use std::sync::Arc;
 

@@ -783,6 +783,8 @@ impl App {
     /// A stream started without opening a screen (station step, Continue, ● on the ready
     /// radio): hand it to the player; with the screen on, name the station.
     fn on_station_step(&mut self, eff: modules::Effect, now: u64) {
+        // The switching window: the next station switch finds the uplink up (uplink.rs).
+        uplink::touch();
         match eff {
             modules::Effect::Play { feed, .. } => {
                 self.stream_sent = true;
@@ -808,6 +810,7 @@ impl App {
     /// What a module selection asks for (modules.rs Effect).
     fn on_module_effect(&mut self, eff: modules::Effect, now: u64) {
         use modules::Effect;
+        uplink::touch();
         match eff {
             Effect::None => {}
             Effect::Exit => self.ui.back(),
