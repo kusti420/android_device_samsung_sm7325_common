@@ -93,7 +93,11 @@ public final class ModuleInstallTest {
         check(spec.streams && spec.loads && spec.captures, "derived: streams, loads, captures");
         List<String> caps = spec.caps(new LinkedHashMap<>());
         System.out.println("     caps " + caps);
-        check(caps.contains("net http://radio.example:8080 lan (links from it: same origin only)"),
+        // The artifact's own server default (a LAN address in the radio module), not a fixed one.
+        String srvDefault = String.valueOf(spec.setting("server").def);
+        String srvOrigin = spec.netOrigins(new LinkedHashMap<>()).iterator().next();
+        check(caps.contains("net " + srvOrigin + (ModuleSpec.isLan(srvOrigin) ? " lan" : "")
+                        + " (links from it: same origin only)"),
                 "net cap from the server setting default");
         for (ModuleSpec.Permission p : spec.permissions(new LinkedHashMap<>())) {
             System.out.println("     · " + p.words);
@@ -171,11 +175,11 @@ public final class ModuleInstallTest {
                 && "0.1.0".equals(l.get(0).version()), "installed + listed");
         check(new File(root, "store/gabbee-radio/tree/menu.nix").isFile()
                 && new File(root, "store/gabbee-radio/menu.json").isFile(), "store layout");
-        check(l.get(0).approvedNet().contains("http://radio.example:8080"), "approved net");
+        check(l.get(0).approvedNet().contains(srvOrigin), "approved net");
         String env = ModuleStore.read(st.settingsFile("gabbee-radio"));
         System.out.print(env.replaceAll("(?m)^", "     "));
         check(env.startsWith("#abyss-settings v1\n") && env.contains("\nFORMAT=mp3\n")
-                && env.contains("\nSERVER=http://radio.example:8080\n")
+                && env.contains("\nSERVER=" + srvDefault + "\n")
                 && env.contains("\nPREBUFFER_SECONDS=15\n"), "settings env");
         ModuleSpec again = l.get(0).spec();
         Map<String, Object> back = st.readSettings(again);
