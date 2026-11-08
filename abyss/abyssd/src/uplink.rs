@@ -34,7 +34,7 @@ const PROP_WIFI_RETRY: &str = "persist.abyss.net.wifi_retry_s";
 /// The radio format to ask for on mobile data ("same" = no change). Default mp3-128: FLAC is
 /// ~450 MB/h, mp3-128 ~58 MB/h.
 pub const PROP_MOBILE_FORMAT: &str = "persist.abyss.net.mobile_format";
-const DEFAULT_MOBILE_FORMAT: &str = "mp3-128";
+const DEFAULT_MOBILE_FORMAT: &str = "same";
 const WIFI_RETRY_DEFAULT_S: u64 = 600;
 /// A Wi-Fi lease that shows "failed" this long after it was taken really failed (before that it
 /// may still be the previous attempt's state, not yet replaced by the worker).

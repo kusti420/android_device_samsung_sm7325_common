@@ -70,9 +70,9 @@
     <string name="net_mode_wifi">Wi-Fi only</string>
     <string name="net_mode_mobile">Mobile only</string>
     <string name="net_format_title">Radio on mobile data</string>
-    <string name="net_format_summary">Lossless radio is about 450 MB an hour; MP3 128 about 58 MB. Abyss shows the data used on its Battery screen.</string>
+    <string name="net_format_summary">Highest quality plays the lossless stream (about 450 MB an hour); MP3 128 uses about 58 MB an hour. Abyss shows the data used on its Battery screen.</string>
     <string name="net_format_small">MP3 128</string>
-    <string name="net_format_same">Same as Wi-Fi</string>
+    <string name="net_format_same">Highest quality (same as Wi-Fi)</string>
     <string name="nav_keys_note">In Abyss: waking the screen (● ● or any first press) shows where you were and does nothing else. ▲ + ● shows Now playing, ▲ + ▼ goes back (on Now playing: to the menu), holding ▲ or ▼ keeps moving in lists and changes the station on a radio.</string>
     <string name="suspend_title">Deep sleep (experimental)</string>
     <string name="suspend_summary">Lets the phone sleep while the screen is off and nothing plays. Not proven on this phone yet: if keys or music misbehave, switch it off.</string>

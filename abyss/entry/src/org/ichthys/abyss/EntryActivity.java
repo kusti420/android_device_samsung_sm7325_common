@@ -107,8 +107,8 @@ public final class EntryActivity extends Activity {
     private static final int[] NET_MODE_LABELS =
             {R.string.net_mode_wifi_mobile, R.string.net_mode_wifi, R.string.net_mode_mobile};
     private static final String PROP_NET_FORMAT = "persist.abyss.net.mobile_format";
-    private static final String[] NET_FORMAT_VALUES = {"mp3-128", "same"};
-    private static final int[] NET_FORMAT_LABELS = {R.string.net_format_small, R.string.net_format_same};
+    private static final String[] NET_FORMAT_VALUES = {"same", "mp3-128"};
+    private static final int[] NET_FORMAT_LABELS = {R.string.net_format_same, R.string.net_format_small};
 
     /** Experimental kernel suspend while idle (abyssd suspend.rs), off by default. */
     private static final String PROP_SUSPEND = "persist.abyss.suspend";
