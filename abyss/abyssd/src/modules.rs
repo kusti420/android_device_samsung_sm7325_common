@@ -77,6 +77,13 @@ pub const FEATURES: &[&str] = &[
 ];
 /// App API levels served.
 pub const API_LEVELS: &[i64] = &[1];
+/// `http` streams set to "as soon as possible" (prebuffer below this): start once the connect
+/// burst is over with this much in hand; the lowest explicit prebuffer.
+const HTTP_EARLY_S: f64 = 2.0;
+/// ... and with this much if the burst's end is not seen.
+const HTTP_ASAP_FALLBACK_S: f64 = 5.0;
+/// "As soon as possible" on mobile data.
+const HTTP_MOBILE_ASAP_S: f64 = 8.0;
 /// Largest `get` answer (contract §8.7 proposal).
 const GET_MAX: usize = 256 * 1024;
 /// Shortest `every`.
@@ -1900,6 +1907,23 @@ pub fn stream_config(st: &Value, sc: &Scope) -> Result<Config, String> {
         _ => None,
     };
     cfg.start_s = pre.unwrap_or(START_S).clamp(5.0, 30.0);
+    if mode == Mode::Http {
+        // A live stream arrives in real time after its connect burst, so a long prebuffer only
+        // adds silence: 2..30 s, and 0 ("as soon as possible") starts once the burst is over
+        // with ~2 s in hand (stream.rs early start; 5 s if the end of the burst is not seen).
+        // On mobile data "as soon as possible" means 8 s (more jitter there).
+        let asked = pre.unwrap_or(START_S);
+        if asked < HTTP_EARLY_S {
+            if crate::uplink::on_mobile() {
+                cfg.start_s = HTTP_MOBILE_ASAP_S;
+            } else {
+                cfg.start_s = HTTP_ASAP_FALLBACK_S;
+                cfg.early_s = HTTP_EARLY_S;
+            }
+        } else {
+            cfg.start_s = asked.clamp(HTTP_EARLY_S, 30.0);
+        }
+    }
     // media:stream:icy: name the song you hear from the stream's own titles.
     cfg.icy = mode == Mode::Http && st.get("icy").and_then(Value::as_bool) == Some(true);
     Ok(cfg)
@@ -2234,6 +2258,18 @@ mod tests {
         assert!(h.stream.as_ref().is_some_and(|s| s.radio.status().mode == Mode::Http));
         h.stop_stream();
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn http_stream_start() {
+        let sc = Scope::new();
+        let c = |pre: Value| stream_config(&json!({"url": "http://h/x.mp3", "prebuffer": pre}), &sc).unwrap();
+        let asap = c(json!(0));
+        assert_eq!((asap.start_s, asap.early_s), (HTTP_ASAP_FALLBACK_S, HTTP_EARLY_S), "as soon as possible (not on mobile here)");
+        assert_eq!((c(json!(3)).start_s, c(json!(3)).early_s), (3.0, 0.0), "2..30 for http");
+        assert_eq!(c(json!(60)).start_s, 30.0);
+        let v1 = stream_config(&json!({"protocol": "radio-v1", "url": "http://h/x", "prebuffer": 0}), &sc).unwrap();
+        assert_eq!((v1.start_s, v1.early_s), (5.0, 0.0), "radio-v1 keeps 5..30");
     }
 
     #[test]

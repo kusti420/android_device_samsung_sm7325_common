@@ -34,7 +34,15 @@
 //!
 //! **Endless**: the plain audio URL, one long answer; frames as they come. The song comes
 //! from a long poll on `now?after=<play_id>&wait=55` in a second thread, plus the tracklist.
-//! A module `http` stream is the same loop on the URL as given (Icecast, Shoutcast).
+//! A module `http` stream is the same loop on the URL as given (Icecast, Shoutcast). Such a
+//! live stream sends a few seconds at once on connect, then real time: reads poll (200 ms, then
+//! 1 s) so the end of that burst is seen (early start, stream.rs) and a stall while connected
+//! reconnects at once for a fresh burst instead of waiting for data that comes at 1× at best.
+//!
+//! **Starting**: a burst stream's first wake asks for the audio first; the tracklist and `now`
+//! come on a second connection meanwhile (the feed's start gate holds sound until they are in,
+//! at most 3 s). Idle keep-alive connections go to http.rs's process-wide pool; a lease
+//! released for more than 20 s closes this session's ones.
 //!
 //! **ICY titles** (module `icy = true`, media:stream:icy): an `http` stream is asked with
 //! `Icy-MetaData: 1`; the metadata blocks (every `icy-metaint` bytes) are cut out before the
@@ -91,6 +99,23 @@ const ASK_WAIT_S: u64 = 15;
 const POLL_WAIT_S: u64 = 55;
 /// Never hold more than this unplayed (a paused player must not make the buffer grow).
 const MAX_BUFFER_S: f64 = 45.0;
+/// A lease released for longer than this closes the idle keep-alive connections: a server's
+/// keep-alive FIN in the gap would otherwise wake the link (on mobile data: page the modem).
+const IDLE_CLOSE_HINT_MS: u64 = 20_000;
+/// The first wake: the names (tracklist, `now`) come on a second connection while the audio
+/// fills; playback waits for them at most this long.
+const NAMES_WAIT_MS: u64 = 3_000;
+/// Endless `http` streams: reads wait at most this long while the connect burst may still come
+/// (a quiet read = the burst is over), then [`STALL_POLL`] (notices a stall while blocked).
+const BURST_POLL: Duration = Duration::from_millis(200);
+const STALL_POLL: Duration = Duration::from_secs(1);
+/// The burst is over once arrival over this window is below [`BURST_RATIO`] × real time.
+const BURST_WINDOW: Duration = Duration::from_millis(500);
+const BURST_RATIO: f64 = 1.5;
+/// Why an endless answer was dropped after running dry (reconnected at once).
+const STALLED: &str = "stalled";
+/// An endless stream that sends nothing for this long is reconnected.
+const QUIET_MAX: Duration = Duration::from_secs(20);
 /// Largest answer body accepted (30 s of FLAC is ~4-5 MB).
 const MAX_AUDIO_BYTES: usize = 24 << 20;
 const MAX_JSON_BYTES: usize = 4 << 20;
@@ -238,8 +263,11 @@ pub struct Config {
     pub mode: Mode,
     /// Random id per player (`cid`), counted as one listener.
     pub cid: String,
-    /// Prebuffer before playback (15 s; the module setting, clamped 5..30).
+    /// Prebuffer before playback (15 s; the module setting, clamped 5..30, 2..30 for `http`).
     pub start_s: f64,
+    /// `http` streams set to "as soon as possible": start with this much in hand once the
+    /// server's connect burst is over (stream.rs early start). 0 = off.
+    pub early_s: f64,
     /// `$stream.tag` / `$stream.title` / `$stream.format` (station id, name, format name).
     pub tag: String,
     pub title: String,
@@ -263,6 +291,7 @@ impl Config {
             mode: Mode::Bursts,
             cid: random_cid(),
             start_s: START_S,
+            early_s: 0.0,
             tag: String::new(),
             title: String::new(),
             format: String::new(),
@@ -719,6 +748,7 @@ impl Radio {
         poke_r.set_nonblocking(true)?;
         poke_w.set_nonblocking(true)?;
         let feed = Feed::with_start(cfg.start_s);
+        feed.set_early_start(cfg.early_s);
         let shared = Arc::new(Shared {
             feed,
             songs: Mutex::new(Songs::new(None)),
@@ -1302,8 +1332,60 @@ impl Worker {
         if let Some(h) = self.hold.take() {
             h.release(next_use_in_ms);
         }
-        if next_use_in_ms.is_none() {
+        // A long gap closes the idle connections (no late FIN mid-gap). Without a hint (the
+        // stream ends) they stay in the pool for its few seconds: the next station of the same
+        // server starts on a warm connection.
+        if next_use_in_ms.is_some_and(|ms| ms > IDLE_CLOSE_HINT_MS) {
             self.client.close_idle();
+        }
+    }
+
+    /// The first wake of a burst stream: the tracklist and `now` on a second connection while
+    /// the audio ask fills the prebuffer; playback waits for them (names before sound) at most
+    /// [`NAMES_WAIT_MS`]. Later wakes sync after the audio as before.
+    fn names_aside(&mut self) {
+        if self.sh.cfg.songs.is_none() && self.now_url.is_none() {
+            return;
+        }
+        self.sh.feed.hold_start_until(Some(Instant::now() + Duration::from_millis(NAMES_WAIT_MS)));
+        let sh = self.sh.clone();
+        let now_url = self.now_url.clone();
+        let r = std::thread::Builder::new().name("abyssd-radio-names".into()).spawn(move || {
+            let started = Instant::now();
+            let client = sh.client();
+            let hold = sh.net.acquire("radio-names");
+            let mut songs = match sh.songs.lock() {
+                Ok(g) => Songs { tracklist: g.tracklist.clone(), items: g.items.clone() },
+                Err(_) => return,
+            };
+            // A few quick tries while the link may still come up; names can wait after that.
+            for i in 0..4 {
+                match songs.sync(&client) {
+                    Ok(_) => break,
+                    Err(e) => {
+                        info!("radio: tracklist (aside): {e}");
+                        if sh.stopped() || !sh.sleep(Duration::from_millis(250 * (i + 1))) {
+                            break;
+                        }
+                    }
+                }
+            }
+            if let Ok(mut g) = sh.songs.lock() {
+                for s in songs.items {
+                    g.merge(s);
+                }
+            }
+            if let Some(u) = now_url {
+                if let Ok(v) = get_json(&client, &u, Timeouts::io_s(15)) {
+                    apply_now(&sh, &v);
+                }
+            }
+            hold.release(Some(1_000));
+            info!("radio: names in after {} ms (beside the first audio ask)", started.elapsed().as_millis());
+            sh.feed.hold_start_until(None);
+        });
+        if r.is_err() {
+            self.sh.feed.hold_start_until(None);
         }
     }
 
@@ -1394,44 +1476,6 @@ impl Worker {
         }
     }
 
-    /// Long bursts, before the first ask: names before sound (a long first answer starts playing
-    /// while it still arrives, before the sync that follows it). Retried like the audio while the
-    /// link is down; any answer from the server ends it (names can wait). False = stopped.
-    fn first_sync(&mut self) -> bool {
-        if self.sh.cfg.songs.is_none() {
-            return true;
-        }
-        let sh = self.sh.clone();
-        let got = self.net("tracklist", |c| {
-            let Ok(mut songs) = sh.songs.lock().map(|g| Songs { tracklist: g.tracklist.clone(), items: g.items.clone() })
-            else {
-                return Ok(None);
-            };
-            match songs.sync(c) {
-                Ok(_) => Ok(Some(songs)),
-                Err(e) if matches!(e.kind(), ErrorKind::Other | ErrorKind::InvalidData | ErrorKind::PermissionDenied) => {
-                    info!("radio: tracklist: {e} (names can wait)");
-                    Ok(None)
-                }
-                Err(e) => Err(e),
-            }
-        });
-        let Some(got) = got else { return false };
-        if let Some(songs) = got {
-            let newest = songs.items.last().map(|s| s.play_id.clone());
-            if let Ok(mut g) = self.sh.songs.lock() {
-                for s in songs.items {
-                    g.merge(s);
-                }
-            }
-            if newest.is_some() && newest != self.newest_play {
-                self.newest_play = newest;
-                self.refresh_next();
-            }
-        }
-        true
-    }
-
     /// `now` (no wait): what the rotation plans after the live song ("Up next").
     fn refresh_next(&mut self) {
         let Some(url) = self.now_url.clone() else { return };
@@ -1441,18 +1485,28 @@ impl Worker {
     }
 
     fn apply_now(&self, v: &Value) {
+        apply_now(&self.sh, v);
+    }
+}
+
+/// A `now` answer: what is planned next (`$stream.next`) and the live item.
+fn apply_now(sh: &Shared, v: &Value) {
+    {
         let next: Vec<Song> = v
             .get("next")
             .and_then(Value::as_array)
             .map(|a| a.iter().filter_map(planned_song).collect())
             .unwrap_or_default();
-        self.sh.set(|s| s.next = next);
+        sh.set(|s| s.next = next);
         if let Some(item) = v.get("item").and_then(Song::from_json) {
-            if let Ok(mut g) = self.sh.songs.lock() {
+            if let Ok(mut g) = sh.songs.lock() {
                 g.merge(item);
             }
         }
     }
+}
+
+impl Worker {
 
     /// When nothing in the tracklist covers what you hear, ask the server once for it.
     fn fill_gap(&mut self) {
@@ -1505,13 +1559,17 @@ impl Worker {
                 continue;
             }
             let Some(base) = self.audio_url.clone() else { return };
-            if st.cur.is_none() && !self.first_sync() {
-                return;
+            // The first wake: audio first, the names beside it on a second connection.
+            let first = self.sh.state.lock().map(|g| g.asks == 0).unwrap_or(false);
+            if first {
+                self.names_aside();
             }
             let (sh, hint) = (self.sh.clone(), self.hint);
             let Some(a) = self.net("audio", |c| long_ask(c, &base, &sh, hint, &mut st)) else { return };
             self.sh.set(|s| s.asks += 1);
-            self.sync_songs(); // same wake as the audio
+            if !first {
+                self.sync_songs(); // same wake as the audio
+            }
             match a.status {
                 200 => {}
                 204 => {
@@ -1620,9 +1678,15 @@ impl Worker {
                 ("min_s", format!("{}", (need * 1000.0).round() / 1000.0)),
                 ("wait", ASK_WAIT_S.to_string()),
             ]);
+            let first = self.sh.state.lock().map(|g| g.asks == 0).unwrap_or(false);
+            if first {
+                self.names_aside();
+            }
             let Some(a) = self.net("audio", |c| ask(c, &url)) else { return };
             self.sh.set(|s| s.asks += 1);
-            self.sync_songs(); // same wake as the audio
+            if !first {
+                self.sync_songs(); // same wake as the audio
+            }
             match a.status {
                 200 => {}
                 204 => {
@@ -1772,6 +1836,11 @@ impl Worker {
             if started.elapsed() > Duration::from_secs(30) {
                 delay = 1.0;
             }
+            if ended.starts_with(STALLED) {
+                info!("radio: {ended}");
+                self.sh.set(|s| s.last_error = Some(ended.clone()));
+                continue;
+            }
             info!("radio: endless stream ended ({ended}); reconnecting in {delay:.0} s");
             self.sh.set(|s| s.last_error = Some(ended));
             if !self.sh.sleep(Duration::from_secs_f64(delay)) {
@@ -1783,6 +1852,16 @@ impl Worker {
         if let Some(p) = poller {
             let _ = p.join();
         }
+    }
+
+    /// The connect burst of this answer is over: the feed may start early.
+    fn burst_over(&self, st: &mut Endless, why: &str) {
+        st.burst_over = true;
+        st.early_ok = true;
+        let Some(i) = st.id else { return };
+        let held = st.samples as f64 / f64::from(st.rate.max(1));
+        info!("radio: connect burst over ({why}) after {} ms, {held:.1} s of audio received", st.connected.elapsed().as_millis());
+        self.sh.feed.burst_over(i);
     }
 
     /// One endless answer, read until it ends. Returns why it ended.
@@ -1823,9 +1902,27 @@ impl Worker {
         let mut rd = r.into_reader();
         let mut buf = vec![0u8; 64 * 1024];
         let mut st = Endless::new(time_ms, self.hint);
+        // A live `http` stream (Icecast): short reads notice the end of the connect burst (early
+        // start) and a stall while blocked (reconnect for a fresh burst instead of waiting).
+        let live = self.sh.cfg.mode == Mode::Http;
+        if live {
+            let _ = rd.set_timeout(BURST_POLL);
+        }
+        let connected = Instant::now();
+        let mut last_data = connected;
+        let mut window = (connected, 0u64);
+        let stalls_before = self.sh.feed.status().stalls;
         loop {
             if self.sh.stopped() {
                 return "stopped".into();
+            }
+            if live && st.burst_over {
+                let fs = self.sh.feed.status();
+                if fs.latest_started && fs.stalls > stalls_before && fs.buffered_s < 0.05 {
+                    // Ran dry while connected: a fresh connection brings a fresh burst at once
+                    // (the stream jumps to live; it cannot be caught up at 1×).
+                    return format!("{STALLED}: reconnecting for a fresh burst");
+                }
             }
             // Backpressure: a paused player must not make the buffer grow without end.
             while self.sh.feed.status().buffered_s > MAX_BUFFER_S {
@@ -1835,8 +1932,22 @@ impl Worker {
             }
             let n = match rd.read(&mut buf) {
                 Ok(0) => break,
-                Ok(n) => n,
+                Ok(n) => {
+                    last_data = Instant::now();
+                    n
+                }
                 Err(e) if e.kind() == ErrorKind::Interrupted && !self.sh.stopped() => continue,
+                Err(e) if live && matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
+                    // Quiet for a poll: the burst is over (if audio came), or a long silence.
+                    if !st.burst_over && st.id.is_some() {
+                        self.burst_over(&mut st, "quiet");
+                        let _ = rd.set_timeout(STALL_POLL);
+                    }
+                    if last_data.elapsed() >= QUIET_MAX {
+                        return format!("no data for {} s", QUIET_MAX.as_secs());
+                    }
+                    continue;
+                }
                 Err(e) => {
                     if let Some(i) = st.id {
                         let tail: Vec<Frame> = st.fr.finish().into_iter().collect();
@@ -1862,6 +1973,26 @@ impl Worker {
             }
             if let Err(e) = endless_feed(&self.sh, &mut st, &audio[from..]) {
                 return e;
+            }
+            // Arrival back to about real time over a window: the burst is over.
+            if live && !st.burst_over && st.id.is_some() && window.0.elapsed() >= BURST_WINDOW {
+                let media_s = (st.samples - window.1) as f64 / f64::from(st.rate.max(1));
+                let ratio = media_s / window.0.elapsed().as_secs_f64();
+                if ratio < BURST_RATIO {
+                    self.burst_over(&mut st, "real time");
+                    let _ = rd.set_timeout(STALL_POLL);
+                } else {
+                    // Still arriving faster than it plays: starting now cannot run dry before
+                    // the burst ends, so the early start may begin already.
+                    if !st.early_ok {
+                        st.early_ok = true;
+                        if let Some(i) = st.id {
+                            info!("radio: burst arriving at {ratio:.1}× real time after {} ms: early start allowed", st.connected.elapsed().as_millis());
+                            self.sh.feed.burst_over(i);
+                        }
+                    }
+                    window = (Instant::now(), st.samples);
+                }
             }
         }
         if let Some(i) = st.id {
@@ -1955,6 +2086,11 @@ struct Endless {
     rate: u32,
     /// ICY titles seen in this answer (the first one names the audio from its start).
     titles: u32,
+    /// The connect burst is over (live `http` streams), and when the answer began.
+    burst_over: bool,
+    /// The feed was told early start is safe (burst over, or still arriving fast).
+    early_ok: bool,
+    connected: Instant,
 }
 
 impl Endless {
@@ -1969,6 +2105,9 @@ impl Endless {
             samples: 0,
             rate: 44_100,
             titles: 0,
+            burst_over: false,
+            early_ok: false,
+            connected: Instant::now(),
         }
     }
 

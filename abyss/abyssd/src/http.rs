@@ -1,6 +1,8 @@
 //! A small HTTP/1.1 client for abyssd's own network work (modules such as the radio).
 //!
-//! - GET only (all our module traffic is GET), keep-alive with one idle connection per
+//! - GET only (all our module traffic is GET), keep-alive through a process-wide pool of idle
+//!   connections (origin + bound device, at most [`POOL_IDLE`] idle: a new station of the same
+//!   server, or the tracklist beside the audio, reuses a warm TCP/TLS connection), formerly one per
 //!   origin, Content-Length / chunked / read-to-close bodies, a streaming body reader for
 //!   endless audio, hard limits on header and body sizes, timeouts on every step.
 //! - Plain `http://` over `std::net::TcpStream`, and `https://` (feature `net:https`) through
@@ -197,6 +199,10 @@ pub trait Conn: Read + Write + Send {
     fn set_timeouts(&self, t: Duration) -> io::Result<()>;
     /// A handle that aborts this connection from another thread.
     fn aborter(&self) -> Option<Aborter>;
+    /// The interface this connection is bound to, if known (the idle pool's key).
+    fn device(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Shuts one connection down from another thread.
@@ -215,6 +221,11 @@ impl Aborter {
 /// `TcpTransport`'s stream.
 pub trait Transport: Send + Sync {
     fn connect(&self, url: &Url, timeout: Duration) -> io::Result<Box<dyn Conn>>;
+    /// The one interface every connection of this transport is bound to (None = it chooses per
+    /// connection, or any): idle connections are reused only from that interface.
+    fn device(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Name lookup for hosts that are not plain IPv4 addresses (Abyss has its own resolver in
@@ -242,7 +253,7 @@ impl TcpTransport {
     }
 }
 
-struct TcpConn(TcpStream);
+struct TcpConn(TcpStream, Option<String>);
 
 impl Read for TcpConn {
     fn read(&mut self, b: &mut [u8]) -> io::Result<usize> {
@@ -270,9 +281,15 @@ impl Conn for TcpConn {
             let _ = s.shutdown(Shutdown::Both);
         }))
     }
+    fn device(&self) -> Option<String> {
+        self.1.clone()
+    }
 }
 
 impl Transport for TcpTransport {
+    fn device(&self) -> Option<String> {
+        self.bind_device.clone()
+    }
     fn connect(&self, url: &Url, timeout: Duration) -> io::Result<Box<dyn Conn>> {
         let addrs = self.addrs(url)?;
         let mut last = io::Error::new(ErrorKind::NotFound, format!("no IPv4 address for {}", url.host));
@@ -280,7 +297,7 @@ impl Transport for TcpTransport {
             match connect_one(a, self.bind_device.as_deref(), timeout) {
                 Ok(s) => {
                     let _ = s.set_nodelay(true);
-                    return Ok(Box::new(TcpConn(s)));
+                    return Ok(Box::new(TcpConn(s, self.bind_device.clone())));
                 }
                 Err(e) => last = e,
             }
@@ -400,6 +417,9 @@ impl TlsTransport {
 }
 
 impl Transport for TlsTransport {
+    fn device(&self) -> Option<String> {
+        self.tcp.device()
+    }
     fn connect(&self, url: &Url, timeout: Duration) -> io::Result<Box<dyn Conn>> {
         let cfg = tls_config()?;
         let name = rustls::pki_types::ServerName::try_from(url.host.clone()).map_err(|e| bad(format!("{}: {e}", url.host)))?;
@@ -442,6 +462,90 @@ impl Conn for TlsConn {
     fn aborter(&self) -> Option<Aborter> {
         self.0.sock.aborter()
     }
+    fn device(&self) -> Option<String> {
+        self.0.sock.device()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The idle-connection pool
+
+/// How long an idle keep-alive connection is kept for reuse. Short: a server's keep-alive
+/// timeout (and its FIN, which on mobile data pages the modem) never comes into play.
+pub const POOL_IDLE: Duration = Duration::from_secs(10);
+/// At most this many idle connections in all, and per origin.
+const POOL_MAX: usize = 8;
+const POOL_PER_ORIGIN: usize = 2;
+
+type Origin = (Scheme, String, u16);
+
+struct Pooled {
+    origin: Origin,
+    device: Option<String>,
+    conn: Box<dyn Conn>,
+    at: std::time::Instant,
+}
+
+static POOL: Mutex<Vec<Pooled>> = Mutex::new(Vec::new());
+static REAPER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn pool_purge(v: &mut Vec<Pooled>) {
+    v.retain(|p| p.at.elapsed() < POOL_IDLE);
+}
+
+/// An idle connection to `origin` (bound to `device` when the transport has one), newest first.
+fn pool_take(origin: &Origin, device: Option<&str>) -> Option<Box<dyn Conn>> {
+    let mut v = POOL.lock().ok()?;
+    pool_purge(&mut v);
+    let i = v.iter().rposition(|p| p.origin == *origin && device.is_none_or(|d| p.device.as_deref() == Some(d)))?;
+    Some(v.remove(i).conn)
+}
+
+fn pool_put(origin: Origin, conn: Box<dyn Conn>) {
+    let device = conn.device();
+    let Ok(mut v) = POOL.lock() else { return };
+    pool_purge(&mut v);
+    while v.iter().filter(|p| p.origin == origin).count() >= POOL_PER_ORIGIN {
+        let i = v.iter().position(|p| p.origin == origin).unwrap_or(0);
+        v.remove(i);
+    }
+    if v.len() >= POOL_MAX {
+        v.remove(0);
+    }
+    v.push(Pooled { origin, device, conn, at: std::time::Instant::now() });
+    drop(v);
+    // Close expired connections even when nobody asks for one (not left open for the server
+    // to FIN minutes later).
+    if !REAPER.swap(true, std::sync::atomic::Ordering::AcqRel) {
+        let r = std::thread::Builder::new().name("abyssd-http-pool".into()).spawn(|| loop {
+            std::thread::sleep(Duration::from_secs(2));
+            let Ok(mut v) = POOL.lock() else { break };
+            pool_purge(&mut v);
+            if v.is_empty() {
+                REAPER.store(false, std::sync::atomic::Ordering::Release);
+                break;
+            }
+        });
+        if r.is_err() {
+            REAPER.store(false, std::sync::atomic::Ordering::Release);
+        }
+    }
+}
+
+/// Closes the idle connections to these origins.
+fn pool_close(origins: &[Origin]) {
+    if let Ok(mut v) = POOL.lock() {
+        v.retain(|p| !origins.contains(&p.origin));
+    }
+}
+
+/// Idle connections held now (tests, the PC tools).
+#[allow(dead_code)]
+pub fn pool_len() -> usize {
+    POOL.lock().map(|mut v| {
+        pool_purge(&mut v);
+        v.len()
+    }).unwrap_or(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -518,9 +622,8 @@ impl Timeouts {
 pub struct Client {
     http: Arc<dyn Transport>,
     https: Option<Arc<dyn Transport>>,
-    /// One idle keep-alive connection per origin (the audio ask and the tracklist sync of
-    /// one wake share it).
-    idle: Mutex<Vec<((Scheme, String, u16), Box<dyn Conn>)>>,
+    /// The origins this client put into the idle pool ([`close_idle`](Self::close_idle)).
+    used: Mutex<Vec<Origin>>,
     cancel: Cancel,
     /// Only these origins may be fetched (a module's approved `net`); None = any.
     allow: Option<Vec<String>>,
@@ -529,7 +632,7 @@ pub struct Client {
 impl Client {
     pub fn new(http: Arc<dyn Transport>, cancel: Cancel) -> Client {
         let https: Arc<dyn Transport> = Arc::new(TlsTransport::new(http.clone()));
-        Client { http, https: Some(https), idle: Mutex::new(Vec::new()), cancel, allow: None }
+        Client { http, https: Some(https), used: Mutex::new(Vec::new()), cancel, allow: None }
     }
 
     /// Restricts every request (links from answers included) to these origins
@@ -551,10 +654,12 @@ impl Client {
         self
     }
 
-    /// Drops idle keep-alive connections (call when the Wi-Fi lease ends: the link may go).
+    /// Closes the idle connections this client left in the pool (call when the lease ends
+    /// for longer than a short gap: the link may go, and a server's late FIN would wake the
+    /// modem).
     pub fn close_idle(&self) {
-        if let Ok(mut v) = self.idle.lock() {
-            v.clear();
+        if let Ok(v) = self.used.lock() {
+            pool_close(&v);
         }
     }
 
@@ -569,17 +674,17 @@ impl Client {
     }
 
     fn take_idle(&self, url: &Url) -> Option<Box<dyn Conn>> {
-        let mut v = self.idle.lock().ok()?;
-        let o = url.origin();
-        let i = v.iter().position(|(k, _)| *k == o)?;
-        Some(v.swap_remove(i).1)
+        let dev = self.transport(url).ok()?.device();
+        pool_take(&url.origin(), dev.as_deref())
     }
 
-    fn put_idle(&self, origin: (Scheme, String, u16), c: Box<dyn Conn>) {
-        if let Ok(mut v) = self.idle.lock() {
-            v.retain(|(k, _)| *k != origin);
-            v.push((origin, c));
+    fn put_idle(&self, origin: Origin, c: Box<dyn Conn>) {
+        if let Ok(mut v) = self.used.lock() {
+            if !v.contains(&origin) {
+                v.push(origin.clone());
+            }
         }
+        pool_put(origin, c);
     }
 
     /// GET `url`. The answer's body is not read yet: call [`Response::bytes`] (and get the
@@ -949,6 +1054,14 @@ pub struct BodyReader<'c> {
     reg: Option<u64>,
 }
 
+impl BodyReader<'_> {
+    /// The read (and write) timeout from now on: a short one lets an endless reader notice a
+    /// quiet link (the end of a connect burst, a stall) while it waits.
+    pub fn set_timeout(&self, t: Duration) -> io::Result<()> {
+        self.body.wire.conn.set_timeouts(t)
+    }
+}
+
 impl Read for BodyReader<'_> {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
         self.body.read(out)
@@ -1042,6 +1155,29 @@ mod tests {
 
     fn client() -> Client {
         Client::new(Arc::new(TcpTransport::default()), Cancel::default())
+    }
+
+    #[test]
+    fn idle_pool_is_shared_keyed_and_closed() {
+        // One connection serves two clients (a station switch on the same server).
+        let (u, h) = serve(vec![vec![
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".to_vec(),
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".to_vec(),
+        ]]);
+        let a = client();
+        assert_eq!(a.get(&u, &[], Timeouts::io_s(5)).unwrap().bytes(10).unwrap(), b"ok");
+        drop(a);
+        let b = client();
+        assert_eq!(b.get(&u, &[], Timeouts::io_s(5)).unwrap().bytes(10).unwrap(), b"ok");
+        // Closing b's idle connections ends the server's single connection.
+        b.close_idle();
+        assert_eq!(h.join().unwrap().len(), 2, "both asks on one connection, then closed");
+        // A transport bound to another interface does not take an unbound connection.
+        let (u, _h) = serve(vec![vec![b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_vec()]]);
+        let c = client();
+        assert!(c.get(&u, &[], Timeouts::io_s(5)).unwrap().bytes(10).unwrap().is_empty());
+        assert!(pool_take(&u.origin(), Some("wlan9")).is_none(), "keyed by the bound device");
+        assert!(pool_take(&u.origin(), None).is_some(), "any device for an unbound transport");
     }
 
     #[test]

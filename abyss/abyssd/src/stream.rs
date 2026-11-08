@@ -11,8 +11,16 @@
 //!   samples) and its `X-Stream-Time-Ms`.
 //! - The player side ([`FeedPlayer::next_pcm`]) takes frames in order, decodes them with
 //!   symphonia's FLAC decoder and returns interleaved stereo i16 (what `AudioOut` takes).
-//!   A stream starts only once [`START_S`] is in hand (15 s); if it runs dry later it stalls
-//!   and resumes, never skipping ahead.
+//!   A stream starts only once [`START_S`] is in hand (15 s), or the session's own start; if it
+//!   runs dry later it stalls and resumes, never skipping ahead.
+//! - **Early start** ([`Feed::set_early_start`], a live `http` stream set to "as soon as
+//!   possible"): a stream also starts with only that much (~2 s) in hand once its network side
+//!   says it is safe ([`Feed::burst_over`]: the connect burst is over, or still arrives faster
+//!   than 1.5× real time, so playing cannot catch up with it): an Icecast server sends a few
+//!   seconds at once on connect, then real time, so waiting longer only adds silence.
+//! - **Start gate** ([`Feed::hold_start_until`]): nothing starts before the gate opens or its
+//!   deadline passes (names before sound: the tracklist arrives on a second connection while
+//!   the audio fills).
 //! - Wall time of the sample playing now = the Time-Ms of the answer that carried it +
 //!   (samples played since that answer's first sample / rate) ([`Feed::now_wall_ms`]).
 //!
@@ -93,11 +101,21 @@ struct StreamBuf {
     started: bool,
     /// No more data will come (a newer stream exists, or the session stopped).
     ended: bool,
+    /// The network side says the connect burst is over (early start may begin).
+    burst_over: bool,
 }
 
 impl StreamBuf {
     fn rate(&self) -> f64 {
         f64::from(self.codec.sample_rate().max(1))
+    }
+    fn held_s(&self) -> f64 {
+        (self.received - self.played) as f64 / self.rate()
+    }
+    /// Whether this stream may start now: its start in hand, or (early start) the burst over
+    /// with the early amount in hand; never while the gate is closed.
+    fn may_start(&self, start_s: f64, early_s: f64, gate_open: bool) -> bool {
+        gate_open && (self.held_s() >= start_s || (early_s > 0.0 && self.burst_over && self.held_s() >= early_s))
     }
     fn wall_ms(&self, sample: u64) -> Option<i64> {
         let i = self.marks.partition_point(|m| m.at <= sample).checked_sub(1)?;
@@ -118,6 +136,27 @@ struct Inner {
     /// The playing stream is dry right now (one stall episode).
     dry: bool,
     start_samples_s: f64,
+    /// Early start (0 = off): seconds in hand that suffice once the burst is over.
+    early_s: f64,
+    /// Nothing starts before this (None = open).
+    gate_until: Option<Instant>,
+}
+
+impl Inner {
+    fn gate_open(&self) -> bool {
+        self.gate_until.is_none_or(|t| Instant::now() >= t)
+    }
+
+    /// Starts every waiting stream that may start now.
+    fn start_ready(&mut self) {
+        let (start_s, early_s, gate) = (self.start_samples_s, self.early_s, self.gate_open());
+        for s in self.streams.iter_mut().filter(|s| !s.started && !s.ended) {
+            if s.may_start(start_s, early_s, gate) {
+                s.started = true;
+                info!("stream {}: {:.1} s in hand, starting{}", s.id, s.held_s(), if s.burst_over { " (early start)" } else { "" });
+            }
+        }
+    }
 }
 
 /// What the network side sees of the buffer.
@@ -183,6 +222,7 @@ impl Feed {
             marks: Vec::new(),
             started: false,
             ended: false,
+            burst_over: false,
         });
         drop(g);
         self.cv.notify_all();
@@ -194,7 +234,6 @@ impl Feed {
     /// gone (stopped, or played out).
     pub fn push(&self, id: u64, frames: Vec<Frame>, time_ms: Option<i64>) -> bool {
         let mut g = self.lock();
-        let start_s = g.start_samples_s;
         let Some(s) = g.streams.iter_mut().find(|s| s.id == id && !s.ended) else { return false };
         if let Some(t) = time_ms {
             if s.marks.last().is_none_or(|m| m.at != s.received) {
@@ -208,13 +247,37 @@ impl Feed {
             s.bytes += f.bytes.len() as u64;
             s.frames.push_back(f);
         }
-        if !s.started && (s.received - s.played) as f64 / s.rate() >= start_s {
-            s.started = true;
-            info!("stream {id}: {:.1} s in hand, starting", s.received as f64 / s.rate());
-        }
+        g.start_ready();
         drop(g);
         self.cv.notify_all();
         true
+    }
+
+    /// Early start (live `http` streams): a stream may start with `secs` in hand once its
+    /// connect burst is over. 0 = off.
+    pub fn set_early_start(&self, secs: f64) {
+        self.lock().early_s = secs.max(0.0);
+    }
+
+    /// Early start is safe for stream `id`: its connect burst is over (arrival fell to about
+    /// real time), or it still arrives clearly faster than it plays.
+    pub fn burst_over(&self, id: u64) {
+        let mut g = self.lock();
+        if let Some(s) = g.streams.iter_mut().find(|s| s.id == id) {
+            s.burst_over = true;
+        }
+        g.start_ready();
+        drop(g);
+        self.cv.notify_all();
+    }
+
+    /// Nothing starts before `until` (None = open the gate now).
+    pub fn hold_start_until(&self, until: Option<Instant>) {
+        let mut g = self.lock();
+        g.gate_until = until;
+        g.start_ready();
+        drop(g);
+        self.cv.notify_all();
     }
 
     /// No more data: the player plays what it holds, then gets `Ended`.
@@ -276,7 +339,8 @@ impl Feed {
         let g = self.lock();
         match g.streams.front() {
             Some(s) if !s.started => {
-                ((s.received - s.played) as f64 / s.rate() / g.start_samples_s.max(0.001)).min(1.0)
+                let need = if g.early_s > 0.0 { g.early_s.min(g.start_samples_s) } else { g.start_samples_s };
+                (s.held_s() / need.max(0.001)).min(1.0)
             }
             Some(_) => 1.0,
             None => 0.0,
@@ -295,6 +359,8 @@ impl Feed {
             while g.streams.front().is_some_and(|s| s.ended && s.frames.is_empty()) {
                 g.streams.pop_front();
             }
+            // A gate deadline may have passed meanwhile.
+            g.start_ready();
             let closed = g.closed;
             let state = match g.streams.front_mut() {
                 None if closed => return Pull::Ended,
@@ -493,6 +559,47 @@ mod tests {
             n += 1;
             assert!(n < 10);
         }
+    }
+
+    #[test]
+    fn early_start_after_the_burst_and_the_gate() {
+        // Start 15 s, early 2 s: 2.5 s in hand starts only once the burst is over.
+        let feed = Feed::with_start(15.0);
+        feed.set_early_start(2.0);
+        let mut p = FeedPlayer::new(feed.clone());
+        let mut out = Vec::new();
+        let id = feed.begin_stream(info());
+        assert!(feed.push(id, frames(0, 25, 4410, 1), Some(1_000)));
+        assert!(feed.status().buffering, "2.5 s is not 15 s while the burst still comes");
+        feed.burst_over(id);
+        assert!(!feed.status().buffering, "burst over with 2.5 s in hand: start");
+        assert_eq!(p.next_pcm(&mut out, Duration::from_millis(1)), Pcm::Samples { rate: 44100 });
+        // Less than the early amount: the burst being over is not enough.
+        let feed = Feed::with_start(15.0);
+        feed.set_early_start(2.0);
+        let id = feed.begin_stream(info());
+        feed.push(id, frames(0, 10, 4410, 1), Some(1_000));
+        feed.burst_over(id);
+        assert!(feed.status().buffering);
+        feed.push(id, frames(10, 10, 4410, 1), None);
+        assert!(!feed.status().buffering, "2 s in hand after the burst: start");
+        // The gate: nothing starts before it opens, whatever is in hand.
+        let feed = Feed::with_start(1.0);
+        feed.hold_start_until(Some(Instant::now() + Duration::from_secs(60)));
+        let id = feed.begin_stream(info());
+        feed.push(id, frames(0, 20, 4410, 1), Some(1_000));
+        assert!(feed.status().buffering, "gate closed");
+        feed.hold_start_until(None);
+        assert!(!feed.status().buffering, "gate opened");
+        // A gate deadline that passes starts it on the player's next pull.
+        let feed = Feed::with_start(1.0);
+        feed.hold_start_until(Some(Instant::now() + Duration::from_millis(30)));
+        let id = feed.begin_stream(info());
+        feed.push(id, frames(0, 20, 4410, 1), Some(1_000));
+        let mut p = FeedPlayer::new(feed.clone());
+        assert_eq!(p.next_pcm(&mut out, Duration::from_millis(1)), Pcm::Buffering);
+        std::thread::sleep(Duration::from_millis(40));
+        assert_eq!(p.next_pcm(&mut out, Duration::from_millis(1)), Pcm::Samples { rate: 44100 });
     }
 
     #[test]
