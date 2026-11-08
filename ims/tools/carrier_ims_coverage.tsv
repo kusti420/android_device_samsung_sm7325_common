@@ -1,0 +1,1015 @@
+plmn	stock_mno	aosp_carrier_or_filter	status	reason	user_agent	notes
+20201	TMobile_GR		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+20205	Vodafone_GR		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20209	Wind_GR	Info Quest S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20210	Wind_GR	Telestet	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20402	Tele2_NL		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20403	Mvno_NL	Voiceworks NL	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20404	Vodafone_NL		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20404	USCC_US	subset= gid1= gid2= spn=U.S. Cellular	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20404	DEFAULT	subset= gid1=3D gid2= spn=	unmapped	short GID1 3D (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+20404	DEFAULT	subset= gid1=3E gid2= spn=	unmapped	short GID1 3E (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+20404	DEFAULT	subset= gid1=40 gid2= spn=	unmapped	short GID1 40 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+20404	DEFAULT	subset= gid1=3F gid2= spn=	unmapped	short GID1 3F (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+20404	DEFAULT	subset= gid1=42 gid2= spn=	unmapped	short GID1 42 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+20404	VZW_US	subset= gid1=BAE0000000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20404	VZW_US:FKR	subset= gid1=BAE1000000000000 gid2=1A00000000000000 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+20404	VZW_US:Visible	subset= gid1=BAE2000000000000 gid2=1C00000000000000 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+20404	DEFAULT	subset= gid1=BA00010000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00020000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00030000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00040000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00050000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00070000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00090000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00110000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00120000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00130000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00150000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00170000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00180000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	DEFAULT	subset= gid1=BA00220000000000 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20404	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20404	VZW_US:CCTRoaming	subset= gid1=BA01450000000000 gid2=A300000000000000 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch: VoLTE off
+20404	VZW_US:CHA	subset= gid1=BA01490000000000 gid2=A700000000000000 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+20404	Mvno_NL	subset=7960 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20408	KPN_NL	KPN Mobiel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20410	KPN_NL		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20416	TMobile_NL	Odido	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+20433	Truphone_NL		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20469	KPN_NL	KPN Lab	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20601	Proximus_BE	Proximus	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20601	Telenet_BE	subset=889 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20601	GoogleGC_ALL	subset= gid1=28 gid2= spn=	unmapped	short GID1 28 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20601	GoogleGC_ALL	subset=8013 gid1=75 gid2= spn=	unmapped	short GID1 75 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20601	GoogleGC_ALL	subset=561 gid1=75 gid2= spn=	unmapped	short GID1 75 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20601	GoogleGC_ALL	subset=8014 gid1=75 gid2= spn=	unmapped	short GID1 75 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20601	GoogleGC_ALL	subset= gid1=52 gid2= spn=	unmapped	short GID1 52 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20601	DEFAULT	subset= gid1=4E524A31 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20601	GoogleGC_ALL	subset= gid1= gid2= spn=Tesco Mobile	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+20605	Telenet_BE	Telenet	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20610	Orange_BE	Orange	generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/20610	
+20620	Telenet_BE	BASE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20620	DEFAULT	subset= gid1=28 gid2= spn=	unmapped	short GID1 28 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+20801	Orange_FR		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/20801	
+20801	Telecom_MC	subset= gid1=4D433032 gid2= spn=	unmapped	short GID1 4D433032 (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+20801	GoogleGC_ALL	subset= gid1=52 gid2= spn=	unmapped	short GID1 52 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20801	GoogleGC_ALL	subset= gid1=33 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+20801	Coriolis_FR	subset= gid1= gid2= spn=Coriolis	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20801	Telecom_MC	subset= gid1=4D433031 gid2= spn=	unmapped	short GID1 4D433031 (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+20801	DEFAULT	subset= gid1=4E524A31 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+20802	Orange_FR		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/20802	
+20809	SFR_FR	SFR	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20809	DEFAULT	subset= gid1=4E524A31 gid2= spn=	unmapped	short GID1 4E524A31 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+20809	GoogleGC_ALL	subset= gid1= gid2= spn=SFR REUNION Roaming	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+20809	Coriolis_FR	subset= gid1= gid2= spn=Coriolis	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20810	SFR_FR	SFR	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20810	DEFAULT	subset= gid1=4E524A31 gid2= spn=	unmapped	short GID1 4E524A31 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+20810	GoogleGC_ALL	subset= gid1=52 gid2= spn=	unmapped	short GID1 52 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20810	GoogleGC_ALL	subset=255 gid1= gid2= spn=Simplicime	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+20810	GoogleGC_ALL	subset=16709 gid1= gid2= spn=LeclercMobile	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+20810	GoogleGC_ALL	subset= gid1= gid2= spn=AE	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+20810	GoogleGC_ALL	subset= gid1= gid2= spn=Coriolis	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+20810	GoogleGC_ALL	subset= gid1=52 gid2= spn=Virgin	unmapped	short GID1 52 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20810	GoogleGC_ALL	subset= gid1=29 gid2= spn=A MOBILE	unmapped	short GID1 29 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+20811	SFR_FR	SFR	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20815	Free_FR	Free	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20820	Bouygues_FR	Bouygues Telecom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20826	NRJ_FR	subset= gid1=4E524A31 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20827	Coriolis_FR	subset= gid1= gid2= spn=Coriolis	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+20844	SFR_FR		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+208500	EDF_FR		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+20889	Hubone_FR		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21210	Telecom_MC	MONACO TELECOM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21303	Telecom_AD	Mobiland	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21401	Vodafone_ES		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21403	Orange_ES	subset= gid1= gid2= spn=Orange	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+21403	Orange_ES:MVNO	subset= gid1= gid2= spn=JAZZTEL	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+21403	Orange_ES:MVNO	subset= gid1= gid2= spn=simyo	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+21404	Yoigo_ES		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21405	Telefonica_ES	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21405	Avatel_ES	subset= gid1= gid2= spn=Avatel	mvno-off	stock imsswitch: VoLTE off		
+21405	GoogleGC_ALL	subset= gid1= gid2= spn=telecable	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+21405	GoogleGC_ALL	subset= gid1= gid2= spn=pepephone	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+21405	Telefonica_ES:Tuenti	subset= gid1= gid2= spn=Tuenti	mvno-off	stock imsswitch: VoLTE off		
+21405	GoogleGC_ALL	subset= gid1= gid2= spn=ONO	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+21406	Lowi_ES	subset= gid1= gid2= spn=Lowi	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+21406	Finetwork_ES	subset= gid1= gid2= spn=finetwork	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+21407	Telefonica_ES	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21407	GoogleGC_ALL	subset= gid1= gid2= spn=Tuenti	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+21407	GoogleGC_ALL	subset= gid1= gid2= spn=JAZZTEL	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+21407	GoogleGC_ALL	subset= gid1= gid2= spn=T-2	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+21422	Digi_ES	Digi Spain	off	stock imsswitch: VoLTE off		
+21427	Truphone_ES		off	stock imsswitch: VoLTE off		
+21601	Telenor_HU	Yettel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21603	DIGI_HU		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21630	TMobile_HU	Magyar Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+21670	Vodafone_HU		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21890	Telecom_BA	GSMBIH	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21901	TMobile_HR	Hrvatski Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+21910	Vodafone_HR	A1/Tomato	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+21920	TMobile_HR	Hrvatski Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+22001	Telenor_RS	Yettel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22003	Telekom_RS	Telekom Srbija a.d.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22005	Vipmobile_RS	A1 SRB	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22201	Telecom_IT	TIM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22201	Coopvoce_IT	subset= gid1=434F4F50FFFFFFFFFF gid2= spn=CoopVoce	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+22201	GoogleGC_ALL	subset= gid1= gid2= spn=tiscali mobile	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+22201	GoogleGC_ALL	subset= gid1= gid2= spn=COOP MOBILE	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+22201	GoogleGC_ALL	subset= gid1= gid2= spn=COOP	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+22201	GoogleGC_ALL	subset= gid1= gid2= spn=BT Italia	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+22201	GoogleGC_ALL	subset= gid1= gid2= spn=BT Enia	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+22206	Vodafone_IT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22207	Telecom_IT:Kena	Kena	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22208	Fastweb_IT	Fastweb SpA	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22210	Vodafone_IT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22233	Vodafone_IT:Postemobile		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22235	Lyca_IT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22249	Vianova_IT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22250	Iliad_IT	Iliad	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22253	Coopvoce_IT	WEB CoopVoce	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22254	Plintron_IT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22288	Windtre_IT	WINDTRE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22299	Windtre_IT	WINDTRE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22299	GoogleGC_ALL	subset=800 gid1= gid2= spn=FASTWEB	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+22601	Vodafone_RO	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22603	TMobile_RO		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+22605	RDS_RO	Digi.Mobil	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22606	TMobile_RO		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+22610	Orange_RO	Orange	generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/22610	
+22801	Swisscom_CH	Swisscom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22801	GoogleGC_ALL	subset= gid1= gid2= spn=FASTWEB	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+22802	Sunrise_CH	Sunrise	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22803	Orange_CH	Salt	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+22853	UPC_CH		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23001	TMobile_CZ	T-Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+23002	Telefonica_CZ	O2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23003	Vodafone_CZ	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23007	Tele2_SE		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23101	Orange_SK		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/23101	
+23102	TMobile_SK	Slovak Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+23103	4ka_SK	4ka SK	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23106	Telefonica_SK	O2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23201	A1_AT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23202	A1_AT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23203	TMobile_AT	Magenta Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+23205	3_AT	Drei	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23207	TMobile_AT	Magenta Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+23209	A1_AT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23210	3_AT	Drei	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23211	A1_AT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23212	A1_AT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23214	3_AT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23217	Spusu_AT	Spusu AT	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23228	Spusu_AT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23402	Telefonica_GB		generated	stock imsswitch+imsprofile: VoLTE on	IM-client/OMA1.0 Samsung/#MODEL#-#BOOTLOADER_LAST3# Samsung-RCS/6.0	
+23403	Airtel_GB	Jersey Telenet Ltd	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23407	Vodafone_GB	Cable and Wireless plc	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23408	BTOP_GB		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23410	Telefonica_GB	O2	generated	stock imsswitch+imsprofile: VoLTE on	IM-client/OMA1.0 Samsung/#MODEL#-#BOOTLOADER_LAST3# Samsung-RCS/6.0	
+23410	GoogleGC_ALL	subset= gid1=537 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+23410	GoogleGC_ALL	subset= gid1=519 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+23410	DEFAULT	subset= gid1=507F gid2= spn=	unmapped	short GID1 507F (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+23415	Vodafone_GB		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23415	DEFAULT	subset= gid1= gid2= spn=TalkTalk	mvno-off	no operator IMS on stock (DEFAULT)		
+23420	Hutchison_GB	Three Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23425	Truphone_GB		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23427	TCL_GB		off	stock imsswitch: VoLTE off		
+23430	EE_GB	EE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23430	GoogleGC_ALL	subset= gid1=28 gid2= spn=	unmapped	short GID1 28 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL)
+23430	BTOP_GB	subset= gid1=b2 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+23433	EE_GB	EE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23438	Virgin_GB		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23440	Spusu_GB	Spusu GB	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23453	Tango_GB	TANGO / TANGO-UK	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23455	Sure_GB	Cable and Wireless Guensey Ltd	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23457	Sky_GB	Sky	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23458	Manx_GB	Manx Telecom	off	stock imsswitch: VoLTE off		
+23471	EEESN_GB	Emergency Services Network	off	stock imsswitch: VoLTE off		
+23594	Hutchison_GB	Three Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23801	TDC_DK	TDC Mobil	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23801	GoogleGC_ALL	subset=72 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+23801	GoogleGC_ALL	subset=71 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+23802	Telenor_DK	Telenor	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23806	3_DK	3	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23810	TDC_DK	TDC Mobil	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23820	Telia_DK	Telia	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23830	Telia_DK	Telia	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+23877	Telenor_DK	Tele2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24001	Telia_SE	Telia Sverige AB	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24002	3_SE	3 (Hi3G Access AB)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24006	Vimla_SE	Vimla	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24007	Tele2_SE	Tele2/Comviq Sverige/Com Hem	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24007	Sky_GB	subset= gid1=0c gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+24007	Sberbank_RU	subset=671 gid1= gid2= spn=	mvno-off	stock imsswitch: VoLTE off		
+24007	Sberbank_RU	subset= gid1=FA3207FFFFFFFFFFFFFF gid2= spn=	mvno-off	stock imsswitch: VoLTE off		
+24007	Spusu_GB	subset= gid1=0048 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+24007	Spusu_AT	subset= gid1=0041 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+24008	Telenor_SE	Telenor Sverige AB	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24201	Telenor_NO	Telenor	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24201	GoogleGC_ALL	subset=700 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+24202	Telia_NO	Telia	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24205	Telia_NO	OneCall	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24214	IceNet_NO	Ice Norway	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24215	Erate_NO		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24403	DNA_FI	DNA	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24404	DNA_FI	Finnet Networks Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24405	Elisa_FI	Elisa	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24412	DNA_FI	DNA	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24413	DNA_FI	DNA	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24414	Alcom_FI	Alands Mobiltelefon AB	off	stock imsswitch: VoLTE off		
+24445	Erillisverkot_FI		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24446	Erillisverkot_FI		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24447	Erillisverkot_FI		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24491	Telia_FI	Telia	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24491	GoogleGC_ALL	subset=92 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+24601	ZEB_LT	Telia	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24602	Bite_LT	BITĖ	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24603	Tele2_LT	Tele2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+246081	LABSIM		off	no operator IMS on stock (LABSIM)		
+24681	LABSIM		off	no operator IMS on stock (LABSIM)		
+24701	LMT_LV	LMT	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24702	Tele2_LV	Tele2/ZZ	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24705	Bite_LV	Bite	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24801	Telia_EE	Telia	verified	VERIFIED 2026-11-08 (IMS registered, HD call; Telia EE prepaid)	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+24802	Elisa_EE	Elisa	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+24803	Tele2_EE	Tele2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25001	MTS_RU	МТС	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER_LAST3#	
+25002	Megafon_RU	MegaFon	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25011	Megafon_RU	Orensot	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25020	TELE2_RU	Tele2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25020	Sberbank_RU	subset= gid1=FA3207FFFFFFFFFFFFFF gid2= spn=	mvno-off	stock imsswitch: VoLTE off		
+25027	Tattelecom_RU		off	stock imsswitch: VoLTE off		
+25035	Motiv_RU		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25050	Sberbank_RU	Sberbank	off	stock imsswitch: VoLTE off		
+25099	Beeline_RU	Билайн	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25502	Kyivstar_UA	T-Mobile - UA	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25503	Kyivstar_UA	Kyivstar GSM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25506	Lifecell_UA	Astelit	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25701	Velcom_BY	A1 BY	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25702	MTS_BY	MTS	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+25851	ATT_US		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+25901	Orange_MD	Orange Moldova GSM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0 25901	UA without [OMCCODE]
+25902	Moldcell_MD	Moldcell	off	stock imsswitch: VoLTE off		
+26001	Plus_PL	Plus	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26002	TMobile_PL	T-Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+26003	Orange_PL	Orange	generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/26003	
+26006	Play_PL	PLAY	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26098	Play_PL		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26201	TMobile_DE	Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+26202	Vodafone_DE	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26203	Telefonica_DE	O2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26206	TMobile_DE	Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+26207	Telefonica_DE	O2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26208	Telefonica_DE		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26209	Vodafone_DE	Vodafone Lab	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26211	Telefonica_DE	O2	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26223	1n1_DE	1&1	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26242	Truphone_DE		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26277	Telefonica_DE		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26280	NVIODT?		off	stock imsswitch: VoLTE off		
+262800	LABSIM	Ericsson Test	off	no operator IMS on stock (LABSIM)		
+262830	LABSIM		off	no operator IMS on stock (LABSIM)		
+26601	Gibtelecom_GI	Gibtelecom GSM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26801	Vodafone_PT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26803	NOS_PT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26806	MEO_PT	MEO	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26889	Vodafone_PT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+26899	NOS_PT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27001	Post_LU	P&T Luxembourg	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27001	GoogleGC_ALL	subset=6 gid1= gid2= spn=Join	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+27077	Tango_LU	Tango	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27099	Orange_LU	Orange	generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/27099	
+27201	Vodafone_IE	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27202	3_IE	3	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27203	Meteor_IE	Meteor Mobile Communications Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27205	3_IE	3	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27225	Sky_IE	Sky IE	off	stock imsswitch: VoLTE off		
+27401	Siminn_IS	Iceland Telecom Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27402	Vodafone_IS	Tal hf	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27411	Nova_IS	Nova	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+27601	Telekom_AL	One Telecommunications	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+27602	Vodafone_AL		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28001	Vodafone_CY	CYTA	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28010	Epic_CY	epic	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28020	Primetel_CY	PrimeTel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28202	Magticom_GE	Magti GSM Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28305	MTS_AM	K Telecom CJSC	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28401	A1_BG	A1	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28403	Vivacom_BG	VIVACOM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28405	Telenor_BG	Yettel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28601	Turkcell_TR	Paycell | Turkcell	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28601	GoogleGC_ALL	subset=590 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+28602	Vodafone_TR	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+28603	AVEA_TR	Türk Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29001	Telepost_GL	Tele Greenland	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29340	A1_SI	SI Mobil	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29341	Telekom_SI	Telekom Slovenije	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29370	Telemach_SI	Telemach	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29401	TMobile_MK	Mkedonski Telecom AD Skopje	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	
+29403	VIP_MK	A1	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29501	Swisscom_CH	Telecom FL AG	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29505	Telecom_LI	Mobilkom (Liechstein) AG	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29701	Telenor_ME	ONE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+29702	TMobile_ME	Crnogorski Telekom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST8# Samsung IMS 6.0	UA without [OMCCODE]
+29703	Mtel_ME	MTEL d.o.o. Podgorica	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+302130	Xplore_CA	Xplornet	off	stock imsswitch: VoLTE off		
+302220	Telus_CA	subset= gid1=54 gid2= spn=	unmapped	short GID1 54 (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+302220	Koodo_CA	subset= gid1=4B gid2= spn=	unmapped	short GID1 4B (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+302220	Telus_CA:PMB	subset= gid1=4D gid2= spn=	unmapped	short GID1 4D (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+302221	Telus_CA	subset= gid1=54 gid2= spn=	unmapped	short GID1 54 (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+302221	Koodo_CA	subset= gid1=4B gid2= spn=	unmapped	short GID1 4B (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+302221	Telus_CA:PMB	subset= gid1=4D gid2= spn=	unmapped	short GID1 4D (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+302222	Telus_CA	subset= gid1=54 gid2= spn=	unmapped	short GID1 54 (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+302222	Koodo_CA	subset= gid1=4B gid2= spn=	unmapped	short GID1 4B (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+302270	ESK_CA	EastLink	generated	stock imsswitch+imsprofile: VoLTE on	Samsung VoLTE IMS #BOOTLOADER#	
+302320	MOBILICITY_CA	Chatr Mobile	off	stock imsswitch: VoLTE off		
+302370	RWC_CA		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302370	DEFAULT	subset= gid1=2C gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+302370	DEFAULT	subset= gid1=5A gid2= spn=	unmapped	short GID1 5A (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+302490	Wind_CA	Freedom Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302500	VideoTron_CA	Videotron	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302510	VideoTron_CA	Videotron	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302512	VideoTron_CA		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302520	VideoTron_CA	Videotron	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302610	Bell_CA	Bell Mobility	generated	stock imsswitch+imsprofile: VoLTE on	Samsung VoLTE IMS #BOOTLOADER#	
+302630	LABSIM	Bell Mobility	off	no operator IMS on stock (LABSIM)		
+302640	LABSIM	Bell Mobility	off	no operator IMS on stock (LABSIM)		
+302681	SaskTelLAB_CA	Sask Tel Mobility	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+30272	RWC_CA	Rogers	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302720	RWC_CA	Rogers	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302720	CTF_CA	subset= gid1=CC gid2= spn=	unmapped	short GID1 CC (prefix match) and no AOSP carrier id		stock: stock imsswitch: VoLTE off
+302720	ZTAR_CA	subset= gid1=D4 gid2= spn=	mvno-off	stock imsswitch: VoLTE off		
+302720	ZTAR_CA	subset=x98 gid1= gid2= spn=	mvno-off	stock imsswitch: VoLTE off		
+302780	SaskTel_CA	Sask Tel Mobility	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+302990	ESK_CA		generated	stock imsswitch+imsprofile: VoLTE on	Samsung VoLTE IMS #BOOTLOADER#	
+302990	SaskTel_CA	subset= gid1=5A gid2= spn=	unmapped	short GID1 5A (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+30803	SPM_FR		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/30803	
+310000	Sprint_US		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310004	VZW_US		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310020	Union_US	Union Telephone Company	off	stock imsswitch: VoLTE off		
+310028	LABSIM	ALU Test-SIM	off	no operator IMS on stock (LABSIM)		
+310030	ATT_US	AT&T	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310070	ATT_US		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310080	GoogleGC_ALL	Corr Wireless Communications LLC	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+310090	ATT_US		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310110	ITE_US	Pacific Telecom Inc	off	stock imsswitch: VoLTE off		
+310120	Sprint_US	Sprint	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310130	GenericIR92_US:CarolinaWest	Carolina West Wireless	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310140	GTA_US	GTA Wireless LLC	off	stock imsswitch: VoLTE off		
+310150	ATT_US:AIO	Cricket Wireless	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310160	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310170	ATT_US	AT&T	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310180	GenericIR92_US:WCW	West Central Wireless	off	stock imsswitch: VoLTE off		
+310200	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310210	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310220	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310230	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310240	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310240	TMobile_US:GoogleFi	subset= gid1=4276 gid2= spn=	unmapped	short GID1 4276 (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+310240	TMobile_US:Boost	subset= gid1=6230 gid2=6231 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+310240	TMobile_US:DSH	subset= gid1=6430 gid2=6431 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+310240	TMobile_US:DSH	subset= gid1=6432 gid2=6433 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+310240	TMobile_US:DSH	subset= gid1=6434 gid2=6435 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+310240	TMobile_US:DSH	subset= gid1=6436 gid2=6437 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+310240	TMobile_US:DSH	subset= gid1=6438 gid2=6439 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+310240	TMobile_US:DSH	subset= gid1=6440 gid2=6441 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+310240	TMobile_US:TFN	subset= gid1=DEFF gid2= spn=	unmapped	short GID1 DEFF (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+310250	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310260	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310260	TMobile_US:GoogleFi	subset= gid1=4276 gid2= spn=	unmapped	short GID1 4276 (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+310260	TMobile_US:TFN	subset= gid1=4D4B gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310260	TMobile_US:TFN	subset= gid1=534D gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310260	TMobile_US:TFN	subset= gid1=DEFF gid2= spn=	unmapped	short GID1 DEFF (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+310270	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310280	ATT_US	AT&T	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310290	GoogleGC_ALL	Nep Cellcorp Inc.	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+310300	GenericIR92_US:Truphone		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310310	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310320	GenericIR92_US:ISP	Smith Bagley Inc, dba Cellular One	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310322	TMobile_US:LAB		generated	stock imsswitch+imsprofile: VoLTE on	T-Mobile VoLTE-VVM SEC/#MODEL# #BOOTLOADER#	
+310332	LABSIM		off	no operator IMS on stock (LABSIM)		
+310370	DPAC_US	Guamcell Cellular and Paging	off	stock imsswitch: VoLTE off		
+310380	ATT_US	AT&T	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310380	DEFAULT	subset= gid1=80 gid2= spn=	unmapped	short GID1 80 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT)
+310410	ATT_US	AT&T	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310450	GenericIR92_US:Viaero	North East Cellular Inc.	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310470	DPAC_US	nTelos	off	stock imsswitch: VoLTE off		
+310480	GoogleGC_ALL	Choice Phone LLC	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+310490	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310560	ATT_US	AT&T	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310570	GoogleGC_ALL	MTPCS LLC	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+310580	GenericIR92_US:Inland	Inland Cellular	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310590	VZW_US	Verizon Wireless	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310591	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310592	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310593	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310594	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310595	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310596	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310597	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310598	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310599	VZW_US:TFN	subset= gid1=BA01270000000000 gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+310660	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310680	ATT_US		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310690	GenericIR92_US:Truphone	Limitless Mobile	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310770	GoogleGC_ALL	Iowa Wireless Services LLC dba I Wireless	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+310800	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+310880	GoogleGC_ALL	Advantage Cellular Systems, Inc.	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+310886	TMobile_US:LAB		generated	stock imsswitch+imsprofile: VoLTE on	T-Mobile VoLTE-VVM SEC/#MODEL# #BOOTLOADER#	
+310890	VZW_US	Verizon Wireless	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310920	GenericIR92_US:JamesValley	James Valley	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+310950	ATT_US	AT&T	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+310950	ATT_US:MVNO	subset= gid1=DDFF gid2= spn=	unmapped	short GID1 DDFF (prefix match) and no AOSP carrier id		stock: stock imsswitch: VoLTE off
+310950	ATT_US:MVNO	subset= gid1=DEFF gid2= spn=	unmapped	short GID1 DEFF (prefix match) and no AOSP carrier id		stock: stock imsswitch: VoLTE off
+310999	ATT_US:softphone		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311028	LABSIM		off	no operator IMS on stock (LABSIM)		
+311040	GenericIR92_US:Choice	Commet Wireless, LLC	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311040	GoogleGC_ALL	subset= gid1=05ffffff gid2= spn=	unmapped	short GID1 05ffffff (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (GoogleGC_ALL@BLOCKGC)
+311080	GenericIR92_US:PineCellular	Pine Telephone Company dba Pine Cellular	off	stock imsswitch: VoLTE off		
+311180	ATT_US	AT&T	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311180	ATT_US:MVNO	subset= gid1=DDFF gid2= spn=	unmapped	short GID1 DDFF (prefix match) and no AOSP carrier id		stock: stock imsswitch: VoLTE off
+311180	ATT_US:MVNO	subset= gid1=DEFF gid2= spn=	unmapped	short GID1 DEFF (prefix match) and no AOSP carrier id		stock: stock imsswitch: VoLTE off
+311190	GoogleGC_ALL	Cellular Properties Inc.	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+311220	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311221	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311222	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311223	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311224	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311225	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311226	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311227	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311228	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311229	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311230	GenericIR92_US:CSpire	C Spire / C Spire-US	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311240	GenericIR92_US:GoogleGC	Cordova Wireless Communications Inc	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311270	VZW_US	Verizon Wireless	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311278	VZW_US	Alltel Communications Inc.	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311279	VZW_US	Alltel Communications Inc.	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311320	GenericIR92_US:VIYA	subset= gid1=05ffffff gid2= spn=	unmapped	short GID1 05ffffff (prefix match) and no AOSP carrier id		stock: stock imsswitch+imsprofile: VoLTE on
+311340	GenericIR92_US:IllinoisValley	Illinois Valley Cellular	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311370	GCI_US	GCI Communications Corp.	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311390	LABSIM	Midwest Wireless Holdings LLC	off	no operator IMS on stock (LABSIM)		
+311450	GenericIR92_US:PTCI	PTCI	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311480	VZW_US	Verizon Wireless	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311480	GoogleGC_ALL:VZW	subset= gid1=BA00030000000000 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL:VZW@BLOCKGC)		
+311480	GoogleGC_ALL:VZW	subset= gid1=BA00180000000000 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL:VZW@BLOCKGC)		
+311480	GoogleGC_ALL:VZW	subset= gid1=BA00020000000000 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL:VZW@BLOCKGC)		
+311480	GoogleGC_ALL:VZW	subset= gid1=BA00110000000000 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL:VZW@BLOCKGC)		
+311480	GoogleGC_ALL:VZW	subset= gid1=BA00220000000000 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL:VZW@BLOCKGC)		
+311480	GoogleGC_ALL:VZW	subset= gid1=BA00090000000000 gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL:VZW@BLOCKGC)		
+311490	Sprint_US		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311500	GoogleGC_ALL	CTC Telecom Inc	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+311560	GenericIR92_US:GoogleGC		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311580	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311581	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311582	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311583	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311584	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311585	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311586	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311587	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311588	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311589	USCC_US	U.S. Cellular	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311630	GenericIR92_US:CSpire		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311650	GenericIR92_US:United		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311650	GoogleGC_ALL	subset= gid1=13BE gid2=10FD spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: no operator IMS on stock (GoogleGC_ALL@BLOCKGC)
+311660	TMobile_US	T-Mobile - Private 5G	generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+311670	GenericIR92_US:PineBelt		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311780	Astca_NZ	ASTCA	off	stock imsswitch: VoLTE off		
+311840	GenericIR92_US:Cellcom		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+311870	Sprint_US	Boost	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+311882	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+311910	GoogleGC_ALL	MobileNation	off	no operator IMS on stock (GoogleGC_ALL@BLOCKGC)		
+311990	GenericIR92_US:GoogleGC		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+312130	GenericIR92_US:Appalachian	East Kentucky Network LLC dba Appalachian Wireless	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+312250	TMobile_US		generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 CPM-client/OMA2.2 RCS-client/UP_2.3 term-Samsung/#MODEL#-#BOOTLOADER# client-Samsung/IMS 6.0 OS-Android/#AV#	UA without [MNO_CUSTOM]
+312280	GenericIR92_US:Pioneer		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+312290	GenericIR92_US:RinaWireless	strata	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+312380	GenericIR92_US:CopperValley	Copper Valley Wireless	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+312420	GenericIR92_US:NexTech	NexTech Ota	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+312430	Interop_US		off	stock imsswitch: VoLTE off		
+312480	GenericIR92_US:Nemont		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+312530	Sprint_US	Sprint	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+312530	DEFAULT	subset= gid1=A00184 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT)		
+312670	ATT_US:FN	FirstNet	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+312720	GenericIR92_US:SouthernLinc		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+312770	VZW_US		generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+313020	Interop_US		off	stock imsswitch: VoLTE off		
+313030	Interop_US		off	stock imsswitch: VoLTE off		
+313040	Interop_US		off	stock imsswitch: VoLTE off		
+313050	Interop_US		off	stock imsswitch: VoLTE off		
+313100	ATT_US:FN	FirstNet	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+313110	DPAC_US	FirstNet / FirstNet Pacific	off	stock imsswitch: VoLTE off		
+313120	DEFAULT	FirstNet / FirstNet Pacific	off	no operator IMS on stock (DEFAULT)		
+313130	ATT_US:FN	FirstNet	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+313140	ATT_US:FN	FirstNet	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+313220	Interop_US		off	stock imsswitch: VoLTE off		
+313340	Dish_US		generated	stock imsswitch+imsprofile: VoLTE on	DISH SEC/#MODEL# #BOOTLOADER#	
+313340	DEFAULT	subset= gid1=6730 gid2= spn=	unmapped	short GID1 6730 (prefix match) and no AOSP carrier id		stock: no operator IMS on stock (DEFAULT@BLOCKGC)
+313340	DEFAULT	subset= gid1=6738 gid2= spn=	mvno-off	no operator IMS on stock (DEFAULT@BLOCKGC)		
+313380	GenericIR92_US:GoogleGC	OptimERA Wireless	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+313450	VZW_US:CHA	subset= gid1=BA01490000000000 gid2=A700000000000000 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+313640	Geoverse_US		off	stock imsswitch: VoLTE off		
+313770	Tango_US	TANGO / TANGO-US	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+313790	Liberty_PR	Liberty Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+314020	VZW_US:CHA	subset= gid1=BA01490000000000 gid2=A700000000000000 spn=	unmapped	GID2 match has no CarrierConfig equivalent		stock: stock imsswitch+imsprofile: VoLTE on
+314200	VZW_US:CCT	Xfinity MSO	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+314240	VZW_US:CCT	Xfinity Mobile 2.0	generated	stock imsswitch+imsprofile: VoLTE on	Samsung---#MODEL#---#BOOTLOADER#	
+330110	Claro_PR	Claro PR	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX PRI	
+330110	Tracfone_PR	subset= gid1=DEFF gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+334020	Telcel_MX	Telcel	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX MEX	
+33403	Movistar_MX	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+334030	Movistar_MX	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+33405	Att_ius_MX		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+334050	Att_ius_MX	AT&T MX	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+334070	Att_ius_MX	AT&T MX	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+334130	Airbus_MX	Alestra Servicios Moviles	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+334140	Altan_MX	ALTAN - Internal Use	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+33805	TMobile_US:Inbound	subset=01 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=02 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=03 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=05 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=06 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=0830 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=0831 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=0833 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=0834 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+33805	TMobile_US:Inbound	subset=0843 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+338050	TMobile_US:Inbound	subset=0 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+338050	TMobile_US:Inbound	subset=3 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+338050	TMobile_US:Inbound	subset=9 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+338180	Cable_JM	Cable & Wireless	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+34001	Orange_FR:Caraibe	Orange Caraïbe Mobiles	generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/34001	
+342600	Cable_BB	Cable & Wireless (Barbados) Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+350000	Cellone_BM		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+36291	UTS_CW	SETEL GSM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+36439	BTC_BS		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+36449	Aliv_BS	ALIV BS	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 (#MODEL# Android #AV#)	
+37001	Orange_DO	Altice Dominicana	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 (#MODEL# Android #AV#)	
+37002	Claro_DO	Claro RD	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX DOM	
+37004	Viva_DO	CentennialDominicana	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+37412	BMobile_TT	TSTT Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+374120	BMobile_TT		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+374129	BMobile_TT	TSTT Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+40001	Azercell_AZ	Azercell Limited Liability Joint Venture	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40002	Bakcell_AZ	Bakcell Limited Liabil ity Company	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40004	Nar_AZ	Azerphone LLC	off	stock imsswitch: VoLTE off		
+40101	Beeline_KZ	Beeline	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40107	Altel_KZ	Tele2/Altel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40177	Tele2_KZ	Tele2/Altel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40211	Telecom_BT	Bhutan Telecom Ltd	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40277	TashiCell_BT	TashiCell	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40401	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40402	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40403	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40404	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40405	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40407	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40410	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40411	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40412	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40413	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40414	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40415	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40416	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40419	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40420	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40422	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40424	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40427	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40430	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40431	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40434	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40438	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40440	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40443	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40444	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40445	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40446	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40449	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40451	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40453	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40454	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40455	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40456	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40457	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40458	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40459	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40460	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40462	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40464	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40466	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40470	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40471	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40472	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40473	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40474	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40475	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40476	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40477	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40478	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40479	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40480	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40481	BSNL_IN	Bharat Sanchar Nigam Ltd. (BSNL)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40482	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40484	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40486	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40487	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40488	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40489	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40490	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40492	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40493	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40494	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40495	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40496	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40497	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40498	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40551	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40552	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40553	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40554	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40555	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40556	AIRTEL_IN	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+40566	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40567	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+40570	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405750	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405751	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405752	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405753	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405754	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405755	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405756	Vodafone_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405799	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405840	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405845	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405846	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405848	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405849	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405850	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405852	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405853	IDEA_IN	Vi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+405854	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405855	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405856	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405857	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405858	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405859	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405860	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405861	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405862	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405863	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405864	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405865	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405866	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405867	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405868	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405869	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405870	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405871	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405872	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405873	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+405874	RJIL_IN	Reliance Jio	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_#MODEL#_#BOOTLOADER_LAST3#_IMS_6.0	NO_CS: IMS-first emergency, SMS over IMS, VoNR
+41001	Jazz_PK	Jazz	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41003	Ufone_PK	PAK Telecom Mobile Ltd. (UFONE)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41004	Zong_PK	Zong	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41006	Telenor_PK	Telenor	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41007	Jazz_PK	Jazz	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41301	Mobitel_LK	Sri Lanka Telecom Mobitel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41302	Dialog_LK	Dialog Sri Lanka	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41305	AIRTEL_LK	Airtel Lanka	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41308	Hutch_LK	Hutchison Telecommunications Lanka	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41401	MPT_MM	Myanmar Post and Telecommunication	off	stock imsswitch: VoLTE off		
+41405	Ooredoo_MM	Ooredoo Myanmar	off	stock imsswitch: VoLTE off		
+41406	Telenor_MM		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41409	Mytel_MM	Mytel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41501	Alfa_LB	Alfa	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41503	Touch_LB	MTC Touch	off	stock imsswitch: VoLTE off		
+41601	Zain_JO	Fastlink	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41603	Umniah_JO	Umniah	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41677	Orange_JO	Orange Jordan	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41805	Asiacell_IQ	Asiacell	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41820	Zain_IQ	Zain Iraq	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41902	Zain_KW	Zain	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41903	Ooredoo_KW	Ooredoo	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41904	Viva_KW	STC	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+41909	Virgin_KW		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42001	STC_SA	STC	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42003	MOBILY_SA	Mobily	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42004	Zain_SA	Zain Saudi Arabia	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42005	Virgin_SA	Virgin	off	stock imsswitch: VoLTE off		
+42006	MOBILY_SA		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42009	Salam_SA		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42010	Redbull_SA		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42111	Yemen_YE	YemenMobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42202	Omantel_OM	Omantel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42203	Ooredoo_OM	Ooredoo	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42206	Vodafone_OM	Vodafone Oman	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42402	Etisalat_AE	e& UAE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42403	DU_AE	du	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42410	Atheer_AE		off	stock imsswitch: VoLTE off		
+42411	Nedaa_AE		off	stock imsswitch: VoLTE off		
+42501	PTR_IL	Partner Communications Co. Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42502	Cellcom_IL	Cellcom Israel Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42503	PCL_IL	Pelephone Communications Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42507	HotMobile_IL	Hot Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42509	Wecom_IL		off	stock imsswitch: VoLTE off		
+42510	PTR_IL	Partner Communications Co. Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42519	Telzar_IL		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42525	CLO_IL		off	stock imsswitch: VoLTE off		
+42550	CLO_IL		off	stock imsswitch: VoLTE off		
+42601	Batelco_BH	Batelco	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42602	Zain_BH	Zain Bahrain	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42604	Viva_BH	stc BH	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42701	Ooredoo_QA	Ooredoo	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42702	Vodafone_QA	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42706	MOI_QA		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42707	MOD_QA		off	stock imsswitch: VoLTE off		
+42833	Ondo_MN		off	stock imsswitch: VoLTE off		
+42899	Mobicom_MN	Mobicom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42901	Namaste_NP	Nepal Telecommunications	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+42902	Ncell_NP	Ncell	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+43211	Mcci_IR	IR-MCI (Hamrahe Avval)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+43235	MTN_IR	Irancell	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+43404	Beeline_UZ	Daewoo Unitel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+43405	Ucell_UZ	Coscom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+43407	Mobiuz_UZ	Uzdunrobita	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+43603	Megafon_TJ	TT mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+43705	Megacom_KG	MegaCom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+44007	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44008	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44010	Docomo_JP	DOCOMO MVNO	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+44011	Rakuten_JP	Rakuten Mobile(MNO)	generated	stock imsswitch+imsprofile: VoLTE on	#IMEISV# #MODEL#-#BOOTLOADER# IMS 6.0	
+44020	Softbank_JP	SoftBank	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+44050	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44051	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44052	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44053	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44054	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44055	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44056	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44070	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44071	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44072	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44073	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44074	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44075	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44076	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44077	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44078	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44079	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44088	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44089	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+44170	KDDI_JP		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# IMS 6.0	
+45003	SKT_KR		generated	stock imsswitch+imsprofile: VoLTE on	TTA-VoLTE #MODEL#/#BOOTLOADER_LAST3# Device_Type/Android_Phone	UA without [OMCCODE],[UICC_VERSION]
+45005	SKT_KR	SK Telecom	generated	stock imsswitch+imsprofile: VoLTE on	TTA-VoLTE #MODEL#/#BOOTLOADER_LAST3# Device_Type/Android_Phone	UA without [OMCCODE],[UICC_VERSION]
+45006	LGU+_KR	LG U+	generated	stock imsswitch+imsprofile: VoLTE on	TTA-VoLTE #MODEL#/#BOOTLOADER_LAST3# Device_Type/Android_Phone	UA without [OMCCODE],[UICC_VERSION]
+45008	KT_KR	KT	generated	stock imsswitch+imsprofile: VoLTE on	TTA-VoLTE #MODEL#/#BOOTLOADER_LAST3# Device_Type/Android_Phone	UA without [OMCCODE],[UICC_VERSION]
+45030	KT_KR:PSLTE		generated	stock imsswitch+imsprofile: VoLTE on	TTA-VoLTE/2.0 #MODEL#/#BOOTLOADER_LAST3# Device_Type/Android_Phone PS-LTE	
+45033	KT_KR:LTER		generated	stock imsswitch+imsprofile: VoLTE on	TTA-VoLTE/2.0 #MODEL#/#BOOTLOADER_LAST3# Device_Type/Android_Phone LTE-R	
+45201	Mobifone_VN	Mobifone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45202	Vinaphone_VN	Vinaphone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45204	Viettel_VN	Viettel Telecom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45204	GoogleGC_ALL	subset= gid1= gid2= spn=Metfone	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+45205	Vietnamobile_VN	Vietnamobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45400	CSL_HK	1O1O / csl / Club Sim	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45402	CSL_HK	3G Radio System/HKCSL3G	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45403	3_HK	Hutchison HK	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45406	Smartone_HK	SmarTone HK	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45407	CUHK_HK	MVNO/China Unicom International Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45408	Truphone_HK	MVNO/Trident	off	stock imsswitch: VoLTE off		
+45410	CSL_HK	GSM1800New World PCS Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45412	CMHK_HK	中國移動香港 China Mobile HK	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45413	CMHK_HK	中國移動香港 China Mobile HK	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45415	Smartone_HK	SmarTone HK	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45416	PCCW_HK	PCCW	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45417	Smartone_HK	SmarTone HK	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45418	CSL_HK	GSM7800/Hong Kong CSL Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45419	PCCW_HK	1O1O / csl / Club Sim	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45420	PCCW_HK	Public Mobile Networks/Reserved	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45430	CMHK_HK	Public Mobile Networks/Reserved	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45431	CTG_HK	Public Mobile Networks/Reserved	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45500	Smartone_MO	Smartone Mobile Communications (Macao) Ltd.	off	stock imsswitch: VoLTE off		
+45501	CTM_MO	CTM	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45502	CTC_MO		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+45503	3_MO	Hutchison Telecom	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45504	CTM_MO	CTM	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45505	3_MO		generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+45507	CTC_MO		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+45601	Cellcard_KH	Mobitel (Cam GSM)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45606	Smart_KH	Smart	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45608	Metfone_KH	Metfone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45611	Seatel_KH	SEATEL	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45701	Laotel_LA	Lao Telecommunications	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+45703	Unitel_LA	Unitel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+46000	CMCC_CN	China Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46001	CU_CN	China Unicom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46002	CMCC_CN	China Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46003	CTC_CN	China Telecom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46004	CMCC_CN	China Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46006	CU_CN	China Unicom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46007	CMCC_CN	China Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46008	CMCC_CN	China Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46009	CU_CN	China Unicom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46010	CMCC_CN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46011	CTC_CN	China Telecom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46012	CTC_CN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46013	CMCC_CN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46015	CBN_CN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46020	CMCC_CN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46030	CMCC_CN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46059	CTC_CN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+46601	FET_TW	遠傳電信 Far EasTone Telecom	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+46605	APT_TW	遠傳電信Far EasTone Telecom(原亞太電信)	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+46689	TSTAR_TW	台灣大哥大(原台灣之星) Taiwan Mobile Telecom	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+46692	CHT_TW	中華電信_Chunghwa Telecom	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+46697	TWM_TW	台灣大哥大 Taiwan Mobile Telecom	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #BOOTLOADER#	
+47001	GRAMEENPHONE_BD	Grameenphone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+47002	ROBI_BD	Aktel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+47003	Banglalink_BD	Mobile 2000	off	stock imsswitch: VoLTE off		
+47007	ROBI_BD	Airtel BD	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Android #AV# Samsung IMS 6.0	
+47201	Dhiraagu_MV	DhiMobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+47202	Ooredoo_MV	Ooredoo	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+50208	UMobile_MY		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+50212	Maxis_MY	Maxis/Hotlink	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+502152	YTL_MY	Yes 5G	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+502153	P1_MY	unifi mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+50216	DIGI_MY	CelcomDigi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+50218	UMobile_MY	U Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+50219	Celcom_MY	CelcomDigi	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+50501	Telstra_AU	Telstra	generated	stock imsswitch+imsprofile: VoLTE on	Telstra Samsung #MODEL# Android_#AV# #BOOTLOADER# Samsung IMS 6.0	
+50502	Optus_AU	Optus	generated	stock imsswitch+imsprofile: VoLTE on	Samsung_IMS_6.0_#MODEL#_#BOOTLOADER#	
+50503	Vodafone_AU	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+50506	Vodafone_AU	Hutchison 3G Australia Pty. Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+50511	Telstra_AU		generated	stock imsswitch+imsprofile: VoLTE on	Telstra Samsung #MODEL# Android_#AV# #BOOTLOADER# Samsung IMS 6.0	
+50571	Telstra_AU	Telstra	generated	stock imsswitch+imsprofile: VoLTE on	Telstra Samsung #MODEL# Android_#AV# #BOOTLOADER# Samsung IMS 6.0	
+50572	Telstra_AU	Telstra	generated	stock imsswitch+imsprofile: VoLTE on	Telstra Samsung #MODEL# Android_#AV# #BOOTLOADER# Samsung IMS 6.0	
+51001	Indosat_ID	Indosat	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51009	Smartfren_ID	Smartfren	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51010	Telkomsel_ID	Telkomsel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51011	XL_ID	XL/AXIS	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51021	Indosat_ID	Indosat - M3	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51028	Smartfren_ID	Smartfren	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51089	3_ID	3	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51502	Globe_PH	Globe Telecom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51503	Smart_PH	Smart Communications	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+51566	DITO_PH		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52000	Truemove_TH	subset=20 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+52000	Truemove_TH	subset=21 gid1= gid2= spn=	mvno-on	stock imsswitch+imsprofile: VoLTE on		
+52001	AIS_TH	AIS GSM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52003	AIS_TH	AIS	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52004	Truemove_TH	TrueMove H 4G LTE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52005	DTAC_TH	dtac 	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52054	AIS_TH		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52074	AIS_TH		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52501	Singtel_SG	Singtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52502	Singtel_SG	Singtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52503	Mobileone_SG	M1	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52505	Starhub_SG	StarHub	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52510	TPG_SG		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52596	Singtel_SG		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52801	Imagine_BN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52802	Progresif_BN	B-Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52803	UNN_BN		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+52811	DST_BN	DST Com	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+53001	Vodafone_NZ	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+53005	Spark_NZ	Spark	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+53024	TwoDegree_NZ	2degrees	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+53099	Spark_NZ		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+53704	VodafonePNG_NZ		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+544110	Bluesky_NZ		off	stock imsswitch: VoLTE off		
+54705	VITI_NZ	Viti	off	stock imsswitch: VoLTE off		
+60201	Orange_EG	Orange Egypt	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+60202	Vodafone_EG	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+60203	Etisalat_EG	Etisalat	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+60204	We_EG		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+60303	Ooredoo_DZ	Ooredoo	off	stock imsswitch: VoLTE off		
+60400	Orange_MA	Méditélécom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0 60400	UA without [OMCCODE]
+60401	Maroc_MA	Maroc	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+60402	INWI_MA	inwi	off	stock imsswitch: VoLTE off		
+60405	INWI_MA		off	stock imsswitch: VoLTE off		
+60502	TunisieTelecom_TN	Tunisie Telecom	off	stock imsswitch: VoLTE off		
+60503	Ooredoo_TN	Ooredoo Tunisia	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+60506	TunisieTelecom_TN		off	stock imsswitch: VoLTE off		
+60508	TunisieTelecom_TN		off	stock imsswitch: VoLTE off		
+60801	Orange_SN	Orange Senegal	off	stock imsswitch: VoLTE off		
+60802	Free_SN	Sentel GSM	off	stock imsswitch: VoLTE off		
+61203	ORANGE_CI	Orange Côte d'Ivoire	off	stock imsswitch: VoLTE off		
+61501	Togocom_TG	Togo Telecom	off	stock imsswitch: VoLTE off		
+61701	Telecom_MU	Orange Mauritius	off	stock imsswitch: VoLTE off		
+61710	Emtel_MU	Emtel	off	stock imsswitch: VoLTE off		
+61807	Orange_LR	Celcom	off	stock imsswitch: VoLTE off		
+62001	MTN_GH	MTN	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+62002	Vodafone_GH	Vodafone	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+62120	AIRTEL_NG	Airtel Nigeria	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+62127	Smile_NG		off	stock imsswitch: VoLTE off		
+62130	MTN_NG	MTN Nigeria Communications	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+62140	Ntel_NG	Nigeria Telecommunications Ltd.	off	stock imsswitch: VoLTE off		
+62160	DEFAULT	9Pay	off	no operator IMS on stock (DEFAULT@BLOCKGC)		
+62402	Orange_CM	Orange Cameroun	off	stock imsswitch: VoLTE off		
+63001	Vodacom_CD	Vodacom Congo RDC sprl	off	stock imsswitch: VoLTE off		
+63086	Orange_CD	Orange RDC	off	stock imsswitch: VoLTE off		
+63089	Orange_CD	Tigo	off	stock imsswitch: VoLTE off		
+63102	Unitel_AO	Unitel	off	stock imsswitch: VoLTE off		
+63301	Cable_SC	Cable & Wireless (Seychelles) Ltd.	off	stock imsswitch: VoLTE off		
+63407	Sudani_SD	Sudani	off	stock imsswitch: VoLTE off		
+63601	Telecom_ET	ETH MTN	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+63902	Safaricom_KE	Safaricom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+63903	Airtel_KE	Airtel Kenya	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+63910	JTL_KE		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+64004	Vodacom_TZ	Vodacom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+64005	Airtel_TZ	Airtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+64011	Smile_TZ		off	stock imsswitch: VoLTE off		
+64101	Airtel_UG	Airtel Uganda	off	stock imsswitch: VoLTE off		
+64122	Airtel_UG	Airtel Uganda	off	stock imsswitch: VoLTE off		
+64133	Smile_UG		off	stock imsswitch: VoLTE off		
+64303	Movitel_MZ	Movitel	off	stock imsswitch: VoLTE off		
+64304	Vodacom_MZ	Vodacom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+64501	Airtel_ZM	Airtel Zambia	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+64502	MTN_ZM	Telecel Zambia Ltd.	off	stock imsswitch: VoLTE off		
+64602	Orange_MG	Orange Madagascar	off	stock imsswitch: VoLTE off		
+64700	Orange_FR:Reunion	Orange La Réunion	generated	stock imsswitch+imsprofile: VoLTE on	PRD-IR92/13 Samsung/#MODEL#-#BOOTLOADER_LAST3# device-type/smart-phone mno-custom/64700	
+64704	Zeop_FR	Zeop_RE	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+65101	Vodacom_LS	VCL	off	stock imsswitch: VoLTE off		
+65102	Econet_LS	Econet Ezin-cel	off	stock imsswitch: VoLTE off		
+65201	Mascom_BW	Mascom Wireless (Pty) Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+65202	Orange_BW	Orange Botswana (Pty) Ltd.	off	stock imsswitch: VoLTE off		
+65501	Vodacom_ZA	Vodacom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+65502	Telkom_ZA	Telkom	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+65507	CellC_ZA	Cell C (Pty) Ltd.	off	stock imsswitch: VoLTE off		
+65510	MTN_ZA	MTN	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+65538	Rain_ZA	rain	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+65573	Rain_ZA	rain	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+65574	Rain_ZA	rain	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER_LAST3# Samsung IMS 6.0	
+70267	Digi_BZ	Belize Telecommunications Ltd.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+70401	Claro_GT	Claro GT	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX GTM	
+70402	Tigo_GT	Comunicaciones Celulares S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+70601	Claro_SV	Claro SV	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX SLV	
+70603	Tigo_SV	Tigo	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+708001	Claro_HN	Claro HN	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX HND	
+70802	Tigo_HN	Celtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+708020	Tigo_HN	Celtel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+71021	Claro_NI	Claro NI	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX NIC	
+710300	Tigo_NI	Movistar (Telefonía Celular de Nicaragua)	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+71203	Claro_CR	Claro CR	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX CRI	
+71401	Cable_PA	Cable & Wireless Panama S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+714020	Tigo_PA	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+71403	Claro_PA	Claro PA	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX PAN	
+71606	Movistar_PE	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+71610	Claro_PE	Claro PE	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX PER	
+71617	Entel_PE	Entel	generated	stock imsswitch+imsprofile: VoLTE on	entpe_Samsung/#MODEL#/#BOOTLOADER#	
+72207	Movistar_AR	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+722070	Movistar_AR		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+72231	Claro_AR	Claro AR	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX ARG	
+722310	Claro_AR	Claro AR	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX ARG	
+72234	Personal_AR	Telecom Personal S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+722341	Personal_AR	Telecom Personal S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+72402	Tim_BR	TIM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+72403	Tim_BR	TIM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+72404	Tim_BR	TIM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+72405	Claro_BR	Claro BR	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX BRA	
+72406	Vivo_BR	Vivo	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 (#MODEL# Android #AV#)	
+72410	Vivo_BR	Vivo	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 (#MODEL# Android #AV#)	
+72411	Vivo_BR	Vivo	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 (#MODEL# Android #AV#)	
+72416	Oi_BR	Brasil Telecom GSM	off	stock imsswitch: VoLTE off		
+72423	Vivo_BR	Vivo	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 (#MODEL# Android #AV#)	
+72424	Oi_BR	Oi	off	stock imsswitch: VoLTE off		
+72426	Americanet_BR		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+72429	Unifique_BR	Unifique	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+72431	Oi_BR	Oi	off	stock imsswitch: VoLTE off		
+72477	Brisanet_BR	Brisanet	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+72489	Vivo_BR		generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 (#MODEL# Android #AV#)	
+73001	Entel_CL	Entel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+73002	Movistar_CL	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+73003	Claro_CL	Claro CL	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX CHL	
+73008	VTR_CL	VTR Banda Ancha SA	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+73009	Wom_CL	WOM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+73010	Entel_CL	Entel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+73023	Claro_CL		generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX CHL	
+732101	Claro_CO	Claro CO	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX COL	
+732103	Tigo_CO	Colombia Móvil S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+732111	Tigo_CO	Colombia Móvil S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+732123	Movistar_CO	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+732123	GoogleGC_ALL	subset=90 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+732123	GoogleGC_ALL	subset=910 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+732123	GoogleGC_ALL	subset=911 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+732123	GoogleGC_ALL	subset=912 gid1= gid2= spn=	mvno-off	no operator IMS on stock (GoogleGC_ALL)		
+732130	Avantel_CO	WOM	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0	
+732360	Wom_CO	WOM	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+73602	Entel_BO	ENTEL S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+73603	Tigo_BO	Telecel S.A.	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+738040	ENet_GY		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+74000	Movistar_EC	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 (#MODEL# Android #AV#)	
+74001	Claro_EC	Claro EC	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX ECU	
+74002	ALE_EC	CNT Mobile	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+74402	Claro_PY	Claro PY	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+74404	Tigo_PY	Telecel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+74405	Personal_PY	Personal	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+74801	Antel_UY	Ancel	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+74807	Movistar_UY	Movistar	generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+74810	Claro_UY	Claro UY	generated	stock imsswitch+imsprofile: VoLTE on	Samsung IMS 6.0 #MODEL#/AMX URY	
+77777	Samsung_OPEN		off	stock imsswitch: VoLTE off		
+96654	MOBILY_SA		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
+96656	MOBILY_SA		generated	stock imsswitch+imsprofile: VoLTE on	#MODEL#-#BOOTLOADER# Samsung IMS 6.0	
