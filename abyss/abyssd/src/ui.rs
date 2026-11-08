@@ -204,7 +204,8 @@ fn hours_short(b: &Battery) -> String {
     if b.charging() {
         return "charging".into();
     }
-    match b.hours_left() {
+    // Abyss runs with the screen off: that estimate once it is learned, else the draw right now.
+    match b.hours_screen_off().or_else(|| b.hours_left()) {
         Some(h) if h >= 1.0 => format!("≈ {:.0} h", h),
         Some(h) => format!("≈ {:.0} min", h * 60.0),
         None => "≈ ? h".into(),
@@ -1133,6 +1134,17 @@ impl Ui {
         if let Some(mv) = b.voltage_mv {
             y += SMALL_LH;
             SMALL.draw(cv, MARGIN, y, &format!("voltage  {}.{:02} V", mv / 1000, (mv % 1000) / 10), DIM);
+        }
+        y += SMALL_LH;
+        y += SMALL_LH;
+        let off = match (b.screen_off_ma, b.hours_screen_off()) {
+            (Some(ma), Some(h)) => format!("screen off  ≈ {h:.0} h at {ma:.0} mA (music, learned)"),
+            _ => "screen off  learning: play music with the screen off".into(),
+        };
+        SMALL.draw(cv, MARGIN, y, &off, TEXT);
+        if let (Some(ma), Some(h)) = (b.draw_ma(), b.hours_left()) {
+            y += SMALL_LH;
+            SMALL.draw(cv, MARGIN, y, &format!("right now   ≈ {h:.0} h at {ma:.0} mA"), DIM);
         }
         y += SMALL_LH;
         SMALL.draw(cv, MARGIN, y, "estimate: level × 4500 mAh × 97 % ÷ draw", DIM);

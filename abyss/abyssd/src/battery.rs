@@ -26,6 +26,8 @@ pub struct Battery {
     pub voltage_mv: Option<u32>,
     pub current_avg_ma: Option<i32>,
     pub current_now_ma: Option<i32>,
+    /// The learned draw while music plays with the screen off ([`OffDraw`], set by main.rs).
+    pub screen_off_ma: Option<f64>,
 }
 
 fn read_str(name: &str) -> Option<String> {
@@ -44,6 +46,7 @@ impl Battery {
             voltage_mv: read_i64("voltage_now").map(|uv| (uv / 1000) as u32),
             current_avg_ma: read_i64("current_avg").map(|v| v as i32),
             current_now_ma: read_i64("current_now").map(|v| v as i32),
+            screen_off_ma: None,
         }
     }
 
@@ -60,10 +63,68 @@ impl Battery {
         (ma >= 1.0 && !self.charging()).then_some(ma)
     }
 
-    /// Hours of playback left at the current average draw.
-    pub fn hours_left(&self) -> Option<f64> {
+    /// Hours left at a given draw in mA.
+    pub fn hours_at(&self, ma: f64) -> Option<f64> {
         let cap = self.capacity? as f64;
-        let remaining_mah = cap / 100.0 * DESIGN_MAH * RESERVE;
-        Some(remaining_mah / self.draw_ma()?)
+        (ma >= 1.0).then(|| cap / 100.0 * DESIGN_MAH * RESERVE / ma)
+    }
+
+    /// Hours of playback left at the current average draw (screen on or off, whatever it is now).
+    pub fn hours_left(&self) -> Option<f64> {
+        self.hours_at(self.draw_ma()?)
+    }
+
+    /// Hours of music left the way Abyss is meant to run: screen off (the learned draw).
+    pub fn hours_screen_off(&self) -> Option<f64> {
+        self.hours_at(self.screen_off_ma?)
+    }
+}
+
+/// Where the learned screen-off draw is kept between sessions (one number, mA).
+const OFF_FILE: &str = "/data/misc/abyss/out/screen_off_draw";
+/// The fuel gauge's current_avg lags; skip this long after the screen went off.
+const SETTLE_MS: u64 = 90_000;
+/// Write the learned value at most this often.
+const SAVE_EVERY_MS: u64 = 300_000;
+
+/// Learns the draw of music with the screen off: only samples taken while music plays, the screen
+/// has been off for [`SETTLE_MS`] and the phone is not charging (an exponential average, so the
+/// figure follows the output, codec and Wi-Fi use of the session). Kept across sessions.
+#[derive(Debug, Default)]
+pub struct OffDraw {
+    ma: Option<f64>,
+    saved_at: u64,
+}
+
+impl OffDraw {
+    pub fn load() -> OffDraw {
+        let ma = fs::read_to_string(OFF_FILE)
+            .ok()
+            .and_then(|s| s.trim().parse::<f64>().ok())
+            .filter(|v| (1.0..2000.0).contains(v));
+        OffDraw { ma, saved_at: 0 }
+    }
+
+    /// One 30 s battery reading. `off_for_ms` is None while the screen is on.
+    pub fn sample(&mut self, b: &Battery, off_for_ms: Option<u64>, playing: bool, now: u64) {
+        if !playing || off_for_ms.is_none_or(|ms| ms < SETTLE_MS) {
+            return;
+        }
+        let Some(d) = b.draw_ma() else { return };
+        let ma = match self.ma {
+            Some(m) => m * 0.8 + d * 0.2,
+            None => d,
+        };
+        self.ma = Some(ma);
+        if now.saturating_sub(self.saved_at) >= SAVE_EVERY_MS {
+            if let Err(e) = fs::write(OFF_FILE, format!("{ma:.1}\n")) {
+                log::warn!("screen-off draw: {e}");
+            }
+            self.saved_at = now;
+        }
+    }
+
+    pub fn ma(&self) -> Option<f64> {
+        self.ma
     }
 }

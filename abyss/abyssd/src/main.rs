@@ -171,6 +171,9 @@ struct App {
     status: Status,
     battery: Battery,
     battery_at: u64,
+    /// The learned screen-off music draw (battery.rs) and when the screen last went off.
+    off_draw: battery::OffDraw,
+    screen_off_since: u64,
     resume: ResumeState,
     volume: u32,
     /// 3.5 mm jack switch state (evdev).
@@ -349,6 +352,7 @@ impl App {
             warn!("blank: {e:#}");
         }
         self.screen_on = false;
+        self.screen_off_since = clock::now_ms();
         self.volume_overlay_until = 0;
         if self.ui.screen == Screen::PowerOff {
             self.ui.back();
@@ -907,6 +911,10 @@ impl App {
         }
         if now >= self.battery_at {
             self.battery = Battery::read();
+            let off_for = (!self.screen_on).then(|| now.saturating_sub(self.screen_off_since));
+            let playing = self.status.state == PlayState::Playing;
+            self.off_draw.sample(&self.battery, off_for, playing, now);
+            self.battery.screen_off_ma = self.off_draw.ma();
             self.modules.battery = serde_json::json!({ "pct": self.battery.capacity });
             self.battery_at = now + BATTERY_EVERY_MS;
             self.dirty = true;
@@ -1178,6 +1186,8 @@ fn run() -> Result<Exit> {
         status: Status::default(),
         battery: Battery::read(),
         battery_at: now + BATTERY_EVERY_MS,
+        off_draw: battery::OffDraw::load(),
+        screen_off_since: now,
         resume,
         volume,
         headphones,
