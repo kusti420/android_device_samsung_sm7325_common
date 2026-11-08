@@ -70,7 +70,8 @@ import java.util.Set;
  *     sys.abyss.request=enter; init (abyss.rc) stops the framework, which ends this process.</li>
  * <li><b>Captures</b>: what abyssd saved on Volume Down + Power ({@link Captures}).</li>
  * <li><b>Settings</b>: persist.abyss.brightness, persist.abyss.screen_timeout_s,
- *     persist.abyss.suspend (abyssd reads them on entry), the volume limit (information only)
+ *     persist.abyss.nav.start / persist.abyss.nav.wake (where Abyss opens, what a screen-off
+ *     ● ● shows), persist.abyss.suspend (abyssd reads them on entry), the volume limit (information only)
  *     and the paired Bluetooth headphones abyss-btd will offer.</li>
  * <li><b>Scripts</b> (v1.1) and <b>Apps &amp; containers</b> (v1.2): "coming next" cards only.</li>
  * </ul>
@@ -96,6 +97,15 @@ public final class EntryActivity extends Activity {
     private static final int SCREEN_TIMEOUT_DEFAULT = 15;
     private static final int SCREEN_TIMEOUT_MIN = 5;
     private static final int SCREEN_TIMEOUT_MAX = 120;
+
+    /** Where Abyss opens: "player" (default: last song ready, paused) or "home" (abyssd ui.rs). */
+    private static final String PROP_NAV_START = "persist.abyss.nav.start";
+    private static final String[] NAV_START_VALUES = {"player", "home"};
+    private static final int[] NAV_START_LABELS = {R.string.nav_start_player, R.string.nav_start_home};
+    /** What ● ● with the screen off shows while music plays: "player" (default) or "last". */
+    private static final String PROP_NAV_WAKE = "persist.abyss.nav.wake";
+    private static final String[] NAV_WAKE_VALUES = {"player", "last"};
+    private static final int[] NAV_WAKE_LABELS = {R.string.nav_wake_player, R.string.nav_wake_last};
 
     /** Experimental kernel suspend while idle (abyssd suspend.rs), off by default. */
     private static final String PROP_SUSPEND = "persist.abyss.suspend";
@@ -129,6 +139,8 @@ public final class EntryActivity extends Activity {
     private boolean mBrightnessTracking;
     private LinearLayout mScreenTimeout;
     private TextView mScreenTimeoutOther;
+    private LinearLayout mNavStart;
+    private LinearLayout mNavWake;
     private Switch mSuspend;
     private boolean mBinding;
     private LinearLayout mBtList;
@@ -514,6 +526,11 @@ public final class EntryActivity extends Activity {
             mScreenTimeout.addView(chip);
         }
 
+        mNavStart = findViewById(R.id.nav_start);
+        addChoices(mNavStart, PROP_NAV_START, NAV_START_VALUES, NAV_START_LABELS);
+        mNavWake = findViewById(R.id.nav_wake);
+        addChoices(mNavWake, PROP_NAV_WAKE, NAV_WAKE_VALUES, NAV_WAKE_LABELS);
+
         mSuspend = findViewById(R.id.suspend);
         mSuspend.setOnCheckedChangeListener((b, on) -> {
             if (mBinding) {
@@ -548,6 +565,8 @@ public final class EntryActivity extends Activity {
             secs = SCREEN_TIMEOUT_DEFAULT;
         }
         showScreenTimeout(secs);
+        showChoice(mNavStart, SystemProperties.get(PROP_NAV_START, ""), NAV_START_VALUES);
+        showChoice(mNavWake, SystemProperties.get(PROP_NAV_WAKE, ""), NAV_WAKE_VALUES);
         mSuspend.setChecked(SystemProperties.getBoolean(PROP_SUSPEND, false));
         mBinding = false;
         refreshBluetooth();
@@ -572,6 +591,43 @@ public final class EntryActivity extends Activity {
         mScreenTimeoutOther.setVisibility(matched ? View.GONE : View.VISIBLE);
         if (!matched) {
             mScreenTimeoutOther.setText(getString(R.string.screen_timeout_other, secs));
+        }
+    }
+
+    /** One chip per value; a tap writes it to {@code prop}. The first value is the default. */
+    private void addChoices(LinearLayout row, String prop, String[] values, int[] labels) {
+        for (int i = 0; i < values.length; i++) {
+            String value = values[i];
+            TextView chip = new TextView(this, null, 0, R.style.AbyssChip);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1f);
+            if (i > 0) {
+                lp.setMarginStart(dp(8));
+            }
+            chip.setLayoutParams(lp);
+            chip.setText(labels[i]);
+            chip.setTag(value);
+            chip.setOnClickListener(v -> {
+                if (setProp(prop, value)) {
+                    showChoice(row, value, values);
+                }
+            });
+            row.addView(chip);
+        }
+    }
+
+    /** Marks the chip of {@code current}; unset or unknown = the default (first) value. */
+    private void showChoice(LinearLayout row, String current, String[] values) {
+        String shown = values[0];
+        for (String v : values) {
+            if (v.equalsIgnoreCase(current.trim())) {
+                shown = v;
+            }
+        }
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View chip = row.getChildAt(i);
+            boolean sel = shown.equals(chip.getTag());
+            chip.setSelected(sel);
+            ((TextView) chip).setTextColor(getColor(sel ? R.color.abyss_accent : R.color.abyss_text));
         }
     }
 

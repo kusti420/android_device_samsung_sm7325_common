@@ -189,6 +189,53 @@
                 style="@style/AbyssDim"
                 android:visibility="gone" />
 
+            <!-- Navigation: persist.abyss.nav.start (player | home), persist.abyss.nav.wake
+                 (player | last); abyssd ui.rs NavPrefs, read on entry -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="18dp"
+                android:background="@color/abyss_rule" />
+
+            <TextView
+                style="@style/AbyssLabel"
+                android:layout_marginTop="16dp"
+                android:text="@string/nav_start_title" />
+
+            <TextView
+                style="@style/AbyssDim"
+                android:layout_marginTop="2dp"
+                android:text="@string/nav_start_summary" />
+
+            <LinearLayout
+                android:id="@+id/nav_start"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal" />
+
+            <TextView
+                style="@style/AbyssLabel"
+                android:layout_marginTop="16dp"
+                android:text="@string/nav_wake_title" />
+
+            <TextView
+                style="@style/AbyssDim"
+                android:layout_marginTop="2dp"
+                android:text="@string/nav_wake_summary" />
+
+            <LinearLayout
+                android:id="@+id/nav_wake"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal" />
+
+            <TextView
+                style="@style/AbyssDim"
+                android:layout_marginTop="10dp"
+                android:text="@string/nav_keys_note" />
+
             <!-- Deep sleep: persist.abyss.suspend 0/1 -->
             <View
                 android:layout_width="match_parent"
