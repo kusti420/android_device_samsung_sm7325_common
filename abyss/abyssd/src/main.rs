@@ -658,6 +658,11 @@ impl App {
                 self.ui.go(Screen::Module);
                 self.screen_on_for(now, self.screen_timeout_ms);
             }
+            Request::OpenModule(i) => {
+                self.modules.open_direct(i);
+                self.ui.go(Screen::Module);
+                self.screen_on_for(now, self.screen_timeout_ms);
+            }
         }
     }
 

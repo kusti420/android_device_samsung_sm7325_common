@@ -710,8 +710,17 @@ impl Host {
         self.stream.as_ref().map(|s| s.radio.poll_fd())
     }
 
-    pub fn count(&self) -> usize {
-        self.modules.len()
+    /// Installed modules' names, in load order (Home lists the first few).
+    pub fn names(&self) -> Vec<String> {
+        self.modules.iter().map(|m| m.name.clone()).collect()
+    }
+
+    /// Opens one module's start screen from Home; Back from it returns to Home.
+    pub fn open_direct(&mut self, module: usize) {
+        self.stack.clear();
+        if module < self.modules.len() {
+            self.open_module(module);
+        }
     }
 
     /// Opens Main › Apps (or straight into the category when only one has modules).

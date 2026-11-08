@@ -91,6 +91,8 @@ pub enum Request {
     WifiTest,
     /// Main › Apps (modules.rs).
     OpenApps,
+    /// Home › an installed module by index (modules.rs), straight to its start screen.
+    OpenModule(usize),
     Leave,
     PowerOff,
 }
@@ -384,6 +386,9 @@ fn letters(lib: &Library, kind: ListKind) -> Vec<char> {
     v
 }
 
+/// How many installed modules Home lists by name (the rest are under Apps ›).
+const HOME_MODULES: usize = 3;
+
 impl Ui {
     pub fn new() -> Ui {
         Ui { screen: Screen::Home, sel: 0, top: 0, stack: Vec::new() }
@@ -406,19 +411,30 @@ impl Ui {
                     (true, Some(r)) => r.title,
                     _ => st.track.as_ref().map(|t| lib.title_of(t)).unwrap_or_else(|| "nothing".into()),
                 };
-                vec![
+                let mut rows = vec![
                     Row::new("Music ›", RowAct::Go(Screen::Music)).meta(music_meta),
                     Row::new("Now playing", RowAct::Go(Screen::NowPlaying)).meta(np_meta),
-                    Row::new("Apps ›", RowAct::Do(Request::OpenApps)).meta(match v.modules.count() {
+                ];
+                // Installed modules show on Home under their own names (a few of them), so a new
+                // one is found where the person looks first; all of them stay under Apps ›.
+                let names = v.modules.names();
+                for (i, name) in names.iter().enumerate().take(HOME_MODULES) {
+                    rows.push(Row::new(format!("{name} ›"), RowAct::Do(Request::OpenModule(i))).meta("app"));
+                }
+                if names.is_empty() || names.len() > HOME_MODULES {
+                    rows.push(Row::new("Apps ›", RowAct::Do(Request::OpenApps)).meta(match names.len() {
                         0 => "none yet".to_string(),
                         n => n.to_string(),
-                    }),
+                    }));
+                }
+                rows.extend([
                     Row::new("Battery", RowAct::Go(Screen::Battery)).meta(pct(v.battery)),
                     Row::new("Bluetooth ›", RowAct::Go(Screen::Bluetooth)).meta(v.bt.summary()),
                     Row::new("Help", RowAct::Go(Screen::Help)).meta("hold ▲+▼"),
                     Row::new("Back to Android", RowAct::Do(Request::Leave)).meta("about 30 s"),
                     Row::new("Power off", RowAct::Go(Screen::PowerOff)),
-                ]
+                ]);
+                rows
             }
             Screen::Music => {
                 let mut r = vec![back()];
