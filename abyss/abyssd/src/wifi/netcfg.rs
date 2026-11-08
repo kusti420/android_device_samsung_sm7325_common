@@ -232,6 +232,13 @@ fn control_socket() -> Result<UnixListener> {
     let owned = unsafe { OwnedFd::from_raw_fd(fd) };
     // SAFETY: plain fcntl(2) on our own fd: init's socket fds must not leak into children.
     unsafe { libc::fcntl(owned.as_raw_fd(), libc::F_SETFD, libc::FD_CLOEXEC) };
+    // init only creates and binds a service socket; the service itself has to listen(2). Without
+    // it every accept() failed with EINVAL and abyssd's connect() found no listener, so Wi-Fi
+    // never got past DHCP.
+    // SAFETY: listen(2) on our own bound socket fd.
+    if unsafe { libc::listen(owned.as_raw_fd(), 4) } != 0 {
+        return Err(std::io::Error::last_os_error()).context("listen on the init socket");
+    }
     Ok(UnixListener::from(owned))
 }
 
@@ -277,7 +284,22 @@ fn helper_loop() -> Result<()> {
             let ready = |i: usize| fds.get(i).and_then(|f| f.revents()).is_some_and(|r| !r.is_empty());
             (ready(0), ready(1), ready(2))
         };
-        if sig {
+        // A listener that can no longer accept (init closed or shut its socket while stopping
+        // us: accept() says EINVAL forever) would turn this loop into a busy spin that floods
+        // the log; treat it like SIGTERM and go down cleanly.
+        let mut dead_listener = false;
+        if lst && !sig {
+            match listener.accept() {
+                // One client (abyssd); a new connection replaces an old one.
+                Ok((s, _)) => client = Some(s),
+                Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) => {}
+                Err(e) => {
+                    warn!("accept: {e}; control socket unusable, going down");
+                    dead_listener = true;
+                }
+            }
+        }
+        if sig || dead_listener {
             info!("SIGTERM: taking the Abyss network and wlan0 down");
             let n = match netd.take() {
                 Some(n) => Some(n),
@@ -289,13 +311,6 @@ fn helper_loop() -> Result<()> {
                 let _ = n.interface_set_flag("wlan0", "down");
             }
             return Ok(());
-        }
-        if lst {
-            match listener.accept() {
-                // One client (abyssd); a new connection replaces an old one.
-                Ok((s, _)) => client = Some(s),
-                Err(e) => warn!("accept: {e}"),
-            }
         }
         if cli {
             let Some(c) = client.as_mut() else { continue };
