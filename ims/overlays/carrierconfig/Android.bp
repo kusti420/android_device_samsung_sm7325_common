@@ -6,4 +6,8 @@
 runtime_resource_overlay {
     name: "IchthysImsCarrierConfigOverlay",
     product_specific: true,
+    // Keep the XML attribute strings as written: without this aapt2 stores mnc="01" as the
+    // integer 1, CarrierConfig's checkFilters() then compares "1" with the SIM's "01" and no
+    // mcc/mnc bundle ever matches (CarrierConfig itself is built with the same flag).
+    aaptflags: ["--keep-raw-values"],
 }
