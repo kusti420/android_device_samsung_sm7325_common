@@ -28,6 +28,9 @@ rust_binary {
         "liblibc", // libc 0.2.183
         "liblog_rust", // log 0.4.29
         "libnix", // nix 0.29.0 (poll, fcntl, ioctl, time, stat)
+        // https:// for modules (http.rs TlsTransport): rustls 0.23 with the aws-lc-rs provider,
+        // which is the platform BoringSSL (libbssl_sys -> libcrypto.so).
+        "librustls",
         "librustutils", // system properties (system/librustutils)
         "libserde_json", // serde_json 1.0.146
         "libsignal_hook", // signal-hook 0.4.3

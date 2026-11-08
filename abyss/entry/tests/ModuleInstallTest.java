@@ -186,6 +186,50 @@ public final class ModuleInstallTest {
             check(bad != null && bad.contains("items.from is"), "bad items.from: " + bad);
         }
 
+        // media:stream:icy, menu:get-at, net:https, and the install sheet per stream type.
+        String liveMan = "{ id = \"live\"; name = \"Live\"; version = \"0.1.0\"; api = 1; "
+                + "requires.abyss = 1; requires.features = [ \"apps\" \"menu:get\" \"menu:get-at\" "
+                + "\"menu:header\" \"media:stream\" \"media:stream:http\" \"media:stream:icy\" "
+                + "\"media:stream:screen\" \"net:https\" ]; category = \"music\"; runtime = \"pure\"; "
+                + "about = \"a\"; menu = \"menu.nix\"; }";
+        String liveMenu = "{ menu = 1; start = \"s\"; screens.s = { items = [ { label = \"A\"; "
+                + "as = \"station\"; x-api = \"Alpha\"; stream = { url = \"http://h.example/a.mp3\"; "
+                + "icy = true; show = \"np\"; }; } ]; }; screens.np = { title = \"$station.label\"; "
+                + "get = { url = \"https://api.example/v1/radio\"; at = \"/$station.x-api\"; }; "
+                + "header = [ \"$data.dj\" \"$stream.song.artist\" ]; items = { from = \"$stream.played\"; "
+                + "row = { label = \"$row.title\"; goto = \"s\"; }; }; }; }";
+        try {
+            ModuleSpec live = ModuleSpec.parse(liveMan, java.util.Set.of("abyss-app.nix", "menu.nix"),
+                    p -> p.equals("menu.nix") ? liveMenu : liveMan, ModuleSpec.servedFeatures());
+            List<String> lc = live.caps(new LinkedHashMap<>());
+            check(lc.contains("lease wifi while playing") && !lc.contains("lease wifi bursts while playing"),
+                    "an http stream keeps Wi-Fi on (not bursts): " + lc);
+            check(live.permissions(new LinkedHashMap<>()).stream().anyMatch(x -> x.words.contains("the whole time")),
+                    "install sheet says Wi-Fi stays on");
+            check(live.netOrigins(new LinkedHashMap<>()).contains("https://api.example"), "https origin");
+        } catch (ModuleSpec.Invalid e) {
+            check(false, "live module parses: " + e.getMessage());
+        }
+        java.util.function.BiFunction<String, String, String> liveErr = (m, mn) -> {
+            try {
+                ModuleSpec.parse(m, java.util.Set.of("abyss-app.nix", "menu.nix"),
+                        p -> p.equals("menu.nix") ? mn : m, ModuleSpec.servedFeatures());
+                return null;
+            } catch (ModuleSpec.Invalid e) {
+                return e.getMessage();
+            }
+        };
+        bad = liveErr.apply(liveMan.replace("\"media:stream:icy\" ", ""), liveMenu);
+        check(bad != null && bad.contains("media:stream:icy"), "icy needs its feature: " + bad);
+        bad = liveErr.apply(liveMan.replace("\"menu:get-at\" ", ""), liveMenu);
+        check(bad != null && bad.contains("menu:get-at"), "get.at needs its feature: " + bad);
+        bad = liveErr.apply(liveMan.replace("\"net:https\" ", ""), liveMenu);
+        check(bad != null && bad.contains("net:https"), "an https URL needs net:https: " + bad);
+        bad = liveErr.apply(liveMan, liveMenu.replace("at = \"/$station", "at = \"$station"));
+        check(bad != null && bad.contains("JSON pointer"), "at is a pointer: " + bad);
+        bad = liveErr.apply(liveMan, liveMenu.replace("icy = true;", "icy = \"yes\";"));
+        check(bad != null && bad.contains("icy is true or false"), "icy is a bool: " + bad);
+
         // Install into a temp root, list, settings, uninstall.
         File root = Files.createTempDirectory("abyss-store").toFile();
         ModuleStore st = new ModuleStore(root);

@@ -8,7 +8,11 @@ media:stream
 media:stream:radio-v1
 media:stream:http
 media:stream:screen
+media:stream:icy
 menu:header
+menu:header-loading
+menu:get-at
+net:https
 capture:fields
 post:capture
 needs:media

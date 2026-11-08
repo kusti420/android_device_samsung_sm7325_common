@@ -19,6 +19,12 @@
 //!   `media:stream:screen`: a stream item may pass its row on (`as`), name the station's `now`
 //!   link (`$stream.next`), and `show` a list screen with a header: that screen opens instead of
 //!   Now Playing, lists may come `from = "$stream.…"`, and Now Playing draws the header.
+//!   `as` on a static stream item passes the item itself on (`$station.label`, `x-` keys).
+//! - `menu:header-loading`: the header is drawn while the screen's `get` loads or failed (lines
+//!   needing `$data` stay out by the hole rules). `menu:get-at`: `get.at` is a JSON pointer
+//!   (holes allowed) and `$data` is that part of the answer. `media:stream:icy`: an `http`
+//!   stream with `icy = true` names the song you hear from the stream's titles
+//!   (radio_source.rs). `net:https`: `https://` URLs work (tls.rs).
 //! - **Features** (§6): [`FEATURES`] is exactly what this host implements; the ROM ships the
 //!   same list as /system_ext/etc/abyss/features for the installer.
 //!
@@ -59,7 +65,11 @@ pub const FEATURES: &[&str] = &[
     "media:stream:radio-v1",
     "media:stream:http",
     "media:stream:screen",
+    "media:stream:icy",
     "menu:header",
+    "menu:header-loading",
+    "menu:get-at",
+    "net:https",
     "capture:fields",
     "post:capture",
     "needs:media",
@@ -1080,8 +1090,9 @@ impl Host {
         }
     }
 
-    /// The URL a frame's `get` fetches now (None = the screen has no `get`).
-    fn get_url(&self, f: &Frame, append: bool) -> Option<Result<(String, usize), String>> {
+    /// The URL a frame's `get` fetches now, and its `at` pointer (menu:get-at) filled in
+    /// (None = the screen has no `get`).
+    fn get_url(&self, f: &Frame, append: bool) -> Option<Result<(String, usize, Option<String>), String>> {
         let Place::Screen { module, screen } = &f.place else { return None };
         let get = self.screen_def(*module, screen)?.get("get")?;
         let url_t = get.get("url").and_then(Value::as_str)?;
@@ -1100,11 +1111,18 @@ impl Host {
                 _ => None,
             };
         }
-        Some(url.map(|u| (u, *module)).ok_or_else(|| "missing address".to_string()))
+        let at = match get.get("at").and_then(Value::as_str) {
+            Some(t) => match self.with_scope(f, None, |sc| fill(t, sc)) {
+                Some(p) => Some(p),
+                None => return Some(Err("missing part of the answer's path".to_string())),
+            },
+            None => None,
+        };
+        Some(url.map(|u| (u, *module, at)).ok_or_else(|| "missing address".to_string()))
     }
 
     /// Starts a fetch on its own thread; returns its request id.
-    fn spawn_get(&mut self, url: String, module: usize, append: bool) -> Result<u64, String> {
+    fn spawn_get(&mut self, url: String, module: usize, at: Option<String>, append: bool) -> Result<u64, String> {
         let req = self.next_req;
         self.next_req += 1;
         let allow = self.modules[module].net.clone();
@@ -1112,7 +1130,11 @@ impl Host {
         std::thread::Builder::new()
             .name("abyssd-mod-get".into())
             .spawn(move || {
-                let result = fetch(&net, &allow, &url);
+                // menu:get-at: `$data` is the part of the answer at the pointer (null if absent).
+                let result = fetch(&net, &allow, &url).map(|v| match &at {
+                    Some(p) => pointer(&v, p).cloned().unwrap_or(Value::Null),
+                    None => v,
+                });
                 done.lock().unwrap_or_else(|e| e.into_inner()).push(Done { req, result, append });
                 if let Ok(mut p) = poke.lock() {
                     let _ = p.write(&[1]);
@@ -1126,7 +1148,7 @@ impl Host {
     fn start_get(&mut self, now_playing: bool, append: bool) {
         let f = if now_playing { self.stream.as_ref().and_then(|s| s.frame.as_ref()) } else { self.stack.last() };
         let Some(job) = f.and_then(|f| self.get_url(f, append)) else { return };
-        let r = job.and_then(|(u, m)| self.spawn_get(u, m, append));
+        let r = job.and_then(|(u, m, at)| self.spawn_get(u, m, at, append));
         let f = if now_playing { self.stream.as_mut().and_then(|s| s.frame.as_mut()) } else { self.stack.last_mut() };
         if let Some(f) = f {
             f.fetched_at = wall_now_ms();
@@ -1185,6 +1207,18 @@ impl Host {
                 // with the player's own keys (its guide is for the list).
                 Body::Rows(_) => {
                     v.guide.clear();
+                    // The list's `empty` text is about rows Now Playing does not draw.
+                    let empty = match &f.place {
+                        Place::Screen { module, screen } => self
+                            .screen_def(*module, screen)
+                            .and_then(|d| d.get("empty"))
+                            .and_then(Value::as_str)
+                            .unwrap_or("Nothing here."),
+                        _ => "",
+                    };
+                    if v.note.as_ref().is_some_and(|(n, _)| n == empty) {
+                        v.note = None;
+                    }
                     Body::Text(Vec::new(), Vec::new())
                 }
             };
@@ -1392,13 +1426,19 @@ impl Host {
             "list" => {
                 let mut rows: Vec<RowView> = self.items_of(f, def).into_iter().map(|(r, _)| r).collect();
                 // A list from `$data` is empty once loaded; one from `$stream` (no get) at once.
-                let from_scope = def.get("items").is_some_and(Value::is_object) && !has_get;
+                let from_scope = def
+                    .get("items")
+                    .and_then(|i| i.get("from"))
+                    .and_then(Value::as_str)
+                    .is_some_and(|from| !from.starts_with("$data"));
                 let empty = rows.is_empty() && (f.load == Load::Ready || from_scope);
                 if let Some(m) = self.more_row(f, def) {
                     rows.push(m);
                 }
                 rows.push(back);
-                let mut header = if has_get && f.pages.is_empty() { Vec::new() } else { self.lines_of(f, def.get("header")) };
+                // menu:header-loading: while the get loads (or failed) the header is drawn from what
+                // is known; lines that need `$data` are left out by the hole rules.
+                let mut header = self.lines_of(f, def.get("header"));
                 drop_bare_heads(&mut header, false);
                 let note = note.or_else(|| empty.then(|| (text("empty").unwrap_or("Nothing here.").to_string(), false)));
                 return ScreenView { title, sub, header, body: Body::Rows(rows), guide, note, sel: f.sel };
@@ -1448,6 +1488,10 @@ impl Host {
         if let Some(f) = self.stack.pop() {
             self.keep_sel(&f);
         }
+        // A screen whose data was dropped (another station started) fetches it again.
+        if self.stack.last().is_some_and(|f| f.load == Load::None) {
+            self.start_get(false, false);
+        }
         if self.stack.is_empty() {
             Effect::Exit
         } else {
@@ -1492,7 +1536,12 @@ impl Host {
 
     fn act(&mut self, f: &Frame, module: usize, def: &Value, act: ItemAct) -> Effect {
         let (item, el): (Value, Option<Value>) = match act {
-            ItemAct::Static(i) => (def.get("items").and_then(|a| a.get(i)).cloned().unwrap_or(Value::Null), None),
+            ItemAct::Static(i) => {
+                // `as` on a static item passes the item itself on (its label, `x-` keys, stream).
+                let it = def.get("items").and_then(|a| a.get(i)).cloned().unwrap_or(Value::Null);
+                let el = it.get("as").is_some().then(|| it.clone());
+                (it, el)
+            }
             ItemAct::Row(pi, i) => {
                 let row = def.get("items").and_then(|s| s.get("row")).cloned().unwrap_or(Value::Null);
                 let from = def.get("items").and_then(|s| s.get("from")).and_then(Value::as_str).unwrap_or("");
@@ -1594,7 +1643,14 @@ impl Host {
                     for fr in self.stack.iter_mut() {
                         if matches!(&fr.place, Place::Screen { module: m, screen: s } if *m == module && s == sh) {
                             fr.binds = f.binds.clone();
+                            // Its own data was the old station's: fetch it again.
+                            fr.pages.clear();
+                            fr.load = Load::None;
                         }
+                    }
+                    if matches!(self.stack.last().map(|fr| &fr.place), Some(Place::Screen { module: m, screen: s }) if *m == module && s == sh)
+                    {
+                        self.start_get(false, false);
                     }
                 }
                 if let Some(sh) = show_list.filter(|_| !self.stepping) {
@@ -1716,7 +1772,8 @@ fn fetch(net: &Arc<dyn Network>, allow: &[String], url: &str) -> Result<Value, S
                 }
                 return Ok(v);
             }
-            Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+            // Not approved, no TLS, a bad certificate: asking again will not help.
+            Err(e) if matches!(e.kind(), io::ErrorKind::PermissionDenied | io::ErrorKind::Unsupported | io::ErrorKind::InvalidData) => {
                 hold.release(None);
                 return Err(e.to_string());
             }
@@ -1843,6 +1900,8 @@ pub fn stream_config(st: &Value, sc: &Scope) -> Result<Config, String> {
         _ => None,
     };
     cfg.start_s = pre.unwrap_or(START_S).clamp(5.0, 30.0);
+    // media:stream:icy: name the song you hear from the stream's own titles.
+    cfg.icy = mode == Mode::Http && st.get("icy").and_then(Value::as_bool) == Some(true);
     Ok(cfg)
 }
 
@@ -2124,6 +2183,68 @@ mod tests {
         let v = h.view().unwrap();
         assert_eq!(v.header.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), vec!["Not playing.", "PLAYED BEFORE"]);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn static_as_get_at_and_header_while_loading() {
+        let root = std::env::temp_dir().join(format!("abyss-mod-at-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let store = root.join("store");
+        store_with(&store, "radio", "ready", &["apps", "menu:get", "menu:get-at", "media:stream", "media:stream:http",
+            "media:stream:icy", "media:stream:screen", "menu:header", "menu:header-loading"]);
+        let st = |t: &str, api: &str| json!({"label": t.to_uppercase(), "as": "station", "x-api": api,
+            "stream": {"url": format!("http://127.0.0.1:9/{t}"), "icy": true, "tag": t, "title": t.to_uppercase(), "show": "np"}});
+        fs::write(store.join("radio/menu.json"), json!({"menu": 1, "start": "main", "screens": {
+            "main": {"title": "T", "items": [st("a", "Alpha"), st("b", "Beta")]},
+            "np": {"title": "$station.label", "get": {"url": "http://127.0.0.1:9/v1/radio", "at": "/$station.x-api", "every": "60s"},
+                "header": [{"text": "LIVE · $data.dj", "style": "head"}, "$stream.title", {"text": "Starting...", "unless": "$stream.heard_ms"}],
+                "items": {"from": "$stream.played", "row": {"label": "$row.artist", "goto": "main"}},
+                "empty": "Nothing played yet.", "error": "No live info."}}}).to_string()).unwrap();
+        let (mods, errs) = load(&store, &root.join("settings"));
+        assert!(errs.is_empty(), "{errs:?}");
+        let net: Arc<dyn Network> = Arc::new(radio_source::OpenNetwork(Arc::new(crate::http::TcpTransport::default())));
+        let mut h = Host::new(mods, errs, net).unwrap();
+        h.open_direct(0);
+        assert!(matches!(h.select(), Effect::Play { player: false, .. }));
+        let v = h.view().unwrap();
+        assert_eq!(v.title, "A", "`as` on a static item passes the item on");
+        // menu:header-loading: the stream lines show while the get still loads.
+        assert_eq!(v.header.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), vec!["A", "Starting..."]);
+        assert_eq!(v.note, Some(("Loading…".into(), false)));
+        // menu:get-at: the pointer is filled from the same scope as the URL.
+        let f = h.stack.last().unwrap().clone();
+        let (url, _, at) = h.get_url(&f, false).unwrap().unwrap();
+        assert_eq!((url.as_str(), at.as_deref()), ("http://127.0.0.1:9/v1/radio", Some("/Alpha")));
+        // The answer arrives: $data is the station's part of it.
+        let answer = json!({"Alpha": {"dj": "Cortez"}, "Beta": {"p": true}});
+        let top = h.stack.last_mut().unwrap();
+        top.pages = vec![pointer(&answer, at.as_deref().unwrap()).cloned().unwrap()];
+        top.load = Load::Ready;
+        assert_eq!(h.view().unwrap().header[0].text, "LIVE · Cortez");
+        let np = h.now_playing_view().unwrap();
+        assert!(np.header.iter().any(|l| l.text == "A"), "Now Playing draws the header too");
+        assert!(np.note.as_ref().is_none_or(|(n, _)| n != "Nothing played yet."), "the list's empty text is not drawn on Now Playing");
+        // Hold ▼: the next station; its screen follows and fetches its own data again.
+        assert!(matches!(h.step_station(1), Effect::Play { .. }));
+        let v = h.view().unwrap();
+        assert_eq!(v.title, "B");
+        assert!(!v.header.iter().any(|l| l.text.starts_with("LIVE")), "the old station's data is dropped");
+        let f = h.stack.last().unwrap().clone();
+        assert_eq!(h.get_url(&f, false).unwrap().unwrap().2.as_deref(), Some("/Beta"));
+        assert!(h.stream.as_ref().is_some_and(|s| s.radio.status().mode == Mode::Http));
+        h.stop_stream();
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn stream_icy_flag() {
+        let sc = Scope::new();
+        let c = stream_config(&json!({"url": "http://h/x.mp3", "icy": true}), &sc).unwrap();
+        assert!(c.icy && c.mode == Mode::Http);
+        let c = stream_config(&json!({"url": "http://h/x.mp3"}), &sc).unwrap();
+        assert!(!c.icy);
+        let c = stream_config(&json!({"protocol": "radio-v1", "url": "http://h/x", "icy": true}), &sc).unwrap();
+        assert!(!c.icy, "icy is for http streams only");
     }
 
     #[test]

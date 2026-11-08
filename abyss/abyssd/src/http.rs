@@ -3,8 +3,10 @@
 //! - GET only (all our module traffic is GET), keep-alive with one idle connection per
 //!   origin, Content-Length / chunked / read-to-close bodies, a streaming body reader for
 //!   endless audio, hard limits on header and body sizes, timeouts on every step.
-//! - Plain `http://` over `std::net::TcpStream`. TLS is additive later: a [`Transport`] for
-//!   [`Scheme::Https`] wraps the TCP connection; nothing above the transport changes.
+//! - Plain `http://` over `std::net::TcpStream`, and `https://` (feature `net:https`) through
+//!   [`TlsTransport`]: rustls (aws-lc-rs = the platform BoringSSL) over the same TCP transport,
+//!   checked against Android's CA store (/system/etc/security/cacerts); nothing above the
+//!   transport changes.
 //! - Sockets can be bound to one interface (`SO_BINDTODEVICE`, e.g. `wlan0` inside Abyss,
 //!   like wifi/http.rs does), so a request never leaks out of another route.
 //! - [`Cancel`]: another thread can abort a blocked request (a 15 s burst ask, a 55 s long
@@ -29,7 +31,7 @@ const USER_AGENT: &str = "abyssd/1 (IchthysOS Abyss)";
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Scheme {
     Http,
-    /// Parsed so links stay valid; served only once a TLS [`Transport`] is registered.
+    /// Served through [`TlsTransport`].
     Https,
 }
 
@@ -339,6 +341,110 @@ fn connect_one(addr: SocketAddr, device: Option<&str>, timeout: Duration) -> io:
 }
 
 // ---------------------------------------------------------------------------
+// TLS (net:https)
+
+/// Where the CA certificates are: Android's store (one PEM file per root, readable by every
+/// domain), the Conscrypt APEX's, then a desktop's (host tests).
+const CA_DIRS: &[&str] = &["/system/etc/security/cacerts", "/apex/com.android.conscrypt/cacerts", "/etc/ssl/certs"];
+
+static TLS_CONFIG: std::sync::OnceLock<Result<Arc<rustls::ClientConfig>, String>> = std::sync::OnceLock::new();
+
+/// The roots of the first CA directory that has any (PEM files; bundles too).
+pub fn load_roots(dirs: &[&str]) -> Result<(rustls::RootCertStore, String), String> {
+    use rustls::pki_types::pem::PemObject;
+    use rustls::pki_types::CertificateDer;
+    for dir in dirs {
+        let Ok(rd) = std::fs::read_dir(dir) else { continue };
+        let mut roots = rustls::RootCertStore::empty();
+        for e in rd.flatten() {
+            let Ok(b) = std::fs::read(e.path()) else { continue };
+            for c in CertificateDer::pem_slice_iter(&b).flatten() {
+                let _ = roots.add(c);
+            }
+        }
+        if !roots.is_empty() {
+            return Ok((roots, dir.to_string()));
+        }
+    }
+    Err(format!("no CA certificates in {}", dirs.join(", ")))
+}
+
+fn tls_config() -> io::Result<Arc<rustls::ClientConfig>> {
+    TLS_CONFIG
+        .get_or_init(|| {
+            let (roots, dir) = load_roots(CA_DIRS)?;
+            log::info!("https: {} CA roots from {dir}", roots.len());
+            let provider = Arc::new(rustls::crypto::aws_lc_rs::default_provider());
+            let cfg = rustls::ClientConfig::builder_with_provider(provider)
+                .with_safe_default_protocol_versions()
+                .map_err(|e| e.to_string())?
+                .with_root_certificates(roots)
+                .with_no_client_auth();
+            Ok(Arc::new(cfg))
+        })
+        .clone()
+        .map_err(|e| io::Error::new(ErrorKind::Unsupported, e))
+}
+
+/// `https://`: TLS 1.2/1.3 over a connection of the plain transport (so it is bound to the
+/// same interface and uses the same resolver). The handshake happens inside `connect`, so a
+/// bad certificate is a connect error (`InvalidData`).
+pub struct TlsTransport {
+    tcp: Arc<dyn Transport>,
+}
+
+impl TlsTransport {
+    pub fn new(tcp: Arc<dyn Transport>) -> TlsTransport {
+        TlsTransport { tcp }
+    }
+}
+
+impl Transport for TlsTransport {
+    fn connect(&self, url: &Url, timeout: Duration) -> io::Result<Box<dyn Conn>> {
+        let cfg = tls_config()?;
+        let name = rustls::pki_types::ServerName::try_from(url.host.clone()).map_err(|e| bad(format!("{}: {e}", url.host)))?;
+        let mut sock = self.tcp.connect(url, timeout)?;
+        sock.set_timeouts(timeout)?;
+        let mut c = rustls::ClientConnection::new(cfg, name).map_err(io::Error::other)?;
+        while c.is_handshaking() {
+            c.complete_io(&mut sock)?;
+        }
+        Ok(Box::new(TlsConn(rustls::StreamOwned::new(c, sock))))
+    }
+}
+
+struct TlsConn(rustls::StreamOwned<rustls::ClientConnection, Box<dyn Conn>>);
+
+impl Read for TlsConn {
+    fn read(&mut self, b: &mut [u8]) -> io::Result<usize> {
+        match self.0.read(b) {
+            // Many servers close without close_notify; the HTTP framing (Content-Length,
+            // chunked) still tells a cut-off body from a whole one.
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof => Ok(0),
+            r => r,
+        }
+    }
+}
+
+impl Write for TlsConn {
+    fn write(&mut self, b: &[u8]) -> io::Result<usize> {
+        self.0.write(b)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+impl Conn for TlsConn {
+    fn set_timeouts(&self, t: Duration) -> io::Result<()> {
+        self.0.sock.set_timeouts(t)
+    }
+    fn aborter(&self) -> Option<Aborter> {
+        self.0.sock.aborter()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Cancel
 
 /// Aborts the requests registered on it. Clone it into the thread that wants to stop the
@@ -422,7 +528,8 @@ pub struct Client {
 
 impl Client {
     pub fn new(http: Arc<dyn Transport>, cancel: Cancel) -> Client {
-        Client { http, https: None, idle: Mutex::new(Vec::new()), cancel, allow: None }
+        let https: Arc<dyn Transport> = Arc::new(TlsTransport::new(http.clone()));
+        Client { http, https: Some(https), idle: Mutex::new(Vec::new()), cancel, allow: None }
     }
 
     /// Restricts every request (links from answers included) to these origins
@@ -437,7 +544,7 @@ impl Client {
         self.allow.as_ref().is_none_or(|a| a.iter().any(|o| url.same_origin(o)))
     }
 
-    /// Registers a TLS transport for https:// (none is built yet: the seam TLS plugs into).
+    /// Another transport for https:// (tests; the default is [`TlsTransport`] over `http`).
     #[allow(dead_code)]
     pub fn with_https(mut self, t: Arc<dyn Transport>) -> Client {
         self.https = Some(t);
@@ -457,7 +564,7 @@ impl Client {
             Scheme::Https => self
                 .https
                 .as_ref()
-                .ok_or_else(|| io::Error::new(ErrorKind::Unsupported, "https is not built into abyssd yet")),
+                .ok_or_else(|| io::Error::new(ErrorKind::Unsupported, "https is not available")),
         }
     }
 
@@ -1032,5 +1139,35 @@ mod tests {
         assert!(took < Duration::from_millis(1200), "{took:?}");
         assert!(c.get(&Url::parse("http://127.0.0.1:1/").unwrap(), &[], Timeouts::io_s(1)).is_err());
         h.join().unwrap();
+    }
+
+    #[test]
+    fn ca_roots_load_from_pem_files() {
+        assert!(load_roots(&["/nonexistent-abyss"]).is_err());
+        // The tree's own CA store (one PEM file per root, as on the phone), else the desktop's.
+        let tree = format!("{}/git/android/system/ca-certificates/files", std::env::var("HOME").unwrap_or_default());
+        if let Ok((roots, dir)) = load_roots(&[tree.as_str(), "/etc/ssl/certs"]) {
+            assert!(roots.len() > 50, "{} roots from {dir}", roots.len());
+        }
+    }
+
+    /// Live: `ABYSS_LIVE=1` runs it (needs the internet).
+    #[test]
+    fn https_get_live() {
+        if std::env::var("ABYSS_LIVE").is_err() {
+            return;
+        }
+        let c = Client::new(Arc::new(TcpTransport::default()), Cancel::default());
+        let r = c.get(&Url::parse("https://api.tb-group.fm/v1/radio").unwrap(), &[], Timeouts::io_s(15)).unwrap();
+        assert_eq!(r.status, 200);
+        let b = r.bytes(1 << 20).unwrap();
+        assert!(b.starts_with(b"{"), "{}", String::from_utf8_lossy(&b));
+        // Kept alive: a second ask on the same TLS connection.
+        let r = c.get(&Url::parse("https://api.tb-group.fm/v1/tracklist/5?count=2").unwrap(), &[], Timeouts::io_s(15)).unwrap();
+        assert_eq!(r.status, 200);
+        assert!(r.bytes(1 << 20).unwrap().starts_with(b"["));
+        // A name the certificate does not cover is refused.
+        let e = c.get(&Url::parse("https://wrong.host.badssl.com/").unwrap(), &[], Timeouts::io_s(15)).err();
+        assert!(e.is_some_and(|e| e.kind() == ErrorKind::InvalidData), "a bad certificate is refused");
     }
 }

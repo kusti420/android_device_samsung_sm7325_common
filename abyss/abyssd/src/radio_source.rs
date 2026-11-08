@@ -34,6 +34,14 @@
 //!
 //! **Endless**: the plain audio URL, one long answer; frames as they come. The song comes
 //! from a long poll on `now?after=<play_id>&wait=55` in a second thread, plus the tracklist.
+//! A module `http` stream is the same loop on the URL as given (Icecast, Shoutcast).
+//!
+//! **ICY titles** (module `icy = true`, media:stream:icy): an `http` stream is asked with
+//! `Icy-MetaData: 1`; the metadata blocks (every `icy-metaint` bytes) are cut out before the
+//! framer, and each new `StreamTitle` becomes a play ("Artist - Title" split at " - ") from
+//! the wall time its first sample is heard, ending the one before. They ride in the audio, so
+//! they are in step with what you hear at no extra request; `$stream.song` / `$stream.played`
+//! and captures work as with a tracklist.
 //!
 //! **Which song you hear**: wall time of the sample playing now (stream.rs marks) → the
 //! tracklist item with `on_air_ms ≤ t < ends_at_ms` (an estimated end counts as open). When
@@ -240,6 +248,10 @@ pub struct Config {
     pub allow: Option<Vec<String>>,
     /// The server's long-burst limits for this format (None = classic bursts, as before).
     pub long: Option<LongBursts>,
+    /// `http` streams (module `icy = true`, feature media:stream:icy): ask the server for its
+    /// in-band titles (`Icy-MetaData: 1`), cut them out of the audio and name the song you
+    /// hear from them.
+    pub icy: bool,
 }
 
 impl Config {
@@ -256,6 +268,7 @@ impl Config {
             format: String::new(),
             allow: None,
             long: None,
+            icy: false,
         }
     }
 
@@ -1254,6 +1267,9 @@ struct Worker {
     newest_play: Option<String>,
     /// "FLAC" / "MP3" from the format name or Content-Type (None = from the bytes).
     hint: Option<&'static str>,
+    /// ICY titles: the last one seen (a repeat is no new song) and how many so far (play ids).
+    icy_last: Option<String>,
+    icy_n: u64,
 }
 
 impl Worker {
@@ -1261,7 +1277,19 @@ impl Worker {
         let client = sh.client();
         let (audio_url, now_url) = (Some(sh.cfg.audio.clone()), sh.cfg.now.clone());
         let hint = codec_hint(&sh.cfg.format, None);
-        Worker { sh, client, hold: None, net_failures: 0, audio_url, now_url, gap_asked: None, newest_play: None, hint }
+        Worker {
+            sh,
+            client,
+            hold: None,
+            net_failures: 0,
+            audio_url,
+            now_url,
+            gap_asked: None,
+            newest_play: None,
+            hint,
+            icy_last: None,
+            icy_n: 0,
+        }
     }
 
     fn take_net(&mut self) {
@@ -1759,7 +1787,10 @@ impl Worker {
 
     /// One endless answer, read until it ends. Returns why it ended.
     fn endless_once(&mut self, url: &Url) -> String {
-        let r = match self.client.get(url, &[], Timeouts::io_s(20)) {
+        // media:stream:icy: the server's titles, in the audio bytes every `icy-metaint` bytes.
+        let want_icy = self.sh.cfg.mode == Mode::Http && self.sh.cfg.icy;
+        let extra: &[(&str, &str)] = if want_icy { &[("Icy-MetaData", "1")] } else { &[] };
+        let r = match self.client.get(url, extra, Timeouts::io_s(20)) {
             Ok(r) => r,
             Err(e) => {
                 self.sh.set(|s| s.phase = Phase::Offline(e.to_string()));
@@ -1780,13 +1811,18 @@ impl Worker {
         // A plain stream has no X-Stream-Time-Ms: its own clock starts now.
         let time_ms: i64 = r.header("x-stream-time-ms").and_then(|v| v.trim().parse().ok()).unwrap_or_else(wall_now_ms);
         self.hint = self.hint.or_else(|| codec_hint("", r.header("content-type")));
+        let mut icy = if want_icy {
+            let mi = r.header("icy-metaint").and_then(|v| v.trim().parse::<usize>().ok()).filter(|n| (1..=1 << 20).contains(n));
+            if mi.is_none() {
+                info!("radio: the server sends no ICY titles (no icy-metaint)");
+            }
+            mi.map(IcyDemux::new)
+        } else {
+            None
+        };
         let mut rd = r.into_reader();
         let mut buf = vec![0u8; 64 * 1024];
-        let mut head: Vec<u8> = Vec::new();
-        let mut fr = Cutter::Flac(Framer::new());
-        let mut id: Option<u64> = None;
-        let mut first = true;
-        let hint = self.hint;
+        let mut st = Endless::new(time_ms, self.hint);
         loop {
             if self.sh.stopped() {
                 return "stopped".into();
@@ -1802,58 +1838,256 @@ impl Worker {
                 Ok(n) => n,
                 Err(e) if e.kind() == ErrorKind::Interrupted && !self.sh.stopped() => continue,
                 Err(e) => {
-                    if let Some(i) = id {
-                        let tail: Vec<Frame> = fr.finish().into_iter().collect();
+                    if let Some(i) = st.id {
+                        let tail: Vec<Frame> = st.fr.finish().into_iter().collect();
                         self.sh.feed.push(i, tail, None);
                     }
                     return format!("read: {e}");
                 }
             };
-            let mut data = &buf[..n];
-            if id.is_none() {
-                head.extend_from_slice(data);
-                match open_stream(&head, hint, false) {
-                    Ok(None) if head.len() < 1 << 20 => continue,
-                    Ok(None) => return "no audio frames at the start of the stream".into(),
-                    Ok(Some((codec, len))) => {
-                        if self.sh.feed.status().has_stream {
-                            self.sh.set(|s| s.resets += 1);
-                        }
-                        fr = Cutter::for_codec(&codec);
-                        let name = codec.name();
-                        self.sh.set(|s| s.codec = Some(name));
-                        id = Some(self.sh.feed.begin_stream(codec));
-                        fr.push(&head[len..]);
-                        head.clear();
-                        data = &[];
-                    }
-                    Err(e) => return format!("not audio we can play: {e}"),
+            let (audio, titles) = match icy.as_mut() {
+                Some(d) => d.push(&buf[..n]),
+                None => (buf[..n].to_vec(), Vec::new()),
+            };
+            // Audio up to each title, then the title at the time those samples are heard.
+            let mut from = 0;
+            for (at, title) in titles {
+                if let Err(e) = endless_feed(&self.sh, &mut st, &audio[from..at]) {
+                    return e;
                 }
+                from = at;
+                let at_ms = if st.titles == 0 { st.time_ms } else { st.wall_ms() };
+                st.titles += 1;
+                icy_title(&self.sh, &mut self.icy_last, &mut self.icy_n, &title, at_ms);
             }
-            fr.push(data);
-            let mut frames = Vec::new();
-            while let Some(f) = fr.next() {
-                frames.push(f);
+            if let Err(e) = endless_feed(&self.sh, &mut st, &audio[from..]) {
+                return e;
             }
-            if frames.is_empty() {
-                continue;
-            }
-            let Some(i) = id else { continue };
-            let mark = if first { Some(time_ms) } else { None };
-            first = false;
-            if !self.sh.feed.push(i, frames, mark) {
-                return "stopped".into();
-            }
-            let fs = self.sh.feed.status();
-            self.sh.set(|s| {
-                s.phase = if fs.latest_started { Phase::Playing } else { Phase::Buffering };
-            });
         }
-        if let Some(i) = id {
-            let tail: Vec<Frame> = fr.finish().into_iter().collect();
+        if let Some(i) = st.id {
+            let tail: Vec<Frame> = st.fr.finish().into_iter().collect();
             self.sh.feed.push(i, tail, None);
         }
         "the server closed the stream".into()
+    }
+}
+
+/// Audio bytes of an endless answer: find the stream's start, cut frames, feed them.
+/// Err = why the stream cannot go on.
+fn endless_feed(sh: &Shared, st: &mut Endless, mut data: &[u8]) -> Result<(), String> {
+    if data.is_empty() {
+        return Ok(());
+    }
+    if st.id.is_none() {
+        st.head.extend_from_slice(data);
+        match open_stream(&st.head, st.hint, false) {
+            Ok(None) if st.head.len() < 1 << 20 => return Ok(()),
+            Ok(None) => return Err("no audio frames at the start of the stream".into()),
+            Ok(Some((codec, len))) => {
+                if sh.feed.status().has_stream {
+                    sh.set(|s| s.resets += 1);
+                }
+                st.fr = Cutter::for_codec(&codec);
+                st.rate = codec.sample_rate().max(1);
+                let name = codec.name();
+                sh.set(|s| s.codec = Some(name));
+                st.id = Some(sh.feed.begin_stream(codec));
+                let head = std::mem::take(&mut st.head);
+                st.fr.push(&head[len..]);
+                data = &[];
+            }
+            Err(e) => return Err(format!("not audio we can play: {e}")),
+        }
+    }
+    st.fr.push(data);
+    let mut frames = Vec::new();
+    while let Some(f) = st.fr.next() {
+        st.samples += f.samples as u64;
+        frames.push(f);
+    }
+    let Some(i) = st.id.filter(|_| !frames.is_empty()) else { return Ok(()) };
+    let mark = if st.first { Some(st.time_ms) } else { None };
+    st.first = false;
+    if !sh.feed.push(i, frames, mark) {
+        return Err("stopped".into());
+    }
+    let fs = sh.feed.status();
+    sh.set(|s| {
+        s.phase = if fs.latest_started { Phase::Playing } else { Phase::Buffering };
+    });
+    Ok(())
+}
+
+/// A StreamTitle from the stream: a new play from `at_ms` (the wall time its first sample
+/// is heard); the one before ends there. A repeat of the last title is no new song.
+fn icy_title(sh: &Shared, last: &mut Option<String>, n: &mut u64, title: &str, at_ms: i64) {
+    let title = title.trim();
+    if title.is_empty() || last.as_deref() == Some(title) {
+        return;
+    }
+    *last = Some(title.to_string());
+    *n += 1;
+    info!("radio: on air (ICY): {title}");
+    let song = icy_song(&format!("icy-{}", *n), title, at_ms);
+    if let Ok(mut g) = sh.songs.lock() {
+        if let Some(prev) = g.items.iter().rev().find(|s| s.play_id.starts_with("icy-") && s.ends_at_ms.is_none()).cloned() {
+            let mut p = prev;
+            p.ends_at_ms = Some(at_ms.max(p.on_air_ms));
+            p.fields.insert("ends_at_ms".into(), Value::from(at_ms.max(p.on_air_ms)));
+            p.fields.insert("duration_ms".into(), Value::from((at_ms - p.on_air_ms).max(0)));
+            g.merge(p);
+        }
+        g.merge(song);
+    }
+}
+
+/// Reading one endless answer.
+struct Endless {
+    head: Vec<u8>,
+    fr: Cutter,
+    id: Option<u64>,
+    first: bool,
+    hint: Option<&'static str>,
+    /// Wall time of the answer's first sample (the feed's mark).
+    time_ms: i64,
+    /// Samples cut so far, and their rate: the wall time of the next sample.
+    samples: u64,
+    rate: u32,
+    /// ICY titles seen in this answer (the first one names the audio from its start).
+    titles: u32,
+}
+
+impl Endless {
+    fn new(time_ms: i64, hint: Option<&'static str>) -> Endless {
+        Endless {
+            head: Vec::new(),
+            fr: Cutter::Flac(Framer::new()),
+            id: None,
+            first: true,
+            hint,
+            time_ms,
+            samples: 0,
+            rate: 44_100,
+            titles: 0,
+        }
+    }
+
+    /// The wall time at which the next sample of this answer is heard.
+    fn wall_ms(&self) -> i64 {
+        self.time_ms + (self.samples * 1000 / self.rate.max(1) as u64) as i64
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ICY (Shoutcast/Icecast in-band titles, media:stream:icy)
+
+/// Cuts the metadata blocks out of an ICY stream: `metaint` audio bytes, one length byte
+/// (×16), that many bytes of `StreamTitle='…';StreamUrl='…';`, again.
+pub struct IcyDemux {
+    metaint: usize,
+    left: usize,
+    meta_len: Option<usize>,
+    meta: Vec<u8>,
+}
+
+impl IcyDemux {
+    pub fn new(metaint: usize) -> IcyDemux {
+        IcyDemux { metaint, left: metaint, meta_len: None, meta: Vec::new() }
+    }
+
+    /// The audio bytes of `b`, and each StreamTitle found with its offset in those bytes (the
+    /// title applies from that byte on). Any split of the input gives the same result.
+    pub fn push(&mut self, mut b: &[u8]) -> (Vec<u8>, Vec<(usize, String)>) {
+        let mut audio = Vec::with_capacity(b.len());
+        let mut titles = Vec::new();
+        while !b.is_empty() {
+            match self.meta_len {
+                None if self.left > 0 => {
+                    let k = self.left.min(b.len());
+                    audio.extend_from_slice(&b[..k]);
+                    self.left -= k;
+                    b = &b[k..];
+                }
+                None => {
+                    let n = b[0] as usize * 16;
+                    b = &b[1..];
+                    if n == 0 {
+                        self.left = self.metaint;
+                    } else {
+                        self.meta_len = Some(n);
+                        self.meta.clear();
+                    }
+                }
+                Some(n) => {
+                    let k = (n - self.meta.len()).min(b.len());
+                    self.meta.extend_from_slice(&b[..k]);
+                    b = &b[k..];
+                    if self.meta.len() == n {
+                        if let Some(t) = stream_title(&self.meta) {
+                            titles.push((audio.len(), t));
+                        }
+                        self.meta_len = None;
+                        self.left = self.metaint;
+                    }
+                }
+            }
+        }
+        (audio, titles)
+    }
+}
+
+/// `StreamTitle='…';` of one metadata block (UTF-8, else Latin-1). The title may itself hold
+/// `'`: it ends at the `';` followed by the next key, padding or the end.
+pub fn stream_title(meta: &[u8]) -> Option<String> {
+    let end = meta.iter().position(|b| *b == 0).unwrap_or(meta.len());
+    let m = &meta[..end];
+    let key = b"StreamTitle='";
+    let start = m.windows(key.len()).position(|w| w == key)? + key.len();
+    let rest = &m[start..];
+    let mut stop = None;
+    for i in 0..rest.len().saturating_sub(1) {
+        if &rest[i..i + 2] == b"';" {
+            let after = &rest[i + 2..];
+            if after.is_empty() || after.starts_with(b"Stream") || after.iter().all(|b| b.is_ascii_whitespace()) {
+                stop = Some(i);
+                break;
+            }
+        }
+    }
+    let raw = &rest[..stop.unwrap_or(rest.len().saturating_sub(usize::from(rest.ends_with(b"'"))))];
+    let text = match std::str::from_utf8(raw) {
+        Ok(t) => t.to_string(),
+        Err(_) => raw.iter().map(|b| *b as char).collect(),
+    };
+    Some(text.trim().to_string())
+}
+
+/// A play named by an ICY title ("Artist - Title", or just a title).
+pub fn icy_song(play_id: &str, title: &str, on_air_ms: i64) -> Song {
+    let mut o = Map::new();
+    o.insert("play_id".into(), Value::from(play_id));
+    o.insert("kind".into(), Value::from("music"));
+    o.insert("line".into(), Value::from(title));
+    match title.split_once(" - ") {
+        Some((a, t)) if !a.trim().is_empty() && !t.trim().is_empty() => {
+            o.insert("artist".into(), Value::from(a.trim()));
+            o.insert("title".into(), Value::from(t.trim()));
+        }
+        _ => {
+            o.insert("title".into(), Value::from(title));
+        }
+    }
+    o.insert("on_air_ms".into(), Value::from(on_air_ms));
+    o.insert("started_at_ms".into(), Value::from(on_air_ms));
+    o.insert("source".into(), Value::from("icy"));
+    Song {
+        play_id: play_id.to_string(),
+        kind: "music".into(),
+        on_air_ms,
+        started_at_ms: on_air_ms,
+        ends_at_ms: None,
+        ends_estimated: false,
+        fields: o,
     }
 }
 
@@ -2096,6 +2330,71 @@ mod tests {
         assert_ne!(c, random_cid());
         let u = Url::parse("http://h:1/a").unwrap();
         assert_eq!(Config::new(u).start_s, START_S);
+    }
+
+    #[test]
+    fn icy_demux_any_split_and_titles() {
+        // 8 audio bytes, a title block, 8 audio bytes, an empty block, 8 audio, a repeat.
+        let block = |t: &str| {
+            let mut m = format!("StreamTitle='{t}';StreamUrl='';").into_bytes();
+            let n = m.len().div_ceil(16);
+            m.resize(n * 16, 0);
+            let mut out = vec![n as u8];
+            out.extend(m);
+            out
+        };
+        let mut wire = Vec::new();
+        wire.extend(b"AAAAAAAA");
+        wire.extend(block("Clockartz - Child Of The Devil"));
+        wire.extend(b"BBBBBBBB");
+        wire.push(0);
+        wire.extend(b"CCCCCCCC");
+        wire.extend(block("Sneijder X Will Rees - Don't Panic"));
+        wire.extend(b"DD");
+        let whole = IcyDemux::new(8).push(&wire);
+        assert_eq!(whole.0, b"AAAAAAAABBBBBBBBCCCCCCCCDD".to_vec());
+        assert_eq!(
+            whole.1,
+            vec![(8, "Clockartz - Child Of The Devil".to_string()), (24, "Sneijder X Will Rees - Don't Panic".to_string())]
+        );
+        for cut in [1, 3, 7, 13, 50] {
+            let mut d = IcyDemux::new(8);
+            let (mut audio, mut titles) = (Vec::new(), Vec::new());
+            for piece in wire.chunks(cut) {
+                let (a, t) = d.push(piece);
+                titles.extend(t.into_iter().map(|(o, x)| (o + audio.len(), x)));
+                audio.extend(a);
+            }
+            assert_eq!((audio, titles), whole, "pieces of {cut}");
+        }
+    }
+
+    #[test]
+    fn icy_titles_parse_and_name_the_song() {
+        assert_eq!(stream_title(b"StreamTitle='A - B';\0\0").as_deref(), Some("A - B"));
+        assert_eq!(stream_title(b"StreamTitle='It's Me - Don't';StreamUrl='x';").as_deref(), Some("It's Me - Don't"));
+        assert_eq!(stream_title(b"StreamTitle='';").as_deref(), Some(""));
+        assert_eq!(stream_title(&[b"StreamTitle='R".as_slice(), &[0xF6], b"yksopp';"].concat()).as_deref(), Some("R\u{f6}yksopp"));
+        assert_eq!(stream_title(b"StreamUrl='x';"), None);
+        let s = icy_song("icy-1", "Slayy - Stay Tonight", 1000);
+        assert_eq!((s.text("artist"), s.text("title"), s.line()), (Some("Slayy"), Some("Stay Tonight"), "Slayy - Stay Tonight".into()));
+        assert!(s.is_song());
+        let s = icy_song("icy-2", "TechnoBase.FM - We aRe oNe", 2000);
+        assert_eq!(s.text("artist"), Some("TechnoBase.FM"));
+        let s = icy_song("icy-3", "Just a title", 3000);
+        assert_eq!((s.text("artist"), s.text("title")), (None, Some("Just a title")));
+        // Played / heard from ICY plays: the open newest one is what you hear.
+        let mut l = Songs::new(None);
+        let mut a = icy_song("icy-1", "A - One", 1000);
+        a.ends_at_ms = Some(5000);
+        l.merge(a);
+        l.merge(icy_song("icy-2", "B - Two", 5000));
+        assert_eq!(l.at(4999).map(|s| s.play_id.as_str()), Some("icy-1"));
+        assert_eq!(l.at(9_999_999).map(|s| s.play_id.as_str()), Some("icy-2"));
+        let heard = l.at(6000).cloned();
+        let (played, coming) = l.around(Some(6000), heard.as_ref(), &[]);
+        assert_eq!(played.iter().map(|s| s.play_id.as_str()).collect::<Vec<_>>(), vec!["icy-1"]);
+        assert!(coming.is_empty());
     }
 
     #[test]

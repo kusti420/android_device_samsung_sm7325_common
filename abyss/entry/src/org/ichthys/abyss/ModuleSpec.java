@@ -61,7 +61,8 @@ final class ModuleSpec {
             "state", "job", "post", "prompt", "event", "apps", "settings", "post:capture",
             "post:player", "needs:media", "radio:wifi", "menu:get", "media:stream",
             "media:stream:radio-v1", "media:stream:http", "media:stream:screen", "menu:header",
-            "capture:fields");
+            "capture:fields", "media:stream:icy", "menu:header-loading", "menu:get-at",
+            "net:https");
 
     static final Set<String> CATEGORIES = new HashSet<>(Arrays.asList(
             "music", "spoken", "time", "home", "info", "tools", "games"));
@@ -102,13 +103,13 @@ final class ModuleSpec {
             "stream");
     private static final Set<String> STREAM_KEYS = new HashSet<>(Arrays.asList(
             "protocol", "url", "formats", "format", "prebuffer", "songs", "now", "tag", "title",
-            "show"));
+            "show", "icy"));
     /** Header line styles (menu:header). */
     private static final List<String> LINE_STYLES = Arrays.asList("big", "plain", "dim", "head");
     private static final Set<String> STREAM_PROTOCOLS = new HashSet<>(Arrays.asList(
             "radio-v1", "http"));
     private static final Set<String> GET_KEYS = new HashSet<>(Arrays.asList(
-            "url", "every", "refreshAt", "page"));
+            "url", "every", "refreshAt", "page", "at"));
     private static final Set<String> RESERVED_NS = new HashSet<>(Arrays.asList(
             "state", "settings", "battery", "time", "value", "data", "row", "stream", "abyss",
             "pub"));
@@ -246,18 +247,25 @@ final class ModuleSpec {
     /** Fixed origins written literally in the menu. */
     final Set<String> netLiteral;
     final boolean streams;
+    /** A stream is a plain endless `http` one: Wi-Fi stays on while it plays (no bursts). */
+    final boolean continuous;
+    /** A stream uses the burst protocol (radio-v1): Wi-Fi wakes for short bursts. */
+    final boolean bursts;
     final boolean loads;
     final boolean captures;
 
     private ModuleSpec(Map<String, Object> manifest, Map<String, Object> menu,
             List<Setting> settings, Set<String> netSettings, Set<String> netLiteral,
-            boolean streams, boolean loads, boolean captures) {
+            boolean streams, boolean continuous, boolean bursts, boolean loads,
+            boolean captures) {
         this.manifest = manifest;
         this.menu = menu;
         this.settings = settings;
         this.netSettings = netSettings;
         this.netLiteral = netLiteral;
         this.streams = streams;
+        this.continuous = continuous;
+        this.bursts = bursts;
         this.loads = loads;
         this.captures = captures;
         id = ModJson.str(manifest, "id");
@@ -504,7 +512,7 @@ final class ModuleSpec {
             norm.put("settings", ns);
         }
         ModuleSpec spec = new ModuleSpec(norm, mr.root, settings, mc.netSettings, mc.netLiteral,
-                mc.streams, mc.loads, captures);
+                mc.streams, mc.continuous, mc.bursts, mc.loads, captures);
         norm.put("caps", spec.caps(null));
         return spec;
     }
@@ -721,6 +729,8 @@ final class ModuleSpec {
         final Set<String> netLiteral = new LinkedHashSet<>();
         final Set<String> asNames = new HashSet<>();
         boolean streams;
+        boolean continuous;
+        boolean bursts;
         boolean loads;
         Map<String, Object> screens;
 
@@ -817,6 +827,15 @@ final class ModuleSpec {
                     }
                 }
                 url(p + ".get.url", c.reqStr(g, "url", p + ".get.url"), extra);
+                if (g.containsKey("at")) {
+                    // menu:get-at: $data is the part of the answer at this pointer (holes allowed).
+                    needFeature(c, required, "menu:get-at", p + ".get.at");
+                    String at = c.reqStr(g, "at", p + ".get.at");
+                    if (!at.startsWith("/")) {
+                        throw c.err(p + ".get.at", "at is a JSON pointer (\"/$station.key\")");
+                    }
+                    holes(p + ".get.at", at, extra);
+                }
                 for (String d : new String[] {"every"}) {
                     String v = ModJson.str(g, d);
                     if (g.containsKey(d) && (v == null || !DURATION.matcher(v).matches())) {
@@ -1016,6 +1035,21 @@ final class ModuleSpec {
                 throw c.err(p + ".protocol", "unknown stream protocol '" + proto + "'");
             }
             needFeature(c, required, "media:stream:" + proto, p + ".protocol");
+            if ("http".equals(proto)) {
+                continuous = true;
+            } else {
+                bursts = true;
+            }
+            if (st.containsKey("icy")) {
+                // media:stream:icy: name the song from the stream's in-band titles.
+                needFeature(c, required, "media:stream:icy", p + ".icy");
+                if (!(st.get("icy") instanceof Boolean)) {
+                    throw c.err(p + ".icy", "icy is true or false");
+                }
+                if (!"http".equals(proto)) {
+                    throw c.err(p + ".icy", "icy is for protocol = \"http\" streams");
+                }
+            }
             if (st.containsKey("url") == st.containsKey("formats")) {
                 throw c.err(p, "a stream has url or formats (one of them)");
             }
@@ -1117,6 +1151,9 @@ final class ModuleSpec {
             String o = origin(v);
             if (o == null) {
                 throw c.err(p, "a URL starts with http(s)://host or a hole");
+            }
+            if (o.startsWith("https:")) {
+                needFeature(c, required, "net:https", p);
             }
             netLiteral.add(o);
         }
@@ -1261,8 +1298,14 @@ final class ModuleSpec {
         if (loads) {
             caps.add("lease wifi while a screen loads");
         }
-        if (streams) {
+        // Per stream type (contract §7): bursts let Wi-Fi sleep in between, a plain stream not.
+        if (bursts) {
             caps.add("lease wifi bursts while playing");
+        }
+        if (continuous) {
+            caps.add("lease wifi while playing");
+        }
+        if (streams) {
             caps.add("needs media");
         }
         if (captures) {
@@ -1282,9 +1325,17 @@ final class ModuleSpec {
                             + "point to the same address.",
                     "net " + o + (isLan(o) ? " lan" : "")));
         }
+        if (bursts) {
+            out.add(new Permission("Wi-Fi in Abyss while it plays: a short burst every so often "
+                    + "(15 seconds to a few minutes), not all the time.",
+                    "lease wifi bursts while playing"));
+        }
+        if (continuous) {
+            out.add(new Permission("Wi-Fi in Abyss the whole time it plays: a live stream "
+                    + "keeps Wi-Fi on, so it uses more battery than music on the phone.",
+                    "lease wifi while playing"));
+        }
         if (streams) {
-            out.add(new Permission("Wi-Fi in Abyss while it plays: a short burst about every "
-                    + "15 seconds, not all the time.", "lease wifi bursts while playing"));
             out.add(new Permission("Plays audio through your headphones.", "needs media"));
         }
         if (loads) {
